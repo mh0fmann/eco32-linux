@@ -1,0 +1,57 @@
+/dts-v1/;
+
+/ {
+    compatible = "thm,de2-115";
+    #address-cells = <1>;
+    #size-cells = <1>;
+    interrupt-parent = <&intctrl>;
+
+    chosen {
+        bootargs = "debug console=ttyECO0";
+    };
+
+    cpus {
+        #address-cells = <1>;
+        #size-cells = <0>;
+
+        cpu@0 {
+            compatible = "thm,eco32-cpu";
+            reg = <0>;
+        };
+    };
+
+    memory@0 {
+        device_type = "memory";
+        reg = <0x00000000 0x08000000>;
+    };
+
+    intctrl: intctrl {
+        compatible = "thm,eco32-intctrl";
+        #interrupt-cells = <1>;
+        interrupt-controller;
+    };
+
+    timer@30000000 {
+        compatible = "thm,eco32-timer";
+        reg = <0x30000000 0x1000 >;
+        interrupts = <14>;
+    };
+
+    timer@30001000 {
+        compatible = "thm,eco32-timer";
+        reg = <0x30001000 0x1000 >;
+        interrupts = <15>;
+    };
+
+    serial@30300000 {
+        compatible = "thm,eco32-uart";
+        reg = <0x30300000 0x1000 >;
+        interrupts = <0>, <1>;
+    };
+
+    serial@30301000 {
+        compatible = "thm,eco32-uart";
+        reg = <0x30301000 0x1000 >;
+        interrupts = <2>, <3>;
+    };
+};

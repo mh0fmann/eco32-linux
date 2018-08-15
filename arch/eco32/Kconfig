@@ -1,0 +1,131 @@
+#
+# For a description of the syntax of this configuration file,
+# see Documentation/kbuild/kconfig-language.txt.
+#
+
+#--------------- ECO32 FIX ----------------
+
+#
+# This part contains fixed options for our architecture.
+# Choices made here are not configurable and need to be like this
+# or the build will break
+#
+
+config ECO32
+	bool
+	default y
+	select TINY_RCU
+	select EMBEDDED
+	select NO_BOOTMEM
+	select HAVE_MEMBLOCK
+	select GENERIC_CLOCKEVENTS
+	select GENERIC_STRNLEN_USER
+	select GENERIC_STRNCPY_FROM_USER
+	select GENERIC_IOMAP
+	select GENERIC_ATOMIC64
+	select GENERIC_IRQ_SHOW
+	select GENERIC_IRQ_CHIP
+	select GENERIC_FIND_FIRST_BIT
+	select OF
+	select OF_EARLY_FLATTREE
+	select OF_IRQ
+	select IRQ_DOMAIN
+
+config GENERIC_CSUM
+	def_bool y
+
+config GENERIC_CALIBRATE_DELAY
+	def_bool y
+
+config GENERIC_HWEIGHT
+	def_bool y
+
+config RWSEM_GENERIC_SPINLOCK
+	def_bool y
+
+config NO_DMA
+	def_bool y
+	
+config CPU_BIG_ENDIAN
+	def_bool y
+
+config SYS_SUPPORTS_BIG_ENDIAN
+	def_bool y
+
+config NR_CPUS
+	int
+	default 1
+
+config PGTABLE_LEVELS
+	int
+	default 2
+
+config HZ
+	int
+	default 100
+
+config MMU
+	def_bool y
+
+
+#---------------- ARCH CONFIG ---------------
+
+menu "ECO32"
+
+config CMDLINE_BOOL
+	bool "Enable builtin cmdline"
+	default y
+	---help---
+	Currently there is no other way than this or with the device tree to
+	pass a cmd line to the kernel. As a minimum the root parameter should
+	be passed.
+
+config CMDLINE
+	string "Default kernel command string"
+	default "debug console=ttyS0 root=/dev/hda7"
+	depends on CMDLINE_BOOL
+	---help---
+	The builtin cmdline string passed to the kernel.
+
+config HIGHMEM
+	bool "Enable Highmem support"
+	default n
+	---help---
+	Currently this is not needed but if the ECO32 will have more than 512MB
+	of ram in the future we will no longer be able to address all the ram
+	with the fixed kernel direct mapped region. Then we can use this to be
+	able to map that remaining space dynamicly.
+
+config EARLY_PRINTK
+	bool "Enable early prinkt"
+	default n
+	---help---
+	Choose this to activate early kernel outputs befor the first console
+	gets registered
+
+config ECO32_BUILTIN_DTB
+	string	"Choose which builtin device tree to use"
+	default "eco32sim"
+	---help---
+	Choose the default Builtin Device Tree which should be compiled
+	in the kernel.
+
+endmenu
+
+
+#------------------------------------------
+
+
+source "init/Kconfig"
+source "kernel/Kconfig.freezer"
+source "kernel/Kconfig.hz"
+source "kernel/Kconfig.preempt"
+source "mm/Kconfig"
+source "fs/Kconfig.binfmt"
+source "net/Kconfig"
+source "drivers/Kconfig"
+source "fs/Kconfig"
+source "security/Kconfig"
+source "crypto/Kconfig"
+source "lib/Kconfig"
+source "lib/Kconfig.debug"

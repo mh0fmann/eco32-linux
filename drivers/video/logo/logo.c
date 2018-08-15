@@ -111,6 +111,10 @@ const struct linux_logo * __ref fb_find_logo(int depth)
 		/* M32R Linux logo */
 		logo = &logo_m32r_clut224;
 #endif
+#ifdef CONFIG_LOGO_THM_CLUT224
+		/* THM Linux logo */
+		logo = &logo_thm_clut224;
+#endif
 	}
 	return logo;
 }

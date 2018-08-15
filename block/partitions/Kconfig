@@ -268,3 +268,11 @@ config CMDLINE_PARTITION
 	help
 	  Say Y here if you want to read the partition table from bootargs.
 	  The format for the command line is just like mtdparts.
+
+config ECO32_PARTITION
+	bool "ECO32 partition table support" if PARTITION_ADVANCED
+	default y if ECO32
+	help
+	  Say Y here if your would like to be able to read the hard disk
+	  partition table format used by the ECO32.
+	  Otherwise, say N.

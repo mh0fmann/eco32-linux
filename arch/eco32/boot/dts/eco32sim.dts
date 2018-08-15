@@ -1,0 +1,81 @@
+/dts-v1/;
+
+/ {
+    compatible = "thm,eco32sim";
+    #address-cells = <1>;
+    #size-cells = <1>;
+    interrupt-parent = <&intc>;
+
+    cpus {
+		#address-cells = <1>;
+		#size-cells = <0>;
+        cpu@0 {
+            compatible = "thm,eco32-cpu";
+            reg = <0>;
+        };
+    };
+    
+    memory@00000000 {
+        device_type = "memory";
+        reg = <0x00000000 0x02000000>;
+    };
+    
+    intc: intc {
+		compatible = "thm,eco32-intc";
+		#interrupt-cells = <1>;
+		interrupt-controller;
+	};
+	
+	timer@30000000 {
+		compatible = "thm,eco32-timer";
+		reg = <0x30000000 0xC>;
+		interrupts = <14>;
+	};
+	
+	timer@30001000 {
+		compatible = "thm,eco32-timer";
+		reg = <0x30001000 0xC>;
+		interrupts = <15>;
+	};
+
+    serial@30300000 {
+        compatible = "thm,eco32-uart";
+        reg = <0x30300000 0x10>;
+        interrupts = <0>, <1>;
+        clock-frequenzy = <50000000>;
+    };
+    
+    serial@30301000 {
+        compatible = "thm,eco32-uart";
+        reg = <0x30301000 0x10>;
+        interrupts = <2>, <3>;
+        clock-frequenzy = <50000000>;
+    };
+    
+    disk@30400000 {
+		compatible = "thm,eco32-disk";
+		reg = <0x30400000 0x100000>;
+		interrupts = <8>;
+	};
+	
+    sdc@30400000 {
+		compatible = "thm,eco32-sdc";
+		reg = <0x30600000 0x10>;
+	};
+	
+	console@30100000 {
+		compatible = "thm,eco32-console";
+		reg = <0x30100000 0x1000>;
+	};
+	
+	keyboard@30200000 {
+		compatible = "thm,eco32-keyboard";
+		reg = <0x30200000 0x8>;
+		interrupts = <4>;
+	};
+	
+	graphic@0x3FC00000 {
+		compatible = "thm,eco32-graphic";
+		reg = <0x3FC00000 0x12C000>;
+	};
+};

@@ -80,6 +80,21 @@ config GDROM
 	  Most users will want to say "Y" here.
 	  You can also build this as a module which will be called gdrom.
 
+config ECO32_DISK
+	tristate "ECO32 Disk Device Driver"
+	default y
+	depends on OF
+	help
+	  Device driver for the ECO32 Disk Device.
+
+config ECO32_SDC
+	tristate "ECO32 SDCard Device Driver"
+	default y
+	depends on OF
+	help
+	  Device driver for the ECO32 Disk Device.
+
+
 config PARIDE
 	tristate "Parallel port IDE device support"
 	depends on PARPORT_PC

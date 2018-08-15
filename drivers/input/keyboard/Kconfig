@@ -157,6 +157,13 @@ config KEYBOARD_QT2160
 	  This driver can also be built as a module. If so, the module
 	  will be called qt2160.
 
+config KEYBOARD_ECO32
+	tristate "ECO32 Keyboard support"
+	default y
+	depends on OF
+	help
+	  Support for the eco32 keyboard
+
 config KEYBOARD_BFIN
 	tristate "Blackfin BF54x keypad support"
 	depends on (BF54x && !BF544)

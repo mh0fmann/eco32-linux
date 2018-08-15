@@ -165,6 +165,22 @@ config SERIAL_ATMEL_TTYAT
 
 	  Say Y if you have an external 8250/16C550 UART.  If unsure, say N.
 
+config SERIAL_ECO32
+	bool "Support for eco32 uart lines"
+	default y
+	depends on OF
+	select SERIAL_CORE
+	help
+	  Support for the co32 uart lines
+
+config SERIAL_ECO32_CONSOLE
+	bool "Support for console on eco32 uart lines"
+	default y
+	depends on SERIAL_ECO32
+	select SERIAL_CORE_CONSOLE
+	help
+	  Say Y here if you want to have a console on the first serial line
+
 config SERIAL_KGDB_NMI
 	bool "Serial console over KGDB NMI debugger port"
 	depends on KGDB_SERIAL_CONSOLE

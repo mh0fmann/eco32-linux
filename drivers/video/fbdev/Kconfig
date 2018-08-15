@@ -2496,3 +2496,13 @@ config FB_SM712
 	  This driver is also available as a module. The module will be
 	  called sm712fb. If you want to compile it as a module, say M
 	  here and read <file:Documentation/kbuild/modules.txt>.
+
+config FB_ECO32
+	tristate "ECO32 framebuffer support"
+	default y
+	depends on FB && ECO32
+	depends on OF
+    select FB_CFB_IMAGEBLIT
+    select FB_CFB_FILLRECT
+    help
+      Framebuffer support for eco32 graphics hardware.
