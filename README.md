@@ -10,6 +10,13 @@ Martin.Hofman@mni.thm.de
 
 or join #eco32-linux on irq.quakenet.org
 
+#### Compile and run Linux on ECO32
+If you are interested to try and run this port for the ECO32 consider to use the automated
+Cross-Linux-From-Scratch provided on my github. Everythin you need to know on how to build
+and run it is explained there.
+
+http://www.github.com/mh0fmann/eco32-clfs
+
 ## ECO32
 ECO32 is a simple, fast 32-bit processor that runs C code, currently
 without floating point operations. We want to execute some flavour
