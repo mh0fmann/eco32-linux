@@ -21,7 +21,6 @@ LDFLAGS_vmlinux	+= -static -nostdlib
 
 head-y := arch/eco32/kernel/head.o
 libs-y += arch/eco32/lib/
-libs-y += ${CLFS}/cross-tools/lib/gcc/eco32-unknown-linux-gnu/5.3.0/libgcc.a
 core-y += arch/eco32/kernel/ arch/eco32/mm/
 
 ifneq '$(CONFIG_ECO32_BUILTIN_DTB)' '""'
