@@ -22,4 +22,5 @@ $(BIN):		$(OBJS)
 		$(CC) $(CFLAGS) -o $@ -c $<
 
 clean:
-		rm -f *~ $(OBJS) $(BIN)
+		$(Q)echo "  CLEAN   arch/eco32/boot/elf32load"
+		$(Q)rm -f *~ $(OBJS) $(BIN)

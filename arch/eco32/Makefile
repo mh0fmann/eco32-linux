@@ -39,17 +39,18 @@ vmlinux.bin: vmlinux
 	$(Q)$(MAKE) -C $(boot) $@
 	$(Q)$(boot)/elf32load/elf32load -v $? $@
 
-vmlinuxboot.bin: vmlinux.bin
+vmlinuxboot.img: vmlinux.bin
 	$(Q)$(MAKE) -C $(boot) $@
-
+	$(Q)cat $(boot)/bootloader/pbr.bin $(boot)/bootloader/mvstrt.bin vmlinux.bin > vmlinuxboot.img
 
 archclean:
-	@$(MAKE) $(clean)=$(boot)
+	@$(MAKE) -C $(boot) $@
+	$(Q)rm -f vmlinux vmlinux.bin vmlinuxboot.img
 
 
 define archhelp
 	echo '  vmlinux.bin          - Raw binary kernel image'
-	echo '  vmlinuxboot.bin      - Bootable kernel image for eco32 monitor'
+	echo '  vmlinuxboot.img      - Bootable kernel image for booting with eco32 monitor'
 	echo
 	echo '  These will be default as appropriate for a configured platform.'
 endef

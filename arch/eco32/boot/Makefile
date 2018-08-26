@@ -5,5 +5,9 @@
 vmlinux.bin:
 	$(Q)$(MAKE) -C elf32load
 
-vmlinuxboot.bin:
+vmlinuxboot.img:
 	$(Q)$(MAKE) -C bootloader
+
+archclean:
+	$(Q)$(MAKE) -C elf32load clean
+	$(Q)$(MAKE) -C bootloader clean
