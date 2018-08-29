@@ -8,7 +8,7 @@ project), don't hesitate to contact me by email to
 
 Martin.Hofman@mni.thm.de
 
-or join #eco32-linux on irq.quakenet.org
+or join #eco32-linux on irc.quakenet.org
 
 #### Compile and run Linux on ECO32
 If you are interested to try and run this port for the ECO32 consider to use the automated
