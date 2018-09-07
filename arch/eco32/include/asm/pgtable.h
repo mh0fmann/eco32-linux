@@ -108,11 +108,15 @@ extern void paging_init(void);
 /*
  * An ECO32 PTE looks like this:
  *
- * |  31 ... 12  |  11 ... 2 |  1  |  0  |
- *  Frame number    reserved    W     V
+ * |  31 ... 12  |  11 ... 6 |  5  |  4  |  3  |  2  |  1  |  0  |
+ *  Frame number    reserved    S     A     D     U     W     P
  *
- *  W: Write accessable
- *  V: Valid
+ *  S: Shared
+ *  A: Accessed
+ *  D: Dirty
+ *  U: User page
+ *  W: Write accessable (TLB Write Flag)
+ *  P: Present (TLB Valid flag)
  *
  */
 
@@ -123,18 +127,16 @@ extern void paging_init(void);
 #define _PAGE_DIRTY	0x008
 #define _PAGE_ACCESSED	0x010
 #define _PAGE_SHARED	0x020
-#define _PAGE_READ	0x040
-#define _PAGE_EXEC	0x080
 
 
 #define _PAGE_CHG_MASK	(PAGE_MASK | _PAGE_ACCESSED | _PAGE_DIRTY)
 #define _PAGE_ALL       (_PAGE_PRESENT | _PAGE_ACCESSED)
 
 #define PAGE_NONE       __pgprot(_PAGE_PRESENT | _PAGE_ACCESSED)
-#define PAGE_READONLY   __pgprot(_PAGE_PRESENT | _PAGE_ACCESSED | _PAGE_READ)
-#define PAGE_SHARED 	__pgprot(_PAGE_PRESENT | _PAGE_READ | _PAGE_WRITE)
-#define PAGE_COPY       __pgprot(_PAGE_PRESENT | _PAGE_READ)
-#define PAGE_KERNEL 	__pgprot(_PAGE_PRESENT | _PAGE_ACCESSED | _PAGE_READ \
+#define PAGE_READONLY   __pgprot(_PAGE_PRESENT | _PAGE_ACCESSED)
+#define PAGE_SHARED 	__pgprot(_PAGE_PRESENT | _PAGE_WRITE)
+#define PAGE_COPY       __pgprot(_PAGE_PRESENT)
+#define PAGE_KERNEL 	__pgprot(_PAGE_PRESENT | _PAGE_ACCESSED \
 		| _PAGE_DIRTY | _PAGE_WRITE | _PAGE_SHARED)
 #define PAGE_KERNEL_NOCACHE (PAGE_KERNEL)
 
@@ -157,17 +159,9 @@ extern void paging_init(void);
 #define __S111	PAGE_SHARED
 
 
-static inline int pte_read(pte_t pte)
-{
-	return pte_val(pte) & _PAGE_READ;
-}
 static inline int pte_write(pte_t pte)
 {
 	return pte_val(pte) & _PAGE_WRITE;
-}
-static inline int pte_exec(pte_t pte)
-{
-	return pte_val(pte) & _PAGE_EXEC;
 }
 static inline int pte_dirty(pte_t pte)
 {
@@ -191,16 +185,6 @@ static inline pte_t pte_wrprotect(pte_t pte)
 	pte_val(pte) &= ~(_PAGE_WRITE);
 	return pte;
 }
-static inline pte_t pte_rdprotect(pte_t pte)
-{
-	pte_val(pte) &= ~(_PAGE_READ);
-	return pte;
-}
-static inline pte_t pte_exprotect(pte_t pte)
-{
-	pte_val(pte) &= ~(_PAGE_EXEC);
-	return pte;
-}
 static inline pte_t pte_mkclean(pte_t pte)
 {
 	pte_val(pte) &= ~(_PAGE_DIRTY);
@@ -214,16 +198,6 @@ static inline pte_t pte_mkold(pte_t pte)
 static inline pte_t pte_mkwrite(pte_t pte)
 {
 	pte_val(pte) |= _PAGE_WRITE;
-	return pte;
-}
-static inline pte_t pte_mkread(pte_t pte)
-{
-	pte_val(pte) |= _PAGE_READ;
-	return pte;
-}
-static inline pte_t pte_mkexec(pte_t pte)
-{
-	pte_val(pte) |= _PAGE_EXEC;
 	return pte;
 }
 static inline pte_t pte_mkdirty(pte_t pte)
