@@ -24,22 +24,9 @@
  * from the assembly-language output.
  */
 
-
-#include <linux/signal.h>
-#include <linux/sched.h>
-#include <linux/kernel.h>
-#include <linux/errno.h>
-#include <linux/string.h>
-#include <linux/types.h>
 #include <linux/ptrace.h>
-#include <linux/mman.h>
-#include <linux/mm.h>
-#include <linux/io.h>
 #include <linux/thread_info.h>
 #include <linux/kbuild.h>
-#include <asm/page.h>
-#include <asm/pgtable.h>
-#include <asm/processor.h>
 
 
 int main(int argc, char* argv[])
