@@ -169,7 +169,7 @@ static void __init setup_memory(void)
 	
 	max_pfn = ram_end_pfn;
 
-	/* initialize the boot-time allocator */
+	/* reserver memory */
 	memblock_reserve(__pa(_stext), _end - _stext);
 	memblock_reserve(__pa(ECO32_KERNEL_DIRECT_MAPPED_ROM_START),
 					 __pa(ECO32_KERNEL_DIRECT_MAPPED_IO_START +
