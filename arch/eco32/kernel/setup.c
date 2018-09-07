@@ -163,7 +163,7 @@ static void __init setup_memory(void)
 								ECO32_KERNEL_DIRECT_MAPPED_RAM_SIZE));
 #ifdef CONFIG_HIGHMEM
 	highstart_pfn = PFN_UP(__pa(ECO32_KERNEL_DIRECT_MAPPED_IO_START+
-								ECO32_KERNEL_DIRECT_MAPPED_IO_SIZE));
+								ECO32_KERNEL_DIRECT_MAPPED_IO_SIZE-1));
 	highend_pfn = PFN_DOWN(0xFFFFFFFF);
 #endif
 	
