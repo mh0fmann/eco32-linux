@@ -49,23 +49,12 @@ static inline pgd_t* pgd_alloc(struct mm_struct* mm)
 		memset(ret, 0, USER_PTRS_PER_PGD * sizeof(pgd_t));
 		memcpy(ret + USER_PTRS_PER_PGD,
 		       swapper_pg_dir + USER_PTRS_PER_PGD,
-		       (PTRS_PER_PGD - USER_PTRS_PER_PGD) * sizeof(pgd_t));
+		       KRNL_PTRS_PER_PGD * sizeof(pgd_t));
 
 	}
 
 	return ret;
 }
-
-#if 0
-/* FIXME: This seems to be the preferred style, but we are using
- * current_pgd (from mm->pgd) to load kernel pages so we need it
- * initialized.  This needs to be looked into.
- */
-extern inline pgd_t* pgd_alloc(struct mm_struct* mm)
-{
-	return (pgd_t*)get_zeroed_page(GFP_KERNEL);
-}
-#endif
 
 static inline void pgd_free(struct mm_struct* mm, pgd_t* pgd)
 {
