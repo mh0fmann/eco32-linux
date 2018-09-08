@@ -29,35 +29,14 @@ extern void do_page_fault(struct pt_regs* regs, int write);
 
 
 /* 
- * user tlb miss that result in a page fault also arrive here so we
- * need to check if we have a real kernel tlb miss by checking the
- * faulting address first and then try to resolve kernel miss or
- * do page fault.
+ * Kernel TLB-Miss are actually also handled in umiss
+ * if anything goes wrong we will get here to handle that page fault.
+ * So we only need to call do_page_fault here because thats what needs
+ * to be done as soon as we get here
  */
 static void ISR_tlb_kmiss(int irqnr, struct pt_regs* regs)
 {
-	unsigned int address = __eco32_read_tlbhi();
-		
-	/* user miss */
-	if (address < ECO32_KERNEL_PAGE_MAPPED_START) {
-		/* user miss is always page fault when we arrive here. */
-		do_page_fault(regs, 0);
-	/* kernel miss */
-	}else{
-		pgd_t* pgd;
-		
-		pgd = pgd_offset_k(address);
-		if (pgd_val(*pgd)) {
-			pte_t* pte = (pte_t*)pgd_val(*pgd);
-			pte += __pte_offset(address);
-			
-			if (pte_val(*pte)) {
-				set_tlbr(address, pte_val(*pte));
-			}
-		}
-		
-		panic("could not handle kernel tlb miss for address 0x%08x\n", address);
-	}
+	do_page_fault(regs, 0);
 }
 
 void ISR_tlb_write(int irqnr, struct pt_regs* regs)
