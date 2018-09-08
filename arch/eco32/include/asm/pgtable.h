@@ -72,7 +72,8 @@ extern void paging_init(void);
  * TASK_SIZE is the top of the virtual user address space
  */
 
-#define USER_PTRS_PER_PGD       (TASK_SIZE/PGDIR_SIZE)
+#define USER_PTRS_PER_PGD       (512)
+#define KRNL_PTRS_PER_PGD		(128)
 #define FIRST_USER_ADDRESS      0UL
 
 /*

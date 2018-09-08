@@ -34,7 +34,6 @@
 #include <asm/cpuinfo.h>
 #include <asm/setup.h>
 #include <asm/eco32.h>
-#include <asm/highmem.h>
 
 #include <linux/seq_file.h>
 #include <linux/delay.h>
@@ -159,21 +158,14 @@ static void __init setup_memory(void)
 	ram_end_pfn = PFN_DOWN(memblock_end_of_DRAM());
 
 	min_low_pfn = ram_start_pfn;
-	max_low_pfn = PFN_DOWN(__pa(ECO32_KERNEL_DIRECT_MAPPED_RAM_START+
-								ECO32_KERNEL_DIRECT_MAPPED_RAM_SIZE));
-#ifdef CONFIG_HIGHMEM
-	highstart_pfn = PFN_UP(__pa(ECO32_KERNEL_DIRECT_MAPPED_IO_START+
-								ECO32_KERNEL_DIRECT_MAPPED_IO_SIZE-1));
-	highend_pfn = PFN_DOWN(0xFFFFFFFF);
-#endif
+	max_low_pfn = PFN_DOWN(__pa(ECO32_KERNEL_DIRECT_MAPPED_RAM_END));
 	
 	max_pfn = ram_end_pfn;
 
 	/* reserver memory */
 	memblock_reserve(__pa(_stext), _end - _stext);
 	memblock_reserve(__pa(ECO32_KERNEL_DIRECT_MAPPED_ROM_START),
-					 __pa(ECO32_KERNEL_DIRECT_MAPPED_IO_START +
-						  ECO32_KERNEL_DIRECT_MAPPED_IO_SIZE));
+					 __pa(ECO32_KERNEL_DIRECT_MAPPED_IO_END));
 	early_init_fdt_reserve_self();
 	early_init_fdt_scan_reserved_mem();
 	__memblock_dump_all();

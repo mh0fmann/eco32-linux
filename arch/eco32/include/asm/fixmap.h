@@ -42,10 +42,6 @@
  * physical memory with fixmap indices.
  */
 enum fixed_addresses {
-#ifdef CONFIG_HIGHMEM
-	/* this is the pte table for kernel mappings */
-	FIX_PKMAP = 0,
-#endif
 	__end_of_fixed_addresses
 };
 

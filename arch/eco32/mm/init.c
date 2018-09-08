@@ -30,8 +30,6 @@
 #include <asm/tlbflush.h>
 #include <asm/tlb.h>
 #include <asm/sections.h>
-#include <asm/highmem.h>
-#include <asm/fixmap.h>
 
 
 
@@ -40,9 +38,6 @@ static void __init zones_size_init(void)
 	unsigned long zones_size[MAX_NR_ZONES];
 	memset(zones_size, 0x00, sizeof(zones_size));
 	zones_size[ZONE_NORMAL] = max_pfn;
-#ifdef CONFIG_HIGHMEM
-	zones_size[ZONE_HIGHMEM] = highend_pfn;
-#endif
 
 	/* initialize the free area and get the allocators up and running */
 	free_area_init(zones_size);
@@ -57,14 +52,6 @@ void __init paging_init(void)
 
 	/* init zones and mem_map */
 	zones_size_init();
-	
-	/*
-	 * init fixmap area and kmap area
-	 */
-	fixmap_init();
-#ifdef CONFIG_HIGHMEM
-	kmap_init();
-#endif
 
 	/* 
 	 * from now on tlb exceptions can happen and we should be able
@@ -80,13 +67,10 @@ void __init paging_init(void)
 /* void __init mem_init(void)
  *
  * Do last stepts of memory init.
- * Set high memory and free all memory which is no longer needed
+ * free all memory which is no longer needed
  */
 void __init mem_init(void)
 {
-	/* everything after direct mapped ram is highmem */
-	high_memory = (void*)ECO32_KERNEL_DIRECT_MAPPED_RAM_SIZE;
-
 	/* empty the zero page */
 	memset((void*)empty_zero_page, 0x00, PAGE_SIZE);
 
@@ -97,15 +81,10 @@ void __init mem_init(void)
 
 	pr_info("Virtual kernel memory layout:\n");
 	pr_cont("     lowmem : 0x%08lx - 0x%08lx   (%4ld MB)\n",
-	        (unsigned long)__va(min_low_pfn),
-	        (unsigned long)__va(max_low_pfn),
-	        ((unsigned long)__va(max_low_pfn) -
-	         (unsigned long)__va(0)) >> 20);
-#ifdef CONFIG_HIGHMEM
-	pr_cont("      pkmap : 0x%08lx - 0x%08lx   (%4ld KB)\n",
-	        PKMAP_BASE, PKMAP_BASE+LAST_PKMAP*PAGE_SIZE,
-	        (LAST_PKMAP*PAGE_SIZE) >> 10);
-#endif
+	        (unsigned long)ECO32_KERNEL_DIRECT_MAPPED_RAM_START,
+	        (unsigned long)ECO32_KERNEL_DIRECT_MAPPED_RAM_END,
+	        ((unsigned long)ECO32_KERNEL_DIRECT_MAPPED_RAM_START -
+	         (unsigned long)ECO32_KERNEL_DIRECT_MAPPED_RAM_END) >> 20);
 	pr_cont("    vmalloc : 0x%08lx - 0x%08lx   (%4ld MB)\n",
 	        VMALLOC_START, VMALLOC_END,
 	        (VMALLOC_END - VMALLOC_START) >> 20);
