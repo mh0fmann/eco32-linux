@@ -16,10 +16,8 @@
  * ioremap.c -- ECO32 I/O remapping functions
  */
 
-#include <linux/vmalloc.h>
-#include <linux/io.h>
-#include <asm/pgalloc.h>
-#include <asm/kmap_types.h>
+#include <asm/io.h>
+
 
 void __iomem* __ioremap(phys_addr_t addr, unsigned long size)
 {

@@ -20,7 +20,6 @@
 #define __ASM_ECO32_IO_H
 
 #include <asm-generic/io.h>
-#include <asm/pgtable.h>
 
 void __iomem* __ioremap(phys_addr_t offset, unsigned long size);
 
