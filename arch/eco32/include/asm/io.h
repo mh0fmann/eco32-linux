@@ -6,7 +6,7 @@
  * declaration.
  *
  * Modifications for ECO32:
- * Copyright (c) 2017 Hellwig Geisse
+ * Copyright (c) 2018 Hellwig Geisse, Martin Hofmann
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,20 +21,12 @@
 
 #include <asm-generic/io.h>
 
+
 void __iomem* __ioremap(phys_addr_t offset, unsigned long size);
 
-static inline void __iomem* ioremap(phys_addr_t offset,
-                                    unsigned long size)
-{
-	return __ioremap(offset, size);
-}
+#define ioremap(offset, size)			__ioremap(offset, size)
+#define ioremap_nocache(offset, size)	__ioremap(offset, size)
 
-static inline void __iomem* ioremap_nocache(phys_addr_t offset,
-        unsigned long size)
-{
-	return __ioremap(offset, size);
-}
-
-void iounmap(void* addr);
+#define iounmap(addr)					do { } while(0);
 
 #endif

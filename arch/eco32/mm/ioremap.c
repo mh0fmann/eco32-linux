@@ -38,8 +38,3 @@ void __iomem* __ioremap(phys_addr_t addr, unsigned long size)
 	/* direct-mapped addresses are easy to translate */
 	return (void __iomem*) (0xC0000000 | addr);
 }
-
-void iounmap(void* addr)
-{
-	/* nothing to do here */
-}
