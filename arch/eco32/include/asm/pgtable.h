@@ -39,7 +39,6 @@
  * the ECO32 page table tree.
  */
 
-extern void paging_init(void);
 
 /* Certain architectures need to do special things when pte's
  * within a page table are directly modified.  Thus, the following
@@ -213,6 +212,7 @@ static inline pte_t pte_mkyoung(pte_t pte)
 }
 
 extern pgd_t swapper_pg_dir[PTRS_PER_PGD];
+
 
 /*
  * ECO32 doesn't have any external MMU info: the kernel page

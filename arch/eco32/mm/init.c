@@ -21,8 +21,8 @@
 #include <linux/mm.h>
 #include <linux/string.h>
 #include <linux/memblock.h>
-#include <linux/sched.h>
 #include <linux/mmzone.h>
+#include <linux/of_fdt.h>
 
 #include <asm/page.h>
 #include <asm/mmu_context.h>
@@ -32,53 +32,65 @@
 #include <asm/sections.h>
 
 
-
 static void __init zones_size_init(void)
 {
+	//on eco32 we only habe ZONE_NORMAL
+	//there is no dma or highmem atm.
 	unsigned long zones_size[MAX_NR_ZONES];
 	memset(zones_size, 0x00, sizeof(zones_size));
 	zones_size[ZONE_NORMAL] = max_pfn;
 
-	/* initialize the free area and get the allocators up and running */
+	//initialize the free area and get the allocators up and running
 	free_area_init(zones_size);
 }
 
 
-void __init paging_init(void)
-{
-	memset(swapper_pg_dir, 0x00, sizeof(swapper_pg_dir));
+/*
+ * setup arch specific memory
+ */
+void __init setup_memory(void){
+	
+	//initial memory region is kernel code/data
+	init_mm.start_code = (unsigned long) _stext;
+	init_mm.end_code = (unsigned long) _etext;
+	init_mm.end_data = (unsigned long) _edata;
+	init_mm.brk = (unsigned long) _end;
+	
+	//on eco32 memory always starts on 0x00000000
+	//due to our mmu desing we always map the first 512mb of ram
+	//this is our lowmem
+	min_low_pfn = PFN_UP(0x00000000);
+	max_low_pfn = PFN_DOWN(__pa(ECO32_KERNEL_DIRECT_MAPPED_RAM_END));
+	max_pfn = PFN_DOWN(memblock_end_of_DRAM());
 
-	current_pgd = init_mm.pgd;
-
-	/* init zones and mem_map */
+	//reserve memory regions
+	memblock_reserve(__pa(_stext), _end - _stext);
+	memblock_reserve(__pa(ECO32_KERNEL_DIRECT_MAPPED_ROM_START),
+					 __pa(ECO32_KERNEL_DIRECT_MAPPED_IO_END));	 
+	early_init_fdt_reserve_self();
+	early_init_fdt_scan_reserved_mem();
+	
+	memblock_allow_resize();
+	__memblock_dump_all();
+	
 	zones_size_init();
-
-	/* 
-	 * from now on tlb exceptions can happen and we should be able
-	 * to catch them and handle them
-	 */
+	
+	//initialize swapper and empty_zero_page
+	memset(swapper_pg_dir, 0x00, PAGE_SIZE);
+	memset(empty_zero_page, 0x00, PAGE_SIZE);
+	
+	//let current_pgd point to something sane
+	current_pgd = init_mm.pgd;
+	
+	//set the tlb handler
 	set_tlb_handler();
-
-	/* flush all tlb entires */
-	flush_tlb_all();
 }
 
 
-/* void __init mem_init(void)
- *
- * Do last stepts of memory init.
- * free all memory which is no longer needed
- */
 void __init mem_init(void)
 {
-	/* empty the zero page */
-	memset((void*)empty_zero_page, 0x00, PAGE_SIZE);
-
-	/* put low memory on the freelist */
-	free_all_bootmem();
-
 	mem_init_print_info(NULL);
-
+	
 	pr_info("Virtual kernel memory layout:\n");
 	pr_cont("     lowmem : 0x%08lx - 0x%08lx   (%4ld MB)\n",
 	        (unsigned long)ECO32_KERNEL_DIRECT_MAPPED_RAM_START,
@@ -101,12 +113,12 @@ void __init mem_init(void)
 	        (unsigned long)&__init_end,
 	        ((unsigned long)&__init_end -
 	         (unsigned long)&__init_begin) >> 10);
+
+	//put remaining bootmem on the free list
+	free_all_bootmem();
 }
 
 
-/*
- * void free_initrd_mem(unsigned long start, unsigned long end)
- */
 #ifdef CONFIG_BLK_DEV_INITRD
 void free_initrd_mem(unsigned long start, unsigned long end)
 {
@@ -115,10 +127,6 @@ void free_initrd_mem(unsigned long start, unsigned long end)
 #endif
 
 
-/* void free_initmem(void)
- *
- * free the memory with the __init marked code
- */
 void free_initmem(void)
 {
 	free_initmem_default(-1);
