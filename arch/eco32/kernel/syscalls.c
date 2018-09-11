@@ -26,50 +26,15 @@
 #include <asm/ptrace.h>
 #include <asm/syscalls.h>
 #include <asm/thread_info.h>
+#include <asm/irqflags.h>
 
-
-/*
- * Notify kernel of syscall entry.
- */
-// currently not used
-//static noinline void syscall_trace_enter(struct pt_regs* regs)
-//{
-//	/* check if tracing allows this syscall */
-//	if (test_thread_flag(TIF_SYSCALL_TRACE) &&
-//	    tracehook_report_syscall_entry(regs)) {
-//		/* it does not */
-//		return;
-//	}
-//
-//	audit_syscall_entry(regs->r2,
-//	                    regs->r4, regs->r5,
-//	                    regs->r6, regs->r7);
-//}
-
-
-/*
- * Notify kernel of syscall leave.
- */
-//static noinline void syscall_trace_leave(struct pt_regs* regs)
-//{
-//	int step;
-//
-//	audit_syscall_exit(regs);
-//	step = test_thread_flag(TIF_SINGLESTEP);
-//
-//	if (step || test_thread_flag(TIF_SYSCALL_TRACE)) {
-//		tracehook_report_syscall_exit(regs, step);
-//	}
-//}
-
-
-/*
- * syscall table
- */
 
 #undef __SYSCALL
 #define __SYSCALL(nr, call) [nr] = (sys_call_ptr_t) (call),
 
+/*
+ * syscall table
+ */
 sys_call_ptr_t syscall_table[__NR_syscalls] = {
 	[0 ... __NR_syscalls-1] = (sys_call_ptr_t) sys_ni_syscall,
 #include <asm/unistd.h>
@@ -77,22 +42,16 @@ sys_call_ptr_t syscall_table[__NR_syscalls] = {
 
 
 /*
- * syscall interface:
- *   syscall # in $2
- *   args in $4..$9
+ * syscall ISR
  */
 void ISR_syscall(int irq, struct pt_regs* regs)
 {
 	unsigned int num;
 	unsigned int res;
 
-	/* syscalls run with interrupts enabled! */
-	__asm__("mvfs $8,0			\n"
-	        "ldhi $9,0x00800000	\n"
-	        "ori $9,$9,0x0000	\n"
-	        "or $8,$8,$9		\n"
-	        "mvts $8,0			\n"
-	        : : : "$8", "$9");
+	/* syscalls run with interrupts enabled */
+	local_irq_enable();
+ 
 	/* skip over trap instruction */
 	regs->r30 += 4;
 	/* check for legal syscall number */
