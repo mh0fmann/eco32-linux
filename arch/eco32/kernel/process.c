@@ -161,15 +161,6 @@ void start_thread(struct pt_regs* regs, unsigned long pc, unsigned long sp)
 
 
 /*
- * Return saved PC of a blocked thread.
- */
-unsigned long thread_saved_pc(struct task_struct* tsk)
-{
-	return (unsigned long) user_regs(tsk->stack)->xa;
-}
-
-
-/*
  * ???
  */
 void release_thread(struct task_struct* tsk)

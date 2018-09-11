@@ -13,19 +13,23 @@
  * the Free Software Foundation; either version 2 of the License, or
  * (at your option) any later version.
  *
- * die.c -- ??
+ * bug.h -- 
  */
 
-#include <linux/printk.h>
-#include <linux/signal.h>
-#include <linux/sched.h>
+#ifndef __ASM_ECO32_BUG_H
+#define __ASM_ECO32_BUG_H
 
-#include <asm/bug.h>
 
-void die(char* msg, struct pt_regs* regs, long err)
-{
-	console_verbose();
-	printk("\n%s#: %04lx\n", msg, err & 0xffff);
-	show_regs(regs);
-	do_exit(SIGSEGV);
-}
+#ifndef __ASSAMBLY__
+
+#include <asm/ptrace.h>
+
+void die(char* msg, struct pt_regs* regs, long err);
+void show_regs(struct pt_regs* regs);
+
+#endif
+
+
+#include <asm-generic/bug.h>
+
+#endif
