@@ -32,6 +32,13 @@
 #include <asm/sections.h>
 
 
+/*
+ * Pointe to the current_pgd which holds the pgd of the current
+ * running process
+ */
+volatile pgd_t* current_pgd = swapper_pg_dir;
+
+
 static void __init zones_size_init(void)
 {
 	//on eco32 we only habe ZONE_NORMAL
@@ -78,9 +85,6 @@ void __init setup_memory(void){
 	//initialize swapper and empty_zero_page
 	memset(swapper_pg_dir, 0x00, PAGE_SIZE);
 	memset(empty_zero_page, 0x00, PAGE_SIZE);
-	
-	//let current_pgd point to something sane
-	current_pgd = init_mm.pgd;
 	
 	//set the tlb handler
 	set_tlb_handler();

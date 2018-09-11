@@ -16,8 +16,8 @@
  * fixmap.h -- special compile time fixed virtual addresses
  */
 
-#ifndef _ASM_FIXMAP_H
-#define _ASM_FIXMAP_H
+#ifndef __ASM_ECO32_FIXMAP_H
+#define __ASM_ECO32_FIXMAP_H
 
 
 #include <linux/init.h>

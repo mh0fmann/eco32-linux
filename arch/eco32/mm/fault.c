@@ -32,17 +32,7 @@
 #include <asm/uaccess.h>
 #include <asm/eco32.h>
 #include <asm/irq.h>
-
 #include <asm/mmu_context.h>
-
-/*
- * this is the pointer to the pgd of the current running process!
- * if a context switch occours this pointer needs to be updated
- * other wise the tlb miss function can not update the tlb entries
- */
-volatile pgd_t* current_pgd;
-extern void die(char* msg, struct pt_regs* regs, long err);
-
 
 
 int fixup_exception(struct pt_regs* regs)
