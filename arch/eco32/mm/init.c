@@ -70,6 +70,8 @@ void __init setup_memory(void){
 	max_low_pfn = PFN_DOWN(__pa(ECO32_KERNEL_DIRECT_MAPPED_RAM_END));
 	max_pfn = PFN_DOWN(memblock_end_of_DRAM());
 
+	memblock_allow_resize();
+	
 	//reserve memory regions
 	memblock_reserve(__pa(_stext), _end - _stext);
 	memblock_reserve(__pa(ECO32_KERNEL_DIRECT_MAPPED_ROM_START),
@@ -77,7 +79,6 @@ void __init setup_memory(void){
 	early_init_fdt_reserve_self();
 	early_init_fdt_scan_reserved_mem();
 	
-	memblock_allow_resize();
 	__memblock_dump_all();
 	
 	zones_size_init();
