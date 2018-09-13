@@ -67,6 +67,7 @@ void __init init_IRQ(void)
 	int irq;
 
 	for (irq = 0; irq < NR_IRQS; irq++) {
+		set_ISR(irq, do_IRQ);
 		irq_set_chip_and_handler(irq,
 		                         &eco32_irq_type,
 		                         handle_level_irq);
