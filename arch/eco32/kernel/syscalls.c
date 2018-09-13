@@ -62,12 +62,12 @@ void ISR_syscall(int irq, struct pt_regs* regs)
 		return;
 	}
 	
-	do_syscall_trace_enter(regs);
+	syscall_trace_enter(regs);
 
 	/* call syscall handling function */
 	res = (*syscall_table[num])(regs->r4, regs->r5, regs->r6,
 	                            regs->r7, regs->r8, regs->r9);
 	regs->r2 = res;
 	
-	do_syscall_trace_leave(regs);
+	syscall_trace_leave(regs);
 }

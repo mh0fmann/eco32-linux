@@ -112,8 +112,8 @@ struct pt_regs {
 };
 
 
-long do_syscall_trace_enter(struct pt_regs* regs);
-void do_syscall_trace_leave(struct pt_regs* regs);
+long syscall_trace_enter(struct pt_regs* regs);
+void syscall_trace_leave(struct pt_regs* regs);
 
 #endif /* __ASSEMBLY__ */
 

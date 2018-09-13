@@ -55,7 +55,7 @@ const struct user_regset_view* task_user_regset_view(struct task_struct* task)
  * Notification of system call entry/exit
  * - triggered by current->work.syscall_trace
  */
-long do_syscall_trace_enter(struct pt_regs* regs)
+long syscall_trace_enter(struct pt_regs* regs)
 {
 	long ret = 0;
 
@@ -74,7 +74,7 @@ long do_syscall_trace_enter(struct pt_regs* regs)
 	return ret ? : regs->gpr[11];
 }
 
-void do_syscall_trace_leave(struct pt_regs* regs)
+void syscall_trace_leave(struct pt_regs* regs)
 {
 	int step;
 
