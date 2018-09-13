@@ -53,20 +53,18 @@ extern void def_xcpt_handler(int irq, struct pt_regs* regs);
 
 static inline void or_irq_mask(unsigned long mask)
 {
-	__asm__ ("andi $8,%0,0x0000FFFF	\n"
-	         "mvfs $9,0				\n"
-	         "or $9,$9,$8			\n"
+	__asm__ ("mvfs $9,0				\n"
+	         "or $9,$9,%0			\n"
 	         "mvts $9,0				\n"
-	         : : "r"(mask) : "$8", "$9");
+	         : : "r"(mask) : "$9");
 }
 
 static inline void and_irq_mask(unsigned long mask)
 {
-	__asm__ ("ori $8,%0,0x0000FFFF	\n"
-	         "mvfs $9,0				\n"
-	         "and $9,$9,$8			\n"
+	__asm__ ("mvfs $9,0				\n"
+	         "and $9,$9,%0			\n"
 	         "mvts $9,0				\n"
-	         : : "r"(mask) : "$8", "$9");
+	         : : "r"(mask) : "$9");
 }
 
 #endif /* __ASM_ECO32_IRQ_H */
