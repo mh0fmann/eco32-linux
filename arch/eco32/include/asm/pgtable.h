@@ -81,26 +81,11 @@
 
 /*
  * since our arch has fixed kernel mapped virtual area this range and size
- * is easy to set even if we will never be able to map 1GB of memory for the kernel
+ * is easy to set even if we will never be able to allocate 1GB of memory for the kernel
  * because we have way less memory.
- * 
- * NOTE: within this area we also have our fixmap placed at the start of the
- * kernel page mapped area and the pkmap at the end of that space.
- * so this may not be the complete 1GB in size
  */
 #define VMALLOC_START		(ECO32_KERNEL_PAGE_MAPPED_START + FIXADDR_SIZE)
-#ifdef CONFIG_HIGHMEM
-/**
- * FIXME
- * 
- * NOTE: For some reason in include order we can not include asm/highmem.h in pgtable.h or we will get
- * errors. so we set that VMALLOC_END hardcoded to PKMAP_BASE. if PKMAP_BASE changes we need to
- * update that here as well.
- */
-#define VMALLOC_END			(ECO32_KERNEL_DIRECT_MAPPED_RAM_START - PAGE_SIZE * PTRS_PER_PTE)
-#else
 #define VMALLOC_END			(ECO32_KERNEL_DIRECT_MAPPED_RAM_START)
-#endif
 #define VMALLOC_SIZE		(VMALLOC_END - VMALLOC_START)
 #define VMALLOC_VMADDR(x)	((unsigned long)(x))
 
