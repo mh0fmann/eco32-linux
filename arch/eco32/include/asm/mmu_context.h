@@ -29,23 +29,23 @@ extern volatile pgd_t* current_pgd;
 
 static inline int init_new_context(struct task_struct* tsk, struct mm_struct* mm)
 {
-	mm->context = NO_CONTEXT;
-	return 0;
+    mm->context = NO_CONTEXT;
+    return 0;
 }
 
 #define destroy_context(mm)	flush_tlb_mm((mm))
 
 static inline void switch_mm(struct mm_struct* prev, struct mm_struct* next, struct task_struct* next_tsk)
 {
-	current_pgd = next->pgd;
+    current_pgd = next->pgd;
 
-	if (prev != next) {
-		flush_tlb_mm(prev);
-	}
+    if (prev != next) {
+        flush_tlb_mm(prev);
+    }
 }
 
-#define deactivate_mm(tsk, mm)	do { } while (0)
-#define activate_mm(prev, next) switch_mm((prev), (next), NULL)
-#define enter_lazy_tlb(mm, tsk) do { } while (0)
+#define deactivate_mm(tsk, mm)      do { } while (0)
+#define activate_mm(prev, next)     switch_mm((prev), (next), NULL)
+#define enter_lazy_tlb(mm, tsk)     do { } while (0)
 
 #endif

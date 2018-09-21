@@ -30,8 +30,8 @@
 /*
  * PAGE_OFFSET is the virtual address of the start of kernel sddr space
  */
-#define PAGE_OFFSET	0xC0000000
-#define KERNELBASE	PAGE_OFFSET
+#define PAGE_OFFSET     0xC0000000
+#define KERNELBASE      PAGE_OFFSET
 
 /* This is not necessarily the right place for this, but it's needed by
  * drivers/of/fdt.c
@@ -40,11 +40,11 @@
 
 #ifndef __ASSEMBLY__
 
-#define get_user_page(vaddr)            __get_free_page(GFP_KERNEL)
-#define free_user_page(page, addr)      free_page(addr)
+#define get_user_page(vaddr)                    __get_free_page(GFP_KERNEL)
+#define free_user_page(page, addr)              free_page(addr)
 
-#define clear_page(page)	memset((page), 0, PAGE_SIZE)
-#define copy_page(to, from)	memcpy((to), (from), PAGE_SIZE)
+#define clear_page(page)                        memset((page), 0, PAGE_SIZE)
+#define copy_page(to, from)                     memcpy((to), (from), PAGE_SIZE)
 
 #define clear_user_page(page, vaddr, pg)        clear_page(page)
 #define copy_user_page(to, from, vaddr, pg)     copy_page(to, from)
@@ -53,49 +53,50 @@
  * These are used to make use of C type-checking..
  */
 typedef struct {
-	unsigned long pte;
+    unsigned long pte;
 } pte_t;
 typedef struct {
-	unsigned long pgd;
+    unsigned long pgd;
 } pgd_t;
 typedef struct {
-	unsigned long pgprot;
+    unsigned long pgprot;
 } pgprot_t;
 typedef struct page* pgtable_t;
 
-#define pte_val(x)	((x).pte)
-#define pgd_val(x)	((x).pgd)
-#define pgprot_val(x)	((x).pgprot)
+#define pte_val(x)      ((x).pte)
+#define pgd_val(x)      ((x).pgd)
+#define pgprot_val(x)   ((x).pgprot)
 
-#define __pte(x)	((pte_t) { (x) })
-#define __pgd(x)	((pgd_t) { (x) })
-#define __pgprot(x)	((pgprot_t) { (x) })
+#define __pte(x)        ((pte_t) { (x) })
+#define __pgd(x)        ((pgd_t) { (x) })
+#define __pgprot(x)     ((pgprot_t) { (x) })
 
 #endif /* !__ASSEMBLY__ */
 
 
 #ifndef __ASSEMBLY__
 
-#define __va(x) ((void *)((unsigned long)(x) | PAGE_OFFSET))
-#define __pa(x) ((unsigned long) (x) & ~PAGE_OFFSET)
+#define __va(x)     ((void *)((unsigned long)(x) | PAGE_OFFSET))
+#define __pa(x)     ((unsigned long) (x) & ~PAGE_OFFSET)
+
 
 #define virt_to_pfn(kaddr)      (__pa(kaddr) >> PAGE_SHIFT)
 #define pfn_to_virt(pfn)        (__va((pfn) << PAGE_SHIFT))
 
-#define virt_to_page(addr)	(mem_map + virt_to_pfn(addr))
-#define page_to_virt(page)	((void *)((((page) - mem_map) << PAGE_SHIFT) | PAGE_OFFSET))
+#define virt_to_page(addr)      (mem_map + virt_to_pfn(addr))
+#define page_to_virt(page)      ((void *)((((page) - mem_map) << PAGE_SHIFT) | PAGE_OFFSET))
 
 #define page_to_phys(page)      ((dma_addr_t)page_to_pfn(page) << PAGE_SHIFT)
 
 #define pfn_valid(pfn)          ((pfn) < max_mapnr)
 
-#define virt_addr_valid(kaddr)	(pfn_valid(virt_to_pfn(kaddr)))
+#define virt_addr_valid(kaddr)  (pfn_valid(virt_to_pfn(kaddr)))
 
 #endif /* __ASSEMBLY__ */
 
 
-#define VM_DATA_DEFAULT_FLAGS	(VM_READ | VM_WRITE | VM_EXEC | \
-		VM_MAYREAD | VM_MAYWRITE | VM_MAYEXEC)
+#define VM_DATA_DEFAULT_FLAGS   (VM_READ | VM_WRITE | VM_EXEC | \
+                                 VM_MAYREAD | VM_MAYWRITE | VM_MAYEXEC)
 
 
 #include <asm-generic/memory_model.h>

@@ -39,19 +39,19 @@ void flush_tlb_range(struct vm_area_struct* vma,
 
 static inline void flush_tlb_mm(struct mm_struct* mm)
 {
-	/* needs improvement */
-	flush_tlb_all();
+    /* needs improvement */
+    flush_tlb_all();
 }
 
 static inline void flush_tlb(void)
 {
-	flush_tlb_mm(current->mm);
+    flush_tlb_mm(current->mm);
 }
 
 static inline void flush_tlb_kernel_range(unsigned long start,
         unsigned long end)
 {
-	flush_tlb_range(NULL, start, end);
+    flush_tlb_range(NULL, start, end);
 }
 
 #endif /* __ASM_ECO32_TLBFLUSH_H */

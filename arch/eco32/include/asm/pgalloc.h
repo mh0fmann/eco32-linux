@@ -25,14 +25,13 @@
 
 extern int mem_init_done;
 
-#define pmd_populate_kernel(mm, pmd, pte) \
-	set_pmd(pmd, __pmd((unsigned long)pte))
+#define pmd_populate_kernel(mm, pmd, pte)   set_pmd(pmd, __pmd((unsigned long)pte))
 
 static inline void pmd_populate(struct mm_struct* mm, pmd_t* pmd,
                                 struct page* pte)
 {
-	set_pmd(pmd, __pmd(((unsigned long) __va((unsigned long)page_to_pfn(pte) <<
-	                    (unsigned long) PAGE_SHIFT))));
+    set_pmd(pmd, __pmd(((unsigned long) __va((unsigned long)page_to_pfn(pte) <<
+                       (unsigned long) PAGE_SHIFT))));
 }
 
 /*
@@ -40,64 +39,65 @@ static inline void pmd_populate(struct mm_struct* mm, pmd_t* pmd,
  */
 static inline pgd_t* pgd_alloc(struct mm_struct* mm)
 {
-	pgd_t* ret = (pgd_t*)__get_free_page(GFP_KERNEL);
+    pgd_t* ret = (pgd_t*)__get_free_page(GFP_KERNEL);
 
-	if (ret) {
-		memset(ret, 0, USER_PTRS_PER_PGD * sizeof(pgd_t));
-		memcpy(ret + USER_PTRS_PER_PGD,
-		       swapper_pg_dir + USER_PTRS_PER_PGD,
-		       KRNL_PTRS_PER_PGD * sizeof(pgd_t));
+    if (ret) {
+        memset(ret, 0, USER_PTRS_PER_PGD * sizeof(pgd_t));
+        memcpy(ret + USER_PTRS_PER_PGD,
+               swapper_pg_dir + USER_PTRS_PER_PGD,
+               KRNL_PTRS_PER_PGD * sizeof(pgd_t));
 
-	}
+    }
 
-	return ret;
+    return ret;
 }
 
 static inline void pgd_free(struct mm_struct* mm, pgd_t* pgd)
 {
-	free_page((unsigned long)pgd);
+    free_page((unsigned long)pgd);
 }
 
 static inline pte_t* pte_alloc_one_kernel(struct mm_struct* mm,
-        unsigned long address)
+                                          unsigned long address)
 {
-	return (pte_t*)__get_free_page(GFP_KERNEL | ___GFP_RETRY_MAYFAIL | __GFP_ZERO);
+    return (pte_t*)__get_free_page(GFP_KERNEL | ___GFP_RETRY_MAYFAIL | __GFP_ZERO);
 }
 
 static inline struct page* pte_alloc_one(struct mm_struct* mm,
-        unsigned long address)
+                                         unsigned long address)
 {
-	struct page* pte;
-	pte = alloc_pages(GFP_KERNEL, 0);
+    struct page* pte;
+    pte = alloc_pages(GFP_KERNEL, 0);
 
-	if (!pte)
-		return NULL;
+    if (!pte) {
+        return NULL;
+    }
 
-	clear_page(page_address(pte));
+    clear_page(page_address(pte));
 
-	if (!pgtable_page_ctor(pte)) {
-		__free_page(pte);
-		return NULL;
-	}
+    if (!pgtable_page_ctor(pte)) {
+        __free_page(pte);
+        return NULL;
+    }
 
-	return pte;
+    return pte;
 }
 
 static inline void pte_free_kernel(struct mm_struct* mm, pte_t* pte)
 {
-	free_page((unsigned long)pte);
+    free_page((unsigned long)pte);
 }
 
 static inline void pte_free(struct mm_struct* mm, struct page* pte)
 {
-	pgtable_page_dtor(pte);
-	__free_page(pte);
+    pgtable_page_dtor(pte);
+    __free_page(pte);
 }
 
 
-#define __pte_free_tlb(tlb, pte, addr) tlb_remove_page((tlb), (pte))
-#define pmd_pgtable(pmd) pmd_page(pmd)
+#define __pte_free_tlb(tlb, pte, addr)  tlb_remove_page((tlb), (pte))
+#define pmd_pgtable(pmd)                pmd_page(pmd)
 
-#define check_pgt_cache()          do { } while (0)
+#define check_pgt_cache()               do { } while (0)
 
 #endif

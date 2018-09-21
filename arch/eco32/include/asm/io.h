@@ -21,9 +21,9 @@
 
 void __iomem* __ioremap(phys_addr_t offset, unsigned long size);
 
-#define ioremap(offset, size)			__ioremap(offset, size)
-#define ioremap_nocache(offset, size)	__ioremap(offset, size)
+#define ioremap(offset, size)           __ioremap(offset, size)
+#define ioremap_nocache(offset, size)   __ioremap(offset, size)
 
-#define iounmap(addr)					do { } while(0);
+#define iounmap(addr)                   do { } while(0);
 
 #endif
