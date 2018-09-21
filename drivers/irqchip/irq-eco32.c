@@ -57,10 +57,12 @@ static struct irq_chip eco32_intc = {
 };
 
 
-static __init int eco32_irq_map(struct irq_domain *h, unsigned int irq,
+int eco32_irq_map(struct irq_domain *h, unsigned int irq,
 						  irq_hw_number_t hw_irq_num)
 {
-	irq_set_chip_and_handler(irq, &eco32_intc, handle_level_irq);
+	pr_info("irq map: %d, %d\n", irq, hw_irq_num);
+	
+	irq_set_chip_and_handler(hw_irq_num, &eco32_intc, handle_level_irq);
 
     return 0;
 }
@@ -81,8 +83,9 @@ static int __init eco32_intc_of_init(struct device_node *intc,
 	irq_set_default_host(domain);
 	
 	/*
-	 * FIXME: we allocate that timer irq befor we should..
-	 * need to look into this
+	 * FIXME: This gets done automaticly
+	 * for all other archs..
+	 * why do we need to do this?
 	 */
 	irq_create_mapping(domain, 15);
 	

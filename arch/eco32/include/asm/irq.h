@@ -37,6 +37,15 @@
 #define XCPT_ILL_ADDR		24
 #define XCPT_PRV_ADDR		25
 
+#define IRQ_TERMINAL1_TX	0
+#define IRQ_TERMINAL1_RX	1
+#define IRQ_TERMINAL2_TX	2
+#define IRQ_TERMINAL2_RX	3
+#define IRQ_KEYBOARD		4
+#define IRQ_DISK			8
+#define IRQ_TIMER1			14
+#define IRQ_TIMER2			15
+
 #define irq_canonicalize(irq)	(irq)
 
 #define interrupts_enabled(regs) ((regs->psw >> 22) & 0x1)
