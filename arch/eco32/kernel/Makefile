@@ -6,7 +6,7 @@ extra-y := head.o vmlinux.lds
 obj-y := syscalls.o irq.o traps.o setup.o pm.o \
          process.o ptrace.o archlocalirq.o \
          die.o entry.o signal.o switch.o \
-         topology.o cacheflush.o time.o \
+         topology.o time.o \
          restart.o processor.o
 
 obj-$(CONFIG_EARLY_PRINTK) += early_printk.o
