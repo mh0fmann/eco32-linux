@@ -30,6 +30,7 @@ config ECO32
 	select OF_EARLY_FLATTREE
 	select OF_IRQ
 	select IRQ_DOMAIN
+	select ECO32_TIMERS
 
 config GENERIC_CSUM
 	def_bool y
