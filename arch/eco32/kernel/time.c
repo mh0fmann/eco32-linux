@@ -23,7 +23,7 @@
 void __init time_init(void)
 {
 	/*
-	 * Timer initialization is all done int the timer driver
+	 * Timer initialization is all done in the timer driver
 	 */
 	timer_probe();
 }
