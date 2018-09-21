@@ -250,9 +250,7 @@ void do_signal(struct pt_regs* regs)
 	}
 
 
-	/* we get here in case of init
-	 * init does not get signals nor
-	 * will it handle any */
+	/* did we come from a syscall? */
 	syscall_num = regs->r2_orig;
 
 	if (syscall_num >= 0) {
@@ -273,6 +271,7 @@ void do_signal(struct pt_regs* regs)
 		}
 	}
 
+	/* put saved sigmask back */
 	restore_saved_sigmask();
 }
 
