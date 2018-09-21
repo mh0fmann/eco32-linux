@@ -82,13 +82,6 @@ static int __init eco32_intc_of_init(struct device_node *intc,
 	BUG_ON(!domain);
 	irq_set_default_host(domain);
 	
-	/*
-	 * FIXME: This gets done automaticly
-	 * for all other archs..
-	 * why do we need to do this?
-	 */
-	irq_create_mapping(domain, 15);
-	
 	return 0;
 }
 IRQCHIP_DECLARE(eco32_intc, "thm,eco32-intc", eco32_intc_of_init);
