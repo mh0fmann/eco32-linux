@@ -20,6 +20,10 @@
 #include <linux/hardirq.h>
 #include <linux/init.h>
 #include <linux/sched.h>
+#include <linux/irq.h>
+#include <linux/irqchip.h>
+#include <linux/of_address.h>
+#include <linux/of_irq.h>
 
 #include <asm/siginfo.h>
 #include <asm/signal.h>
@@ -27,51 +31,20 @@
 
 
 /*
- * We safe the current state of active irqs here so we can
- * load the active irqs from here.
- *
- * This needs be done so we can update the psw on each context
- * switch and return so all threads run with the correct irqs
- * masked
- */
-unsigned long volatile irqmask = 0;
-
-
-static void enable_eco32_irq(struct irq_data* data)
-{
-	irqmask |= (1 << data->irq);
-	or_irq_mask(1 << data->irq);
-}
-
-
-static void disable_eco32_irq(struct irq_data* data)
-{
-	irqmask &= ~(1 << data->irq);
-	and_irq_mask(~(1 << data->irq));
-}
-
-
-static struct irq_chip eco32_irq_type = {
-	.name = "ECO32",
-	.irq_disable = disable_eco32_irq,
-	.irq_mask = disable_eco32_irq,
-	.irq_unmask = enable_eco32_irq,
-};
-
-
-/*
  * initialise the interrupt system
  */
 void __init init_IRQ(void)
 {
-	int irq;
-
-	for (irq = 0; irq < NR_IRQS; irq++) {
-		set_ISR(irq, do_IRQ);
-		irq_set_chip_and_handler(irq,
-		                         &eco32_irq_type,
-		                         handle_level_irq);
-	}
+	set_ISR(IRQ_TERMINAL1_TX, do_IRQ);
+	set_ISR(IRQ_TERMINAL1_RX, do_IRQ);
+	set_ISR(IRQ_TERMINAL2_TX, do_IRQ);
+	set_ISR(IRQ_TERMINAL2_RX, do_IRQ);
+	set_ISR(IRQ_KEYBOARD, do_IRQ);
+	set_ISR(IRQ_DISK, do_IRQ);
+	set_ISR(IRQ_TIMER1, do_IRQ);
+	set_ISR(IRQ_TIMER2, do_IRQ);
+	
+	irqchip_init();
 }
 
 
