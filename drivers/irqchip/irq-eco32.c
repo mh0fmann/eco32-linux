@@ -59,9 +59,7 @@ static struct irq_chip eco32_intc = {
 
 int eco32_irq_map(struct irq_domain *h, unsigned int irq,
 						  irq_hw_number_t hw_irq_num)
-{
-	pr_info("irq map: %d, %d\n", irq, hw_irq_num);
-	
+{	
 	irq_set_chip_and_handler(hw_irq_num, &eco32_intc, handle_level_irq);
 
     return 0;
