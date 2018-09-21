@@ -1,19 +1,16 @@
 /*
- * ECO32 Linux
- *
  * Linux architectural port borrowing liberally from similar works of
- * others.  All original copyrights apply as per the original source
- * declaration.
+ * others, namely OpenRISC and RISC-V.  All original copyrights apply
+ * as per the original source declaration.
  *
  * Modifications for ECO32:
- * Copyright (c) 2018 Hellwig Geisse, Martin Hofmann
+ * Copyright (c) 2018 Hellwig Geisse
+ * Copyright (c) 2018 Martin Hofmann
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation; either version 2 of the License, or
  * (at your option) any later version.
- *
- * setup.c -- arch specific kernel setup
  */
 
 #include <linux/string.h>
@@ -53,7 +50,7 @@ void __init eco32_early_setup(void* fdt)
 		        (unsigned long) fdt);
 	}
 	
-	//we make the device tree ready befor we enter the kernel
+	/* we make the device tree ready befor we enter the kernel */
 	early_init_dt_scan(fdt);
 	parse_early_param();
 }
@@ -70,11 +67,11 @@ void __init setup_arch(char** cmdline_p)
 
 	unflatten_and_copy_device_tree();
 
-	//setup memblock and all other eco32 related memory stuff
+	/* setup memblock and all other eco32 related memory stuff */
 	setup_memory();
 
 #ifdef CONFIG_CMDLINE_BOOL
-	//copy builtin commandline
+	/* copy builtin commandline */
 	strlcpy(boot_command_line, eco32_builtin_cmdline, COMMAND_LINE_SIZE);
 #endif
 	*cmdline_p = boot_command_line;
@@ -82,7 +79,7 @@ void __init setup_arch(char** cmdline_p)
 	         (unsigned long) &init_thread_info);
 	         
 #if defined(CONFIG_VT) && defined(CONFIG_DUMMY_CONSOLE)
-	//set dummy_con if we are going to use virtual terminals
+	/* use dummy_con if we are going to use virtual terminals */
 	if (!conswitchp)
 		conswitchp = &dummy_con;
 #endif

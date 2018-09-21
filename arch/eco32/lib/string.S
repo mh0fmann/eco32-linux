@@ -1,24 +1,24 @@
 /*
- * ECO32 Linux
- *
  * Linux architectural port borrowing liberally from similar works of
- * others.  All original copyrights apply as per the original source
- * declaration.
+ * others, namely OpenRISC and RISC-V.  All original copyrights apply
+ * as per the original source declaration.
  *
  * Modifications for ECO32:
- * Copyright (c) 2017 Hellwig Geisse
+ * Copyright (c) 2018 Hellwig Geisse
+ * Copyright (c) 2018 Martin Hofmann
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation; either version 2 of the License, or
  * (at your option) any later version.
- *
- * string.S -- low-level system/user memory copy and clear routines
  */
 
 
 #include <linux/linkage.h>
 #include <asm/errno.h>
+
+	.global	__copy_tofrom_user
+	.global	__clear_user
 
 
 /*
@@ -28,7 +28,6 @@
  *
  * NOTE: Returns number of bytes NOT copied!
  */
-	.global	__copy_tofrom_user
 __copy_tofrom_user:
 	subi	$29,$29,8
 	stw	$4,$29,0		# save dst ptr
@@ -67,7 +66,6 @@ copy_fixup:
  *
  * NOTE: Returns number of bytes NOT cleared!
  */
-	.global	__clear_user
 __clear_user:
 	subi	$29,$29,4
 	stw	$4,$29,0		# save dst ptr

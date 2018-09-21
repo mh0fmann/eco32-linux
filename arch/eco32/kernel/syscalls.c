@@ -1,19 +1,16 @@
 /*
- * ECO32 Linux
- *
  * Linux architectural port borrowing liberally from similar works of
- * others.  All original copyrights apply as per the original source
- * declaration.
+ * others, namely OpenRISC and RISC-V.  All original copyrights apply
+ * as per the original source declaration.
  *
  * Modifications for ECO32:
- * Copyright (c) 2018 Hellwig Geisse, Martin Hofmann
+ * Copyright (c) 2018 Hellwig Geisse
+ * Copyright (c) 2018 Martin Hofmann
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation; either version 2 of the License, or
  * (at your option) any later version.
- *
- * syscalls.c -- system calls
  */
 
 
@@ -32,9 +29,8 @@
 #undef __SYSCALL
 #define __SYSCALL(nr, call) [nr] = (sys_call_ptr_t) (call),
 
-/*
- * syscall table
- */
+
+/* syscall table */
 sys_call_ptr_t syscall_table[__NR_syscalls] = {
 	[0 ... __NR_syscalls-1] = (sys_call_ptr_t) sys_ni_syscall,
 #include <asm/unistd.h>
@@ -42,7 +38,7 @@ sys_call_ptr_t syscall_table[__NR_syscalls] = {
 
 
 /*
- * syscall ISR
+ * ISR for syscalls
  */
 void ISR_syscall(int irq, struct pt_regs* regs)
 {

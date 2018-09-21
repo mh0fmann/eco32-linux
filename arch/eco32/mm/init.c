@@ -1,19 +1,16 @@
 /*
- * ECO32 Linux
- *
  * Linux architectural port borrowing liberally from similar works of
- * others.  All original copyrights apply as per the original source
- * declaration.
+ * others, namely OpenRISC and RISC-V.  All original copyrights apply
+ * as per the original source declaration.
  *
  * Modifications for ECO32:
- * Copyright (c) 2018 Hellwig Geisse, Martin Hofmann
+ * Copyright (c) 2018 Hellwig Geisse
+ * Copyright (c) 2018 Martin Hofmann
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation; either version 2 of the License, or
  * (at your option) any later version.
- *
- * init.c -- initialize the memory management
  */
 
 #include <linux/init.h>
@@ -41,13 +38,15 @@ volatile pgd_t* current_pgd = swapper_pg_dir;
 
 static void __init zones_size_init(void)
 {
-	//on eco32 we only habe ZONE_NORMAL
-	//there is no dma or highmem atm.
+	/* 
+	 * on eco32 we only habe ZONE_NORMAL
+	 * there is no dma or highmem atm.
+	 */
 	unsigned long zones_size[MAX_NR_ZONES];
 	memset(zones_size, 0x00, sizeof(zones_size));
 	zones_size[ZONE_NORMAL] = max_pfn;
 
-	//initialize the free area and get the allocators up and running
+	/* initialize the free area and get the allocators up and running */
 	free_area_init(zones_size);
 }
 
@@ -57,22 +56,24 @@ static void __init zones_size_init(void)
  */
 void __init setup_memory(void){
 	
-	//initial memory region is kernel code/data
+	/* initial memory region is kernel code/data */
 	init_mm.start_code = (unsigned long) _stext;
 	init_mm.end_code = (unsigned long) _etext;
 	init_mm.end_data = (unsigned long) _edata;
 	init_mm.brk = (unsigned long) _end;
 	
-	//on eco32 memory always starts on 0x00000000
-	//due to our mmu desing we always map the first 512mb of ram
-	//this is our lowmem
+	/*
+	 * on eco32 memory always starts on 0x00000000
+	 * due to our mmu desing we always map the first 512mb of ram
+	 * this is our lowmem
+	 */
 	min_low_pfn = PFN_UP(0x00000000);
 	max_low_pfn = PFN_DOWN(__pa(ECO32_KERNEL_DIRECT_MAPPED_RAM_END));
 	max_pfn = PFN_DOWN(memblock_end_of_DRAM());
 
 	memblock_allow_resize();
 	
-	//reserve memory regions
+	/* reserve memory regions */
 	memblock_reserve(__pa(_stext), _end - _stext);
 	memblock_reserve(__pa(ECO32_KERNEL_DIRECT_MAPPED_ROM_START),
 					 __pa(ECO32_KERNEL_DIRECT_MAPPED_IO_END));	 
@@ -83,11 +84,11 @@ void __init setup_memory(void){
 	
 	zones_size_init();
 	
-	//initialize swapper and empty_zero_page
+	/* initialize swapper and empty_zero_page */
 	memset(swapper_pg_dir, 0x00, PAGE_SIZE);
 	memset(empty_zero_page, 0x00, PAGE_SIZE);
 	
-	//set the tlb handler
+	/* set the tlb handler */
 	set_tlb_handler();
 }
 
@@ -119,7 +120,7 @@ void __init mem_init(void)
 	        ((unsigned long)&__init_end -
 	         (unsigned long)&__init_begin) >> 10);
 
-	//put remaining bootmem on the free list
+	/* put remaining bootmem on the free list */
 	free_all_bootmem();
 }
 

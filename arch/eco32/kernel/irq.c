@@ -1,19 +1,16 @@
 /*
- * ECO32 Linux
- *
  * Linux architectural port borrowing liberally from similar works of
- * others.  All original copyrights apply as per the original source
- * declaration.
+ * others, namely OpenRISC and RISC-V.  All original copyrights apply
+ * as per the original source declaration.
  *
  * Modifications for ECO32:
- * Copyright (c) 2018 Hellwig Geisse, Martin Hofmann
+ * Copyright (c) 2018 Hellwig Geisse
+ * Copyright (c) 2018 Martin Hofmann
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation; either version 2 of the License, or
  * (at your option) any later version.
- *
- * irq.c -- Interrupt initialization and handling entry
  */
 
 #include <linux/interrupt.h>
@@ -35,6 +32,14 @@
  */
 void __init init_IRQ(void)
 {
+	/*
+	 * Set do_IRQ as the ISR for all currently used irqlines
+	 * used by hardware on the SoC
+	 * 
+	 * Other irqlines should never be active and interrupt the cpu
+	 * if they do we got some hardwarefailure which gets
+	 * catched by the default ISR.
+	 */
 	set_ISR(IRQ_TERMINAL1_TX, do_IRQ);
 	set_ISR(IRQ_TERMINAL1_RX, do_IRQ);
 	set_ISR(IRQ_TERMINAL2_TX, do_IRQ);
@@ -44,6 +49,10 @@ void __init init_IRQ(void)
 	set_ISR(IRQ_TIMER1, do_IRQ);
 	set_ISR(IRQ_TIMER2, do_IRQ);
 	
+	/*
+	 * Initialize the irq chip to get the interrupt subsystem
+	 * up and running
+	 */
 	irqchip_init();
 }
 
