@@ -239,7 +239,7 @@ extern long __get_user_bad(void);
     __asm__ __volatile__(                       \
             "1: ldw %1,%2,0\n"                  \
             "2: ldw %L1,%2,4\n"                 \
-            "3: \n"	                            \
+            "3: \n"                             \
             "   .section .fixup,\"ax\"\n"       \
             "4: addi %0,$0,%3\n"                \
             "   addi %1,$0,0\n"                 \

@@ -367,7 +367,7 @@ static inline void pmd_set(pmd_t* pmdp, pte_t* ptep)
 #define __pte_to_swp_entry(pte)     ((swp_entry_t) { pte_val(pte) })
 #define __swp_entry_to_pte(x)       ((pte_t) { (x).val })
 
-#define kern_addr_valid(addr)           (1)
+#define kern_addr_valid(addr)       (1)
 
 #include <asm-generic/pgtable.h>
 
