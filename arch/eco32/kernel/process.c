@@ -40,17 +40,6 @@
 struct thread_info* current_ti = &init_thread_info;
 
 
-/*
- * If a process does an exec syscall, machine state
- * like FPU and debug registers need to be reset.
- * This is a hook function for that purpose.
- */
-void flush_thread(void)
-{
-	/* nothing to do here */
-}
-
-
 extern __visible asmlinkage void ret_from_fork(void);
 
 

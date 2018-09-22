@@ -81,6 +81,16 @@ unsigned long get_wchan(struct task_struct* p);
 
 
 /*
+ * If a process does an exec syscall, machine state
+ * like FPU and debug registers need to be reset.
+ * This is a hook function for that purpose.
+ */
+extern inline void flush_thread(void)
+{
+    /* nothing to do here */
+}
+
+/*
  * Free current thread data structures etc.
  */
 extern inline void exit_thread(struct task_struct* tsk)
