@@ -32,28 +32,29 @@
  */
 void __init init_IRQ(void)
 {
-	/*
-	 * Set do_IRQ as the ISR for all currently used irqlines
-	 * used by hardware on the SoC
-	 * 
-	 * Other irqlines should never be active and interrupt the cpu
-	 * if they do we got some hardwarefailure which gets
-	 * catched by the default ISR.
-	 */
-	set_ISR(IRQ_TERMINAL1_TX, do_IRQ);
-	set_ISR(IRQ_TERMINAL1_RX, do_IRQ);
-	set_ISR(IRQ_TERMINAL2_TX, do_IRQ);
-	set_ISR(IRQ_TERMINAL2_RX, do_IRQ);
-	set_ISR(IRQ_KEYBOARD, do_IRQ);
-	set_ISR(IRQ_DISK, do_IRQ);
-	set_ISR(IRQ_TIMER1, do_IRQ);
-	set_ISR(IRQ_TIMER2, do_IRQ);
-	
-	/*
-	 * Initialize the irq chip to get the interrupt subsystem
-	 * up and running
-	 */
-	irqchip_init();
+    /*
+     * Set do_IRQ as the ISR for all currently used irqlines
+     * used by hardware on the SoC
+     * 
+     * Other irqlines should never be active and interrupt the cpu.
+     * If they do we got some hardwarefailure which gets
+     * catched by the default ISR that is still present for these
+     * entries
+     */
+    set_ISR(IRQ_TERMINAL1_TX, do_IRQ);
+    set_ISR(IRQ_TERMINAL1_RX, do_IRQ);
+    set_ISR(IRQ_TERMINAL2_TX, do_IRQ);
+    set_ISR(IRQ_TERMINAL2_RX, do_IRQ);
+    set_ISR(IRQ_KEYBOARD, do_IRQ);
+    set_ISR(IRQ_DISK, do_IRQ);
+    set_ISR(IRQ_TIMER1, do_IRQ);
+    set_ISR(IRQ_TIMER2, do_IRQ);
+
+    /*
+     * Initialize the irq chip to get the interrupt subsystem
+     * up and running
+     */
+    irqchip_init();
 }
 
 
@@ -65,19 +66,17 @@ void __init init_IRQ(void)
  */
 void __irq_entry do_IRQ(int irq, struct pt_regs* regs)
 {
+    /* establish pointer to current exception frame */
+    struct pt_regs* old_regs = set_irq_regs(regs);
 
+    /*
+     * notify kernel over hardware interrupt and let kernel call the
+     * registered handler
+     */
+    irq_enter();
+    generic_handle_irq(irq);
+    irq_exit();
 
-	/* establish pointer to current exception frame */
-	struct pt_regs* old_regs = set_irq_regs(regs);
-
-	/*
-	 * notify kernel over hardware interrupt and let kernel call the
-	 * registered handler
-	 */
-	irq_enter();
-	generic_handle_irq(irq);
-	irq_exit();
-
-	/* restore original pointer to exception frame */
-	set_irq_regs(old_regs);
+    /* restore original pointer to exception frame */
+    set_irq_regs(old_regs);
 }

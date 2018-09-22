@@ -20,6 +20,8 @@
 
 /* NR_IRQS counts only real interrupts, but not faults */
 #define NR_IRQS                 16
+/* NR_INTERRUPS counts all interrupts including faults */
+#define NR_INTERRUPTS           32
 
 #define NO_IRQ                  (-1)
 
@@ -47,13 +49,43 @@
 
 #define interrupts_enabled(regs) ((regs->psw >> 22) & 0x1)
 
+
+/*
+ * Signature for all ISR-functions that get called at the very end
+ * of our kernel-entry
+ */
 typedef void (*isr_t)(int irq, struct pt_regs* regs);
 
-void set_ISR(int irq, isr_t isr);
-isr_t get_ISR(int irq);
 
-void init_IRQ(void);
-void do_IRQ(int irq, struct pt_regs* regs);
+extern isr_t isr_tbl[NR_INTERRUPTS];
+
+
+/*
+ * Write a new isr for a given irq in the isr table
+ */
+static inline int set_ISR(unsigned int irq, isr_t isr)
+{
+    if (irq >= NR_INTERRUPTS) {
+        return 1;
+    }
+    
+    isr_tbl[irq] = isr;
+    
+    return 0;
+}
+
+/*
+ * Read a isr for a given irq from the isr table
+ */
+static inline isr_t get_ISR(unsigned int irq)
+{
+    if (irq >= NR_INTERRUPTS) {
+        /* NULL is not present here */
+        return (isr_t)(0);
+    }
+    
+    return isr_tbl[irq];
+}
 
 /*
  * default ISR that generates a panic when called
@@ -82,5 +114,17 @@ static inline void and_irq_mask(unsigned long mask)
              "mvts $9,0     \n"
              : : "r"(mask) : "$9");
 }
+
+/* initialize the arch specific interrupt stuff for the irq subsystem */
+void init_IRQ(void);
+
+
+/*
+ * do_IRQ handles all normal device interrupts
+ * This is our ISR for all device interrupts.
+ * The devices itslef register thier interrupt handler
+ * via request_irq which get called by generic_handle_irq
+ */
+void do_IRQ(int irq, struct pt_regs* regs);
 
 #endif /* __ASM_ECO32_IRQ_H */

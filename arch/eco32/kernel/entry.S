@@ -236,25 +236,6 @@ sys_rt_sigreturn:
 	addi	$4,$28,0		# fp points to pt_regs
 	j	do_sigreturn		# actual work done there
 
-/*
- * void set_ISR(int irq, isr_t isr)
- *
- * set the ISR for a given irq number
- */
-set_ISR:
-	slli	$4,$4,2
-	stw	$5,$4,isr_tbl
-	jr	$31
-
-/*
- * isr_t get_ISR(int irq)
- *
- * get the ISR for a given irq number
- */
-get_ISR:
-	slli	$4,$4,2
-	ldw	$2,$4,isr_tbl
-	jr	$31
 
 /*
  * ISR table
