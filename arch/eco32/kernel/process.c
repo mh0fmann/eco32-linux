@@ -75,58 +75,58 @@ extern __visible asmlinkage void ret_from_fork(void);
 int copy_thread(unsigned long clone_flags, unsigned long usp,
                 unsigned long arg, struct task_struct* p)
 {
-	struct thread_info* ti;
-	unsigned long top_of_kernel_stack;
-	unsigned long sp;
-	struct pt_regs* uregs;
-	struct pt_regs* kregs;
+    struct thread_info* ti;
+    unsigned long top_of_kernel_stack;
+    unsigned long sp;
+    struct pt_regs* uregs;
+    struct pt_regs* kregs;
 
-	p->set_child_tid = NULL;
-	p->clear_child_tid = NULL;
+    p->set_child_tid = NULL;
+    p->clear_child_tid = NULL;
 
-	/* locate thread info and top of kernel stack */
-	ti = task_thread_info(p);
-	top_of_kernel_stack = (unsigned long) ti + THREAD_SIZE;
-	sp = top_of_kernel_stack;
+    /* locate thread info and top of kernel stack */
+    ti = task_thread_info(p);
+    top_of_kernel_stack = (unsigned long) ti + THREAD_SIZE;
+    sp = top_of_kernel_stack;
 
-	/* locate userspace context on stack */
-	sp -= sizeof(struct pt_regs);
-	uregs = (struct pt_regs*) sp;
+    /* locate userspace context on stack */
+    sp -= sizeof(struct pt_regs);
+    uregs = (struct pt_regs*) sp;
 
-	/* locate kernel context on stack */
-	sp -= sizeof(struct pt_regs);
-	kregs = (struct pt_regs*) sp;
+    /* locate kernel context on stack */
+    sp -= sizeof(struct pt_regs);
+    kregs = (struct pt_regs*) sp;
 
-	if (unlikely(p->flags & PF_KTHREAD)) {
-		/* create kernel thread */
-		/* may later mutate to userspace thread */
-		pr_debug("create kernel thread, info @ 0x%08lx\n",
-		         (unsigned long) ti);
-		memset(kregs, 0, sizeof(struct pt_regs));
-		kregs->gpr[16] = usp;	/* kernel thread function */
-		kregs->gpr[17] = arg;	/* kernel thread argument */
-	} else {
-		/* create userspace thread */
-		/* (in response to fork() syscall) */
-		pr_debug("create userspace thread, info @ 0x%08lx\n",
-		         (unsigned long) ti);
-		*uregs = *current_pt_regs();
+    if (unlikely(p->flags & PF_KTHREAD)) {
+        /* create kernel thread */
+        /* may later mutate to userspace thread */
+        pr_debug("create kernel thread, info @ 0x%08lx\n",
+                 (unsigned long) ti);
+        memset(kregs, 0, sizeof(struct pt_regs));
+        kregs->gpr[16] = usp;   /* kernel thread function */
+        kregs->gpr[17] = arg;   /* kernel thread argument */
+    } else {
+        /* create userspace thread */
+        /* (in response to fork() syscall) */
+        pr_debug("create userspace thread, info @ 0x%08lx\n",
+                 (unsigned long) ti);
+        *uregs = *current_pt_regs();
 
-		if (usp) {
-			uregs->sp = usp;
-		}
+        if (usp) {
+            uregs->sp = usp;
+        }
 
-		uregs->gpr[2] = 0;	/* result from fork() */
-		kregs->gpr[16] = 0;	/* this is a userspace thread */
-	}
+        uregs->gpr[2] = 0;  /* result from fork() */
+        kregs->gpr[16] = 0; /* this is a userspace thread */
+    }
 
-	/* every newly created thread will resume execution here */
-	kregs->gpr[31] = (unsigned long) ret_from_fork;
+    /* every newly created thread will resume execution here */
+    kregs->gpr[31] = (unsigned long) ret_from_fork;
 
-	/* ti->ksp is used to locate the stored kernel context */
-	ti->ksp = (unsigned long) kregs;
+    /* ti->ksp is used to locate the stored kernel context */
+    ti->ksp = (unsigned long) kregs;
 
-	return 0;
+    return 0;
 }
 
 
@@ -135,14 +135,14 @@ int copy_thread(unsigned long clone_flags, unsigned long usp,
  */
 void start_thread(struct pt_regs* regs, unsigned long pc, unsigned long sp)
 {
-	unsigned long psw = 0x0A40FFFF;
+    unsigned long psw = 0x0A40FFFF;
 
-	pr_debug("start_thread called, regs @ 0x%08lux pc=0x%08lux sp=0x%08lux\n",
-	         (unsigned long) regs, pc, sp);
-	memset(regs, 0, sizeof(struct pt_regs));
-	regs->psw = psw;
-	regs->xa = pc;
-	regs->sp = sp;
+    pr_debug("start_thread called, regs @ 0x%08lux pc=0x%08lux sp=0x%08lux\n",
+             (unsigned long) regs, pc, sp);
+    memset(regs, 0, sizeof(struct pt_regs));
+    regs->psw = psw;
+    regs->xa = pc;
+    regs->sp = sp;
 }
 
 
@@ -156,29 +156,29 @@ extern struct thread_info* _switch(struct thread_info* old_ti,
 struct task_struct* __switch_to(struct task_struct* old,
                                 struct task_struct* new)
 {
-	struct task_struct* last;
-	struct thread_info* new_ti, *old_ti;
-	unsigned long flags;
+    struct task_struct* last;
+    struct thread_info* new_ti, *old_ti;
+    unsigned long flags;
 
-	local_irq_save(flags);
+    local_irq_save(flags);
 
-	new_ti = new->stack;
-	old_ti = old->stack;
+    new_ti = new->stack;
+    old_ti = old->stack;
 
-	/*
-	 * Current_set is an array of saved current pointers
-	 * (one for each cpu). We need them at user -> kernel
-	 * transitions, while we save them here. For the time
-	 * being, we only have a single cpu and thus only
-	 * a single current_ti.
-	 */
+    /*
+     * Current_set is an array of saved current pointers
+     * (one for each cpu). We need them at user -> kernel
+     * transitions, while we save them here. For the time
+     * being, we only have a single cpu and thus only
+     * a single current_ti.
+     */
 
-	current_ti = new_ti;
-	last = (_switch(old_ti, new_ti))->task;
+    current_ti = new_ti;
+    last = (_switch(old_ti, new_ti))->task;
 
-	local_irq_restore(flags);
+    local_irq_restore(flags);
 
-	return last;
+    return last;
 }
 
 
@@ -187,38 +187,38 @@ struct task_struct* __switch_to(struct task_struct* old,
  */
 void show_regs(struct pt_regs* regs)
 {
-	char line[80];
-	char* p;
-	int i, j;
-	int rn;
-	unsigned long psw;
+    char line[80];
+    char* p;
+    int i, j;
+    int rn;
+    unsigned long psw;
 
-	for (i = 0; i < 8; i++) {
-		p = line;
+    for (i = 0; i < 8; i++) {
+        p = line;
 
-		for (j = 0; j < 4; j++) {
-			rn = 8 * j + i;
-			p += sprintf(p, "$%-2d  %08lX     ",
-			             rn, regs->gpr[rn]);
-		}
+        for (j = 0; j < 4; j++) {
+            rn = 8 * j + i;
+            p += sprintf(p, "$%-2d  %08lX     ",
+                         rn, regs->gpr[rn]);
+        }
 
-		pr_info("%s\n", line);
-	}
+        pr_info("%s\n", line);
+    }
 
-	psw = regs->psw;
-	pr_info("     xxxx  V  UPO  IPO  IACK   MASK\n");
-	p = line;
-	p += sprintf(p, "PSW  ");
+    psw = regs->psw;
+    pr_info("     xxxx  V  UPO  IPO  IACK   MASK\n");
+    p = line;
+    p += sprintf(p, "PSW  ");
 
-	for (i = 31; i >= 0; i--) {
-		if (i == 27 || i == 26 || i == 23 || i == 20 || i == 15) {
-			p += sprintf(p, "  ");
-		}
+    for (i = 31; i >= 0; i--) {
+        if (i == 27 || i == 26 || i == 23 || i == 20 || i == 15) {
+            p += sprintf(p, "  ");
+        }
 
-		p += sprintf(p, "%c", psw & (1 << i) ? '1' : '0');
-	}
+        p += sprintf(p, "%c", psw & (1 << i) ? '1' : '0');
+    }
 
-	pr_info("%s\n", line);
+    pr_info("%s\n", line);
 }
 
 
@@ -227,6 +227,6 @@ void show_regs(struct pt_regs* regs)
  */
 unsigned long get_wchan(struct task_struct* p)
 {
-	/* TODO */
-	return 0;
+    /* TODO */
+    return 0;
 }
