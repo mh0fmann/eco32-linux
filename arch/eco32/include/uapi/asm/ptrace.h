@@ -23,9 +23,9 @@
  */
 
 struct user_regs_struct {
-	unsigned long gpr[32];
-	unsigned long pc;
-	unsigned long sr;
+    unsigned long gpr[32];
+    unsigned long pc;
+    unsigned long sr;
 };
 
 #endif

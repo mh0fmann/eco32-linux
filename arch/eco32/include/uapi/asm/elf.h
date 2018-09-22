@@ -30,15 +30,15 @@
 #include <asm/ptrace.h>
 
 /* The ECO32 relocation types... not all relevant for module loader */
-#define R_ECO32_NONE		0
-#define R_ECO32_32		1
-#define R_ECO32_16		2
-#define R_ECO32_8		3
-#define R_ECO32_CONST		4
-#define R_ECO32_CONSTH		5
-#define R_ECO32_JUMPTARG	6
-#define R_ECO32_VTINHERIT	7
-#define R_ECO32_VTENTRY		8
+#define R_ECO32_NONE        0
+#define R_ECO32_32          1
+#define R_ECO32_16          2
+#define R_ECO32_8           3
+#define R_ECO32_CONST       4
+#define R_ECO32_CONSTH      5
+#define R_ECO32_JUMPTARG    6
+#define R_ECO32_VTINHERIT   7
+#define R_ECO32_VTENTRY     8
 
 typedef unsigned long elf_greg_t;
 
@@ -53,13 +53,13 @@ typedef elf_greg_t elf_gregset_t[ELF_NGREG];
 typedef unsigned long elf_fpregset_t;
 
 /* EM_ECO32 is defined in linux/elf-em.h */
-#define EM_ECO32	0xEC05
+#define EM_ECO32            0xEC05
 
 /*
  * These are used to set parameters in the core dumps.
  */
-#define ELF_ARCH	EM_ECO32
-#define ELF_CLASS	ELFCLASS32
-#define ELF_DATA	ELFDATA2MSB
+#define ELF_ARCH            EM_ECO32
+#define ELF_CLASS           ELFCLASS32
+#define ELF_DATA            ELFDATA2MSB
 
 #endif /* _UAPI__ASM_ECO32_ELF_H */
