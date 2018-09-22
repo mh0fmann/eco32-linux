@@ -79,13 +79,21 @@ void start_thread(struct pt_regs* regs, unsigned long nip, unsigned long sp);
 void release_thread(struct task_struct* tsk);
 unsigned long get_wchan(struct task_struct* p);
 
+
 /*
  * Free current thread data structures etc.
  */
-
 extern inline void exit_thread(struct task_struct* tsk)
 {
-    /* Nothing needs to be done here. */
+    /* nothing to do here */
+}
+
+/*
+ * Free all ressources held by a thread
+ */
+extern inline void release_thread(struct task_struct* tsk)
+{
+    /* nothing to do here */
 }
 
 /*

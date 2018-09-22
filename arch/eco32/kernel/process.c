@@ -157,15 +157,6 @@ void start_thread(struct pt_regs* regs, unsigned long pc, unsigned long sp)
 }
 
 
-/*
- * ???
- */
-void release_thread(struct task_struct* tsk)
-{
-	/* nothing to do here */
-}
-
-
 extern struct thread_info* _switch(struct thread_info* old_ti,
                                    struct thread_info* new_ti);
 
