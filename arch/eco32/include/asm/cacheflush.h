@@ -16,17 +16,23 @@
 #ifndef __ASM_ECO32_CACHEFLUSH_H
 #define __ASM_ECO32_CACHEFLUSH_H
 
-extern void flush_cache_all(void);
-extern void flush_dcache(void);
-extern void flush_icache(void);
+#define flush_cache_all()   __asm__("cctl 7")
+#define flush_dcache()      __asm__("cctl 3")
+#define flush_icache()      __asm__("cctl 4")
 
 
+/*
+ * The ECO32 can only flush either the complete instruction
+ * or the complete data cache
+ * 
+ * flushing specific parts of it is not supported
+ */
 #define flush_cache_mm(mm)                              flush_cache_all()
 #define flush_cache_dup_mm(mm)                          flush_cache_all()
 #define flush_cache_range(vma, addr, pfn)               flush_cache_all()
 #define flush_cache_page(vma, addr, pfn)                flush_cache_all()
 
-#define ARCH_IMPLEMENTS_FLUSH_DCACHE_PAGE 1
+#define ARCH_IMPLEMENTS_FLUSH_DCACHE_PAGE 0
 #define flush_dcache_page(page)                         flush_dcache()
 #define flush_dcache_mmap_lock(mapping)                 flush_dcache()
 #define flush_dcache_mmap_unlock(mapping)               flush_dcache()
