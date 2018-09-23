@@ -170,3 +170,11 @@ void show_regs(struct pt_regs* regs)
 
     pr_info("%s\n", line);
 }
+
+
+void show_stack(struct task_struct* tsk, unsigned long* sp)
+{
+    /* not implemented */
+}
+
+

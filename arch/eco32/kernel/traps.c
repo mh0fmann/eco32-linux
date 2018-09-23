@@ -138,10 +138,3 @@ void __init trap_init(void)
     set_ISR(XCPT_PRV_ADDR, ISR_prv_addr);
     set_ISR(XCPT_TRAP_INST, ISR_syscall);
 }
-
-
-void show_stack(struct task_struct* tsk, unsigned long* sp)
-{
-    panic("function %s in file %s not implemented",
-          __FUNCTION__, __FILE__);
-}
