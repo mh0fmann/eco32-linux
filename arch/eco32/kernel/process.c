@@ -183,46 +183,6 @@ struct task_struct* __switch_to(struct task_struct* old,
 
 
 /*
- * Show contents of registers.
- */
-void show_regs(struct pt_regs* regs)
-{
-    char line[80];
-    char* p;
-    int i, j;
-    int rn;
-    unsigned long psw;
-
-    for (i = 0; i < 8; i++) {
-        p = line;
-
-        for (j = 0; j < 4; j++) {
-            rn = 8 * j + i;
-            p += sprintf(p, "$%-2d  %08lX     ",
-                         rn, regs->gpr[rn]);
-        }
-
-        pr_info("%s\n", line);
-    }
-
-    psw = regs->psw;
-    pr_info("     xxxx  V  UPO  IPO  IACK   MASK\n");
-    p = line;
-    p += sprintf(p, "PSW  ");
-
-    for (i = 31; i >= 0; i--) {
-        if (i == 27 || i == 26 || i == 23 || i == 20 || i == 15) {
-            p += sprintf(p, "  ");
-        }
-
-        p += sprintf(p, "%c", psw & (1 << i) ? '1' : '0');
-    }
-
-    pr_info("%s\n", line);
-}
-
-
-/*
  * ???
  */
 unsigned long get_wchan(struct task_struct* p)
