@@ -16,14 +16,10 @@
 #include <linux/interrupt.h>
 #include <linux/hardirq.h>
 #include <linux/init.h>
-#include <linux/sched.h>
 #include <linux/irq.h>
 #include <linux/irqchip.h>
-#include <linux/of_address.h>
-#include <linux/of_irq.h>
+#include <linux/irqdomain.h>
 
-#include <asm/siginfo.h>
-#include <asm/signal.h>
 #include <asm/irq.h>
 
 
@@ -74,7 +70,7 @@ void __irq_entry do_IRQ(int irq, struct pt_regs* regs)
      * registered handler
      */
     irq_enter();
-    generic_handle_irq(irq);
+    generic_handle_irq(irq_find_mapping(NULL, irq));
     irq_exit();
 
     /* restore original pointer to exception frame */

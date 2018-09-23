@@ -35,29 +35,29 @@ unsigned long volatile irqmask = 0;
 
 static void eco32_unmask_irq(struct irq_data* data)
 {
-	irqmask |= (1 << data->irq);
-	or_irq_mask(1 << data->irq);
+    irqmask |= (1 << data->irq);
+    or_irq_mask(1 << data->irq);
 }
 
 
 static void eco32_mask_irq(struct irq_data* data)
 {
-	irqmask &= ~(1 << data->irq);
-	and_irq_mask(~(1 << data->irq));
+    irqmask &= ~(1 << data->irq);
+    and_irq_mask(~(1 << data->irq));
 }
 
 
 static struct irq_chip eco32_intc = {
-	.name = "ECO32",
-	.irq_mask = eco32_mask_irq,
-	.irq_unmask = eco32_unmask_irq,
+    .name = "ECO32",
+    .irq_mask = eco32_mask_irq,
+    .irq_unmask = eco32_unmask_irq,
 };
 
 
 int eco32_irq_map(struct irq_domain *h, unsigned int irq,
-						  irq_hw_number_t hw_irq_num)
-{	
-	irq_set_chip_and_handler(hw_irq_num, &eco32_intc, handle_level_irq);
+                  irq_hw_number_t hw_irq_num)
+{
+    irq_set_chip_and_handler(irq, &eco32_intc, handle_level_irq);
 
     return 0;
 }
@@ -69,14 +69,14 @@ static const struct irq_domain_ops irq_ops = {
 
 
 static int __init eco32_intc_of_init(struct device_node *intc,
-								   struct device_node *parent)
+                                     struct device_node *parent)
 {
-	struct irq_domain *domain;
+    struct irq_domain *domain;
 
-	domain = irq_domain_add_linear(intc, NR_IRQS, &irq_ops, NULL);
-	BUG_ON(!domain);
-	irq_set_default_host(domain);
-	
-	return 0;
+    domain = irq_domain_add_linear(intc, NR_IRQS, &irq_ops, NULL);
+    BUG_ON(!domain);
+    irq_set_default_host(domain);
+
+    return 0;
 }
 IRQCHIP_DECLARE(eco32_intc, "thm,eco32-intc", eco32_intc_of_init);
