@@ -17,6 +17,7 @@
 #define __ASM_ECO32_TLB_H
 
 #include <asm/eco32.h>
+#include <asm/mvtfs.h>
 
 
 #define NUM_TLB_ENTRIES     32

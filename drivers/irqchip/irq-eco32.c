@@ -20,6 +20,7 @@
 #include <linux/of_irq.h>
 
 #include <asm/irq.h>
+#include <asm/mvtfs.h>
 
 
 /*
@@ -35,15 +36,25 @@ unsigned long volatile irqmask = 0;
 
 static void eco32_unmask_irq(struct irq_data* data)
 {
+    unsigned long psw;
+    
     irqmask |= (1 << data->hwirq);
-    or_irq_mask(1 << data->hwirq);
+
+    psw = __eco32_read_psw();
+    psw |= (1 << data->hwirq);
+    __eco32_write_psw(psw);
 }
 
 
 static void eco32_mask_irq(struct irq_data* data)
 {
+    unsigned long psw;
+
     irqmask &= ~(1 << data->hwirq);
-    and_irq_mask(~(1 << data->hwirq));
+    
+    psw = __eco32_read_psw();
+    psw &= ~(1 << data->hwirq);
+    __eco32_write_psw(psw);
 }
 
 
