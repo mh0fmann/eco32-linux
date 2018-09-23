@@ -35,15 +35,15 @@ unsigned long volatile irqmask = 0;
 
 static void eco32_unmask_irq(struct irq_data* data)
 {
-    irqmask |= (1 << data->irq);
-    or_irq_mask(1 << data->irq);
+    irqmask |= (1 << data->hwirq);
+    or_irq_mask(1 << data->hwirq);
 }
 
 
 static void eco32_mask_irq(struct irq_data* data)
 {
-    irqmask &= ~(1 << data->irq);
-    and_irq_mask(~(1 << data->irq));
+    irqmask &= ~(1 << data->hwirq);
+    and_irq_mask(~(1 << data->hwirq));
 }
 
 
