@@ -409,11 +409,15 @@ static int eco32uart_probe(struct platform_device* dev)
 			goto out_no_property;
 
 		err = of_property_read_u32_index(np, "interrupts", 0, &tx_irq);
+        
+        tx_irq = irq_of_parse_and_map(np, 0);
 
 		if (err)
 			goto out_no_property;
 
 		err = of_property_read_u32_index(np, "interrupts", 1, &rx_irq);
+        
+        rx_irq = irq_of_parse_and_map(np, 1);
 
 		if (err)
 			goto out_no_property;
