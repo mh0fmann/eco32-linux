@@ -14,41 +14,84 @@
  */
 
 
-#include <linux/elf.h>
 #include <linux/kernel.h>
-#include <linux/sched.h>
-#include <linux/mm.h>
-#include <linux/errno.h>
 #include <linux/ptrace.h>
 #include <linux/regset.h>
-#include <linux/smp.h>
 #include <linux/audit.h>
 #include <linux/tracehook.h>
+#include <linux/errno.h>
+#include <linux/elf.h>
 
-#include <asm/page.h>
-#include <asm/uaccess.h>
+#include <asm/elf.h>
+
 
 long arch_ptrace(struct task_struct* child, long request,
                  unsigned long addr, unsigned long data)
 {
-    panic("function %s in file %s not implemented",
-          __FUNCTION__, __FILE__);
-    return 0;
+    return ptrace_request(child, request, addr, data);
 }
 
 
 void ptrace_disable(struct task_struct* child)
 {
-    panic("function %s in file %s not implemented",
-          __FUNCTION__, __FILE__);
+    clear_tsk_thread_flag(child, TIF_SYSCALL_TRACE);
 }
+
+
+static int eco32_get(struct task_struct *target,
+                     const struct user_regset *regset,
+                     unsigned int pos, unsigned int count,
+                     void *kbuf, void __user *ubuf)
+{
+    struct pt_regs *regs;
+
+    regs = task_pt_regs(target);
+    return user_regset_copyout(&pos, &count, &kbuf, &ubuf, regs, 0, -1);
+}
+
+
+static int eco32_set(struct task_struct *target,
+                     const struct user_regset *regset,
+                     unsigned int pos, unsigned int count,
+                     const void *kbuf, const void __user *ubuf)
+{
+    int ret;
+    struct pt_regs *regs;
+
+    regs = task_pt_regs(target);
+    ret = user_regset_copyin(&pos, &count, &kbuf, &ubuf, regs, 0, -1);
+    return ret;
+}
+
+
+enum eco32_regset{
+    REGSET_X
+};
+
+
+static const struct user_regset eco32_user_regset[] = {
+    [REGSET_X] = {
+        .core_note_type = NT_PRSTATUS,
+        .n = ELF_NGREG,
+        .size = sizeof(elf_greg_t),
+        .align = sizeof(elf_greg_t),
+        .get = &eco32_get,
+        .set = &eco32_set,
+    },
+};
+
+
+static const struct user_regset_view eco32_user_native_view = {
+    .name = "eco32",
+    .e_machine = EM_ECO32,
+    .regsets = eco32_user_regset,
+    .n = ARRAY_SIZE(eco32_user_regset),
+};
 
 
 const struct user_regset_view* task_user_regset_view(struct task_struct* task)
 {
-    panic("function %s in file %s not implemented",
-          __FUNCTION__, __FILE__);
-    return NULL;
+    return &eco32_user_native_view;
 }
 
 
