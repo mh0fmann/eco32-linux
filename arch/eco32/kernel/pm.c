@@ -18,34 +18,37 @@
 #include <linux/reboot.h>
 
 
-#define SHUTDOWN_BASE	*((unsigned int*)0xFF100000)
+#define SHUTDOWN_BASE   *((unsigned int*)0xFF100000)
 
 
 void __noreturn eco32_restart(void);
 
 void machine_power_off(void)
 {
-	pr_info("\nmachine power off");
+    pr_info("\nmachine power off");
 
-	/* 
-	 * the shutdown device isn't real and only present on the simulator
-	 * so we need to catch that.
-	 */
-	SHUTDOWN_BASE = 0xBEDEAD;
-	while (1);
+#ifdef CONFIG_ECO32_SIMULATOR
+    /* 
+     * the shutdown device isn't real and only present on the simulator
+     * so we need to catch that.
+     */
+    SHUTDOWN_BASE = 0xBEDEAD;
+#else
+    while (1);
+#endif
 }
 
 void machine_halt(void)
 {
-	pr_info("\nmachine_halt requested\n");
+    pr_info("\nmachine_halt requested\n");
 
-	while (1);
+    while (1);
 }
 
 void machine_restart(char* cmd)
 {
-	pr_info("\nmachine_restart: %s\n", cmd);
-	eco32_restart();
+    pr_info("\nmachine_restart: %s\n", cmd);
+    eco32_restart();
 }
 
 void (*pm_power_off)(void) = machine_power_off;

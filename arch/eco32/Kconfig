@@ -12,95 +12,104 @@
 #
 
 config ECO32
-	bool
-	default y
-	select TINY_RCU
-	select EMBEDDED
-	select NO_BOOTMEM
-	select HAVE_MEMBLOCK
-	select GENERIC_CLOCKEVENTS
-	select GENERIC_STRNLEN_USER
-	select GENERIC_STRNCPY_FROM_USER
-	select GENERIC_IOMAP
-	select GENERIC_ATOMIC64
-	select GENERIC_IRQ_SHOW
-	select GENERIC_IRQ_CHIP
-	select GENERIC_FIND_FIRST_BIT
-	select OF
-	select OF_EARLY_FLATTREE
-	select OF_IRQ
-	select IRQ_DOMAIN
-	select ECO32_TIMERS
+    bool
+    default y
+    select TINY_RCU
+    select EMBEDDED
+    select NO_BOOTMEM
+    select HAVE_MEMBLOCK
+    select GENERIC_CLOCKEVENTS
+    select GENERIC_STRNLEN_USER
+    select GENERIC_STRNCPY_FROM_USER
+    select GENERIC_IOMAP
+    select GENERIC_ATOMIC64
+    select GENERIC_IRQ_SHOW
+    select GENERIC_IRQ_CHIP
+    select GENERIC_FIND_FIRST_BIT
+    select OF
+    select OF_EARLY_FLATTREE
+    select OF_IRQ
+    select IRQ_DOMAIN
+    select ECO32_TIMERS
 
 config GENERIC_CSUM
-	def_bool y
+    def_bool y
 
 config GENERIC_CALIBRATE_DELAY
-	def_bool y
+    def_bool y
 
 config GENERIC_HWEIGHT
-	def_bool y
+    def_bool y
 
 config RWSEM_GENERIC_SPINLOCK
-	def_bool y
+    def_bool y
 
 config NO_DMA
-	def_bool y
-	
+    def_bool y
+    
 config CPU_BIG_ENDIAN
-	def_bool y
+    def_bool y
 
 config SYS_SUPPORTS_BIG_ENDIAN
-	def_bool y
+    def_bool y
 
 config NR_CPUS
-	int
-	default 1
+    int
+    default 1
 
 config PGTABLE_LEVELS
-	int
-	default 2
+    int
+    default 2
 
 config HZ
-	int
-	default 100
+    int
+    default 100
 
 config MMU
-	def_bool y
+    def_bool y
 
 
 #---------------- ARCH CONFIG ---------------
 
 menu "ECO32"
 
+config ECO32_SIMULATOR
+    bool "Compile Linux for the ECO32 simulator"
+    default y
+    ---help---
+    The ECO32 has little more features than the real hardware.
+    The shutdown device is one of those. If you plan to run the kernel
+    only on the simulator you can activate this to enable these
+    features
+
 config CMDLINE_BOOL
-	bool "Enable builtin cmdline"
-	default y
-	---help---
-	Currently there is no other way than this or with the device tree to
-	pass a cmd line to the kernel. As a minimum the root parameter should
-	be passed.
+    bool "Enable builtin cmdline"
+    default y
+    ---help---
+    Currently there is no other way than this or with the device tree to
+    pass a cmd line to the kernel. As a minimum the root parameter should
+    be passed.
 
 config CMDLINE
-	string "Default kernel command string"
-	default "debug console=ttyS0 root=/dev/hda7"
-	depends on CMDLINE_BOOL
-	---help---
-	The builtin cmdline string passed to the kernel.
+    string "Default kernel command string"
+    default "debug console=ttyS0 root=/dev/hda7"
+    depends on CMDLINE_BOOL
+    ---help---
+    The builtin cmdline string passed to the kernel.
 
 config EARLY_PRINTK
-	bool "Enable early prinkt"
-	default n
-	---help---
-	Choose this to activate early kernel outputs befor the first console
-	gets registered
+    bool "Enable early prinkt"
+    default n
+    ---help---
+    Choose this to activate early kernel outputs befor the first console
+    gets registered
 
 config ECO32_BUILTIN_DTB
-	string	"Choose which builtin device tree to use"
-	default "eco32sim"
-	---help---
-	Choose the default Builtin Device Tree which should be compiled
-	in the kernel.
+    string  "Choose which builtin device tree to use"
+    default "eco32sim"
+    ---help---
+    Choose the default Builtin Device Tree which should be compiled
+    in the kernel.
 
 endmenu
 
