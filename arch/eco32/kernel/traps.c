@@ -113,7 +113,7 @@ void ISR_prv_inst(int irq, struct pt_regs* regs)
 
 void ISR_div_inst(int irq, struct pt_regs* regs)
 {
-    sig_or_panic(irq, regs, SIGPFE);
+    sig_or_panic(irq, regs, SIGFPE);
 }
 
 
