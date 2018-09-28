@@ -23,75 +23,59 @@
 #include <asm/io.h>
 
 
-#define ECO32TIMER_DEV_NAME		"timerECO"
-#define ECO32TIMER_CTL_IEN		0x2
+#define ECO32TIMER_DEV_NAME     "timerECO"
+#define ECO32TIMER_CTL_IEN      0x2
 
-/*
- * ECO32 Timer
- * 
- * An ECO32 Timer is running backwards at fixed 50Mhz
- * Writing to the divisor will load the counter and makes
- * the timer run. Once reached zero the expired bit will
- * bet set in the control register. reading the control
- * register will reset the expire bit
- * 
- * ctl : the control register
- * div : the devisor
- * cnt : the counter
- * 
- * This makes accessing the timer easier
- */
-struct eco32_timer{
-	unsigned int ctl;
-	unsigned int div;
-	unsigned int cnt;
-};
+#define ECO32TIMER_CTL          0
+#define ECO32TIMER_DIV          4
+#define ECO32TIMER_CNT          8
 
 
 /*
  * clocksource (continuously running timer)
  */
 
-static struct eco32_timer* cs_timer;
+static void __iomem* cs_timer_base;
 
 static u64 eco32_clocksource_read(struct clocksource* cs)
 {
-	unsigned int count;
+    unsigned int count;
 
-	/* use timer 0 */
-	count = cs_timer->cnt;
-	/* timer is counting backwards */
-	return (u64) ~count;
+    /* use timer 0 */
+    count = readl(cs_timer_base + ECO32TIMER_CNT);
+    /* timer is counting backwards */
+    return (u64) ~count;
 }
 
 static struct clocksource eco32_clocksource = {
-	.name   = "eco32_clocksource",
-	.rating = 300,
-	.read   = eco32_clocksource_read,
-	.mask   = CLOCKSOURCE_MASK(8 * sizeof(unsigned int)),
-	.flags  = CLOCK_SOURCE_IS_CONTINUOUS,
+    .name   = "eco32_clocksource",
+    .rating = 300,
+    .read   = eco32_clocksource_read,
+    .mask   = CLOCKSOURCE_MASK(8 * sizeof(unsigned int)),
+    .flags  = CLOCK_SOURCE_IS_CONTINUOUS,
 };
 
 static void __init eco32_clocksource_init(struct device_node *node)
-{	
-	/* get base and remap timer */
-	cs_timer = of_iomap(node, 0);
-	
-	if (!cs_timer) {
-		pr_err("could not read and remap for clocksource timer\n");
-		return;
-	}
-	
-	/* set divisor and disable interrupts */
-	cs_timer->div = 0xFFFFFFFF;
-	cs_timer->ctl = 0x00;
+{
+    /* get base and remap timer */
+    cs_timer_base = of_iomap(node, 0);
 
-	/* register clocksource */
-	if (clocksource_register_hz(&eco32_clocksource, 50000000)) {
-		pr_err("could not register clocksource\n");
-	}
-	
-	pr_info("eco32 clocksource initialized\n");;
+    if (!cs_timer_base) {
+        pr_err("could not read and remap for clocksource timer\n");
+        return;
+    }
+
+    /* set divisor and disable interrupts */
+    writel(0xFFFFFFFF, cs_timer_base + ECO32TIMER_DIV);
+    writel(0, cs_timer_base + ECO32TIMER_CTL);
+
+    /* register clocksource */
+    if (clocksource_register_hz(&eco32_clocksource, 50000000)) {
+        pr_err("could not register clocksource\n");
+        io_unmap(cs_timer_base);
+    }
+
+    pr_info("eco32 clocksource initialized\n");
 }
 
 
@@ -100,7 +84,7 @@ static void __init eco32_clocksource_init(struct device_node *node)
  * clockevents (interrupting event timer)
  */
 
-static struct eco32_timer* ce_timer;
+static void __iomem* ce_timer_base;
 static struct clock_event_device eco32_clockevent;
 
 /*
@@ -115,19 +99,19 @@ static struct clock_event_device eco32_clockevent;
  */
 static irqreturn_t eco32_clockevent_interrupt_handler(int irq, void* dev)
 {
-	unsigned int ctl;
-	struct clock_event_device* evt;
+    unsigned int ctl;
+    struct clock_event_device* evt;
 
-	/* reset expire and irq enable */
-	ctl = ce_timer->ctl;
-	if (ctl) {
-		ce_timer->ctl = 0;
-	}
+    /* reset expire and irq enable */
+    ctl = readl(ce_timer_base + ECO32TIMER_CTL);
+    if (!(ctl & ECO32TIMER_CTL_IEN)) {
+        writel(ctl, ce_timer_base + ECO32TIMER_CTL;
+    }
 
-	evt = &eco32_clockevent;
-	evt->event_handler(evt);
+    evt = &eco32_clockevent;
+    evt->event_handler(evt);
 
-	return IRQ_HANDLED;
+    return IRQ_HANDLED;
 }
 
 /*
@@ -139,17 +123,17 @@ static irqreturn_t eco32_clockevent_interrupt_handler(int irq, void* dev)
  */
 static int eco32_clockevent_set_event(unsigned long delta, struct clock_event_device* dev)
 {
-	/* start the timer */
-	ce_timer->div = delta;
-	ce_timer->ctl = ECO32TIMER_CTL_IEN;
-	return 0;
+    /* start the timer */
+    writel(delta, ce_timer_base + ECO32TIMER_DIV);
+    writel(ECO32TIMER_CTL_IEN, ce_timer_base + ECO32TIMER_CTL);
+    return 0;
 }
 
 static struct clock_event_device eco32_clockevent = {
-	.name = "eco32_clockevent",
-	.features = CLOCK_EVT_FEAT_ONESHOT,
-	.rating = 300,
-	.set_next_event = eco32_clockevent_set_event,
+    .name = "eco32_clockevent",
+    .features = CLOCK_EVT_FEAT_ONESHOT,
+    .rating = 300,
+    .set_next_event = eco32_clockevent_set_event,
 };
 
 /*
@@ -160,43 +144,45 @@ static struct clock_event_device eco32_clockevent = {
  */
 static int __init eco32_clockevents_init(struct device_node *node)
 {
-	unsigned int irq;
-	
-	/* get base and remap timer */
-	ce_timer = of_iomap(node, 0);
-	
-	if (!ce_timer) {
-		pr_err("could not read and remap clockevent timer\n");
-		return 1;
-	}
-	
-	irq = irq_of_parse_and_map(node, 0);
-	if (!irq) {
-		pr_err("could not read irq for clockevent timer\n");
-		return 1;
-	}
-	
-	/* reset irq enable */
-	ce_timer->ctl = 0x00;
+    unsigned int irq;
 
-	if (request_irq(irq, eco32_clockevent_interrupt_handler, 0, ECO32TIMER_DEV_NAME, NULL)) {
-		/*
-		 * this one is brutal..
-		 * the timer drives the scheduler without it the system will
-		 * not be functional
-		 */
-		pr_err("could not request irq for clockevent timer\n");
-		iounmap(ce_timer);
-		return 1;
-	}
+    /* get base and remap timer */
+    ce_timer_base = of_iomap(node, 0);
+    
+    if (!ce_timer_base) {
+        pr_err("could not read and remap clockevent timer\n");
+        return 1;
+    }
 
-	/* register clockevents */
-	eco32_clockevent.cpumask = cpumask_of(0);
-	clockevents_config_and_register(&eco32_clockevent, 50000000, 100, 0xFFFFFFFF);
-	
-	pr_info("eco32 clockevent initialized\n");
-	
-	return 0;
+    irq = irq_of_parse_and_map(node, 0);
+    if (!irq) {
+        pr_err("could not read irq for clockevent timer\n");
+        goto unmap;
+    }
+
+    /* reset irq enable */
+    writel(0, ce_timer_base + ECO32TIMER_CTL);
+
+    if (request_irq(irq, eco32_clockevent_interrupt_handler, 0, ECO32TIMER_DEV_NAME, NULL)) {
+        /*
+         * this one is brutal..
+         * the timer drives the scheduler without it the system will
+         * not be functional
+         */
+        pr_err("could not request irq for clockevent timer\n");
+        goto unmap;
+    }
+
+    /* register clockevents */
+    eco32_clockevent.cpumask = cpumask_of(0);
+    clockevents_config_and_register(&eco32_clockevent, 50000000, 100, 0xFFFFFFFF);
+
+    pr_info("eco32 clockevent initialized\n");
+
+    return 0;
+unmap:
+    iounmap(ce_timer_base);
+    return 1;
 }
 
 
@@ -205,20 +191,20 @@ static int __init eco32_clockevents_init(struct device_node *node)
  */
 static int __init eco32_timer_init(struct device_node *node)
 {
-	static int clockevents_initialized = 0;
-	
-	/*
-	 * We really need that clockevents timer running
-	 * 
-	 * If it fails on the first try, try again with the next timer
-	 * If that fails again we will have a problem..
-	 */
-	if (!clockevents_initialized) {
-		clockevents_initialized = !eco32_clockevents_init(node);
-	}else{
-		eco32_clocksource_init(node);
-	}
-	
-	return 0;
+    static int clockevents_initialized = 0;
+
+    /*
+     * We really need that clockevents timer running
+     * 
+     * If it fails on the first try, try again with the next timer
+     * If that fails again we will have a problem..
+     */
+    if (!clockevents_initialized) {
+        clockevents_initialized = !eco32_clockevents_init(node);
+    }else{
+        eco32_clocksource_init(node);
+    }
+
+    return 0;
 }
 TIMER_OF_DECLARE(eco32_timer, "thm,eco32-timer", eco32_timer_init);
