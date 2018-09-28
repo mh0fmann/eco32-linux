@@ -42,7 +42,7 @@ static u64 eco32_clocksource_read(struct clocksource* cs)
     unsigned int count;
 
     /* use timer 0 */
-    count = readl(cs_timer_base + ECO32TIMER_CNT);
+    count = ioread32be(cs_timer_base + ECO32TIMER_CNT);
     /* timer is counting backwards */
     return (u64) ~count;
 }
@@ -66,13 +66,13 @@ static void __init eco32_clocksource_init(struct device_node *node)
     }
 
     /* set divisor and disable interrupts */
-    writel(0xFFFFFFFF, cs_timer_base + ECO32TIMER_DIV);
-    writel(0, cs_timer_base + ECO32TIMER_CTL);
+    iowrite32be(0xFFFFFFFF, cs_timer_base + ECO32TIMER_DIV);
+    iowrite32be(0, cs_timer_base + ECO32TIMER_CTL);
 
     /* register clocksource */
     if (clocksource_register_hz(&eco32_clocksource, 50000000)) {
         pr_err("could not register clocksource\n");
-        io_unmap(cs_timer_base);
+        iounmap(cs_timer_base);
     }
 
     pr_info("eco32 clocksource initialized\n");
@@ -103,9 +103,9 @@ static irqreturn_t eco32_clockevent_interrupt_handler(int irq, void* dev)
     struct clock_event_device* evt;
 
     /* reset expire and irq enable */
-    ctl = readl(ce_timer_base + ECO32TIMER_CTL);
+    ctl = ioread32be(ce_timer_base + ECO32TIMER_CTL);
     if (!(ctl & ECO32TIMER_CTL_IEN)) {
-        writel(ctl, ce_timer_base + ECO32TIMER_CTL;
+        iowrite32be(ctl, ce_timer_base + ECO32TIMER_CTL);
     }
 
     evt = &eco32_clockevent;
@@ -121,11 +121,11 @@ static irqreturn_t eco32_clockevent_interrupt_handler(int irq, void* dev)
  * This means we just load the divisor register with the delta
  * and enable interrupts again
  */
-static int eco32_clockevent_set_event(unsigned long delta, struct clock_event_device* dev)
+int eco32_clockevent_set_event(unsigned long delta, struct clock_event_device* dev)
 {
     /* start the timer */
-    writel(delta, ce_timer_base + ECO32TIMER_DIV);
-    writel(ECO32TIMER_CTL_IEN, ce_timer_base + ECO32TIMER_CTL);
+    iowrite32be(delta, ce_timer_base + ECO32TIMER_DIV);
+    iowrite32be(ECO32TIMER_CTL_IEN, ce_timer_base + ECO32TIMER_CTL);
     return 0;
 }
 
@@ -161,7 +161,7 @@ static int __init eco32_clockevents_init(struct device_node *node)
     }
 
     /* reset irq enable */
-    writel(0, ce_timer_base + ECO32TIMER_CTL);
+    iowrite32be(0, ce_timer_base + ECO32TIMER_CTL);
 
     if (request_irq(irq, eco32_clockevent_interrupt_handler, 0, ECO32TIMER_DEV_NAME, NULL)) {
         /*
