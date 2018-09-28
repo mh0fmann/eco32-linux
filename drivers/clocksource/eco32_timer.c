@@ -121,7 +121,7 @@ static irqreturn_t eco32_clockevent_interrupt_handler(int irq, void* dev)
  * This means we just load the divisor register with the delta
  * and enable interrupts again
  */
-int eco32_clockevent_set_event(unsigned long delta, struct clock_event_device* dev)
+static int eco32_clockevent_set_event(unsigned long delta, struct clock_event_device* dev)
 {
     /* start the timer */
     iowrite32be(delta, ce_timer_base + ECO32TIMER_DIV);
