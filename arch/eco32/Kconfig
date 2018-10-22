@@ -24,7 +24,6 @@ config ECO32
     select GENERIC_IOMAP
     select GENERIC_ATOMIC64
     select GENERIC_IRQ_SHOW
-    select GENERIC_IRQ_CHIP
     select GENERIC_FIND_FIRST_BIT
     select OF
     select OF_EARLY_FLATTREE
@@ -56,10 +55,6 @@ config SYS_SUPPORTS_BIG_ENDIAN
 config NR_CPUS
     int
     default 1
-
-config PGTABLE_LEVELS
-    int
-    default 2
 
 config HZ
     int
