@@ -35,12 +35,8 @@
 #define ECO32GRAPHIC_HEIGHT         480
 
 
-static struct {
-    unsigned int* base;
-    unsigned int len;
-    struct fb_info* info;
-    uint32_t pseudo_palette[16];
-} eco32fb_dev;
+static struct fb_info* info;
+static uint32_t pseudo_palette[16];
 
 
 struct fb_var_screeninfo eco32fb_var = {
@@ -115,20 +111,15 @@ static struct fb_ops eco32fb_ops = {
 static int eco32fb_probe(struct platform_device* dev)
 {
     int err;
-    unsigned int base;
+    unsigned long base;
+    unsigned long len;
+    struct device_node * node = dev->dev.of_node;
 
     /* read device node and obtain needed properties */
-    if (dev->dev.of_node) {
-        struct device_node* np = dev->dev.of_node;
+    if (node) {
+        base = (unsigned long)of_iomap(node, 0);
 
-        err = of_property_read_u32_index(np, "reg", 0, &base);
-
-        if (err)
-            goto out_no_property;
-
-        eco32fb_dev.base = (unsigned int*)(base | PAGE_OFFSET);
-
-        err = of_property_read_u32_index(np, "reg", 1, &eco32fb_dev.len);
+        err = of_property_read_u32_index(node, "reg", 1, (unsigned int*) &len);
 
         if (err)
             goto out_no_property;
@@ -139,33 +130,33 @@ static int eco32fb_probe(struct platform_device* dev)
     }
 
 
-    if (eco32_device_probe((unsigned long)eco32fb_dev.base)) {
+    if (eco32_device_probe(base)) {
         dev_err(&dev->dev, "device not present on the bus\n");
         return -ENODEV;
     }
 
     /*request mem region */
-    if (devm_request_mem_region(&dev->dev, base, eco32fb_dev.len, "graphicsECO") == NULL) {
+    if (devm_request_mem_region(&dev->dev, base, len, "fbECO") == NULL) {
         dev_err(&dev->dev, "could not request mem region\n");
         return -EBUSY;
     }
 
     /* allocate framebuffer device and fill it */
-    eco32fb_dev.info = framebuffer_alloc(0, &dev->dev);
+    info = framebuffer_alloc(0, &dev->dev);
 
-    if (!eco32fb_dev.info) {
+    if (!info) {
         dev_err(&dev->dev, "could not allocate framebuffer device\n");
         return -ENOMEM;
     }
 
-    eco32fb_dev.info->fbops = &eco32fb_ops;
-    eco32fb_fix.smem_start = (unsigned long)eco32fb_dev.base;
-    eco32fb_fix.smem_len = eco32fb_dev.len;
-    eco32fb_dev.info->fix = eco32fb_fix;
-    eco32fb_dev.info->var = eco32fb_var;
-    eco32fb_dev.info->screen_base = (u_char*)eco32fb_dev.base;
+    info->fbops = &eco32fb_ops;
+    eco32fb_fix.smem_start = base;
+    eco32fb_fix.smem_len = len;
+    info->fix = eco32fb_fix;
+    info->var = eco32fb_var;
+    info->screen_base = (u_char*)base;
 
-    err = fb_alloc_cmap(&eco32fb_dev.info->cmap, 256, 0);
+    err = fb_alloc_cmap(&info->cmap, 256, 0);
 
     if (err) {
         dev_err(&dev->dev, "could not allocate color map\n");
@@ -173,9 +164,9 @@ static int eco32fb_probe(struct platform_device* dev)
         goto out_release;
     }
 
-    eco32fb_dev.info->pseudo_palette = &eco32fb_dev.pseudo_palette;
+    info->pseudo_palette = pseudo_palette;
 
-    err = register_framebuffer(eco32fb_dev.info);
+    err = register_framebuffer(info);
 
     if (err) {
         dev_err(&dev->dev, "could not register framebuffer device\n");
@@ -188,18 +179,17 @@ out_no_property:
     dev_err(&dev->dev, "could not read all necessary properties from device tree\n");
     return -ENODEV;
 out_dealloc:
-    fb_dealloc_cmap(&eco32fb_dev.info->cmap);
+    fb_dealloc_cmap(&info->cmap);
 out_release:
-    framebuffer_release(eco32fb_dev.info);
+    framebuffer_release(info);
     return err;
 }
 
 static int eco32fb_remove(struct platform_device* dev)
 {
-
-    unregister_framebuffer(eco32fb_dev.info);
-    fb_dealloc_cmap(&eco32fb_dev.info->cmap);
-    framebuffer_release(eco32fb_dev.info);
+    unregister_framebuffer(info);
+    fb_dealloc_cmap(&info->cmap);
+    framebuffer_release(info);
     return 0;
 }
 
