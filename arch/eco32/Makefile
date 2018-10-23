@@ -36,8 +36,8 @@ core-$(BUILTIN_DTB) += arch/eco32/boot/dts/
 boot := arch/eco32/boot
 
 vmlinux.bin: vmlinux
-	$(Q)$(MAKE) -C $(boot) $@
-	$(Q)$(boot)/elf32load/elf32load -v $? $@
+	$(Q)echo "  OBJCOPY vmlinux.bin"
+	$(Q)$(CROSS_COMPILE)objcopy -O binary $? $@
 
 vmlinuxboot.img: vmlinux.bin
 	$(Q)$(MAKE) -C $(boot) $@
