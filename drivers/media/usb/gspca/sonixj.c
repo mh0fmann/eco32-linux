@@ -1155,7 +1155,7 @@ static void reg_r(struct gspca_dev *gspca_dev,
 	if (gspca_dev->usb_err < 0)
 		return;
 	if (len > USB_BUF_SZ) {
-		gspca_err(gspca_dev, "reg_r: buffer overflow\n");
+		PERR("reg_r: buffer overflow\n");
 		return;
 	}
 
@@ -1166,8 +1166,7 @@ static void reg_r(struct gspca_dev *gspca_dev,
 			value, 0,
 			gspca_dev->usb_buf, len,
 			500);
-	gspca_dbg(gspca_dev, D_USBI, "reg_r [%02x] -> %02x\n",
-		  value, gspca_dev->usb_buf[0]);
+	PDEBUG(D_USBI, "reg_r [%02x] -> %02x", value, gspca_dev->usb_buf[0]);
 	if (ret < 0) {
 		pr_err("reg_r err %d\n", ret);
 		gspca_dev->usb_err = ret;
@@ -1182,7 +1181,7 @@ static void reg_w1(struct gspca_dev *gspca_dev,
 
 	if (gspca_dev->usb_err < 0)
 		return;
-	gspca_dbg(gspca_dev, D_USBO, "reg_w1 [%04x] = %02x\n", value, data);
+	PDEBUG(D_USBO, "reg_w1 [%04x] = %02x", value, data);
 	gspca_dev->usb_buf[0] = data;
 	ret = usb_control_msg(gspca_dev->dev,
 			usb_sndctrlpipe(gspca_dev->dev, 0),
@@ -1206,11 +1205,11 @@ static void reg_w(struct gspca_dev *gspca_dev,
 
 	if (gspca_dev->usb_err < 0)
 		return;
-	gspca_dbg(gspca_dev, D_USBO, "reg_w [%04x] = %02x %02x ..\n",
-		  value, buffer[0], buffer[1]);
+	PDEBUG(D_USBO, "reg_w [%04x] = %02x %02x ..",
+		value, buffer[0], buffer[1]);
 
 	if (len > USB_BUF_SZ) {
-		gspca_err(gspca_dev, "reg_w: buffer overflow\n");
+		PERR("reg_w: buffer overflow\n");
 		return;
 	}
 
@@ -1236,7 +1235,7 @@ static void i2c_w1(struct gspca_dev *gspca_dev, u8 reg, u8 val)
 
 	if (gspca_dev->usb_err < 0)
 		return;
-	gspca_dbg(gspca_dev, D_USBO, "i2c_w1 [%02x] = %02x\n", reg, val);
+	PDEBUG(D_USBO, "i2c_w1 [%02x] = %02x", reg, val);
 	switch (sd->sensor) {
 	case SENSOR_ADCM1700:
 	case SENSOR_OM6802:
@@ -1277,8 +1276,8 @@ static void i2c_w8(struct gspca_dev *gspca_dev,
 
 	if (gspca_dev->usb_err < 0)
 		return;
-	gspca_dbg(gspca_dev, D_USBO, "i2c_w8 [%02x] = %02x ..\n",
-		  buffer[2], buffer[3]);
+	PDEBUG(D_USBO, "i2c_w8 [%02x] = %02x ..",
+		buffer[2], buffer[3]);
 	memcpy(gspca_dev->usb_buf, buffer, 8);
 	ret = usb_control_msg(gspca_dev->dev,
 			usb_sndctrlpipe(gspca_dev->dev, 0),
@@ -1350,7 +1349,7 @@ static void hv7131r_probe(struct gspca_dev *gspca_dev)
 	if (gspca_dev->usb_buf[0] == 0x02	/* chip ID (02 is R) */
 	    && gspca_dev->usb_buf[1] == 0x09
 	    && gspca_dev->usb_buf[2] == 0x01) {
-		gspca_dbg(gspca_dev, D_PROBE, "Sensor HV7131R found\n");
+		PDEBUG(D_PROBE, "Sensor HV7131R found");
 		return;
 	}
 	pr_warn("Erroneous HV7131R ID 0x%02x 0x%02x 0x%02x\n",
@@ -1397,19 +1396,18 @@ static void mi0360_probe(struct gspca_dev *gspca_dev)
 		return;
 	switch (val) {
 	case 0x8221:
-		gspca_dbg(gspca_dev, D_PROBE, "Sensor mi0360b\n");
+		PDEBUG(D_PROBE, "Sensor mi0360b");
 		sd->sensor = SENSOR_MI0360B;
 		break;
 	case 0x823a:
-		gspca_dbg(gspca_dev, D_PROBE, "Sensor mt9v111\n");
+		PDEBUG(D_PROBE, "Sensor mt9v111");
 		sd->sensor = SENSOR_MT9V111;
 		break;
 	case 0x8243:
-		gspca_dbg(gspca_dev, D_PROBE, "Sensor mi0360\n");
+		PDEBUG(D_PROBE, "Sensor mi0360");
 		break;
 	default:
-		gspca_dbg(gspca_dev, D_PROBE, "Unknown sensor %04x - forced to mi0360\n",
-			  val);
+		PDEBUG(D_PROBE, "Unknown sensor %04x - forced to mi0360", val);
 		break;
 	}
 }
@@ -1434,10 +1432,10 @@ static void ov7630_probe(struct gspca_dev *gspca_dev)
 /*fixme: only valid for 0c45:613e?*/
 		gspca_dev->cam.input_flags =
 				V4L2_IN_ST_VFLIP | V4L2_IN_ST_HFLIP;
-		gspca_dbg(gspca_dev, D_PROBE, "Sensor soi768\n");
+		PDEBUG(D_PROBE, "Sensor soi768");
 		return;
 	}
-	gspca_dbg(gspca_dev, D_PROBE, "Sensor ov%04x\n", val);
+	PDEBUG(D_PROBE, "Sensor ov%04x", val);
 }
 
 static void ov7648_probe(struct gspca_dev *gspca_dev)
@@ -1454,7 +1452,7 @@ static void ov7648_probe(struct gspca_dev *gspca_dev)
 	reg_w1(gspca_dev, 0x01, 0x29);
 	reg_w1(gspca_dev, 0x17, 0x42);
 	if ((val & 0xff00) == 0x7600) {		/* ov76xx */
-		gspca_dbg(gspca_dev, D_PROBE, "Sensor ov%04x\n", val);
+		PDEBUG(D_PROBE, "Sensor ov%04x", val);
 		return;
 	}
 
@@ -1469,7 +1467,7 @@ static void ov7648_probe(struct gspca_dev *gspca_dev)
 	if (gspca_dev->usb_err < 0)
 		return;
 	if (val == 0x1030) {			/* po1030 */
-		gspca_dbg(gspca_dev, D_PROBE, "Sensor po1030\n");
+		PDEBUG(D_PROBE, "Sensor po1030");
 		sd->sensor = SENSOR_PO1030;
 		return;
 	}
@@ -1492,7 +1490,7 @@ static void po2030n_probe(struct gspca_dev *gspca_dev)
 	reg_w1(gspca_dev, 0x01, 0x29);		/* reset */
 	reg_w1(gspca_dev, 0x17, 0x42);
 	if (val == 0x99) {			/* gc0307 (?) */
-		gspca_dbg(gspca_dev, D_PROBE, "Sensor gc0307\n");
+		PDEBUG(D_PROBE, "Sensor gc0307");
 		sd->sensor = SENSOR_GC0307;
 		return;
 	}
@@ -1508,7 +1506,7 @@ static void po2030n_probe(struct gspca_dev *gspca_dev)
 	if (gspca_dev->usb_err < 0)
 		return;
 	if (val == 0x2030) {
-		gspca_dbg(gspca_dev, D_PROBE, "Sensor po2030n\n");
+		PDEBUG(D_PROBE, "Sensor po2030n");
 /*		sd->sensor = SENSOR_PO2030N; */
 	} else {
 		pr_err("Unknown sensor ID %04x\n", val);
@@ -1560,7 +1558,7 @@ static int sd_init(struct gspca_dev *gspca_dev)
 	regF1 = gspca_dev->usb_buf[0];
 	if (gspca_dev->usb_err < 0)
 		return gspca_dev->usb_err;
-	gspca_dbg(gspca_dev, D_PROBE, "Sonix chip id: %02x\n", regF1);
+	PDEBUG(D_PROBE, "Sonix chip id: %02x", regF1);
 	if (gspca_dev->audio)
 		regGpio[1] |= 0x04;		/* with audio */
 	switch (sd->bridge) {
@@ -1760,10 +1758,10 @@ static u32 expo_adjust(struct gspca_dev *gspca_dev,
 				| ((expo & 0x0003) << 4);
 		i2c_w8(gspca_dev, expoMo10);
 		i2c_w8(gspca_dev, gainMo);
-		gspca_dbg(gspca_dev, D_FRAM, "set exposure %d\n",
-			  ((expoMo10[3] & 0x07) << 10)
-			  | (expoMof[3] << 2)
-			  | ((expoMo10[3] & 0x30) >> 4));
+		PDEBUG(D_FRAM, "set exposure %d",
+			((expoMo10[3] & 0x07) << 10)
+			| (expoMof[3] << 2)
+			| ((expoMo10[3] & 0x30) >> 4));
 		break;
 	    }
 	case SENSOR_MT9V111: {
@@ -1791,7 +1789,7 @@ static u32 expo_adjust(struct gspca_dev *gspca_dev,
 		gainOm[3] = expo >> 2;
 		i2c_w8(gspca_dev, gainOm);
 		reg_w1(gspca_dev, 0x96, expo >> 5);
-		gspca_dbg(gspca_dev, D_FRAM, "set exposure %d\n", gainOm[3]);
+		PDEBUG(D_FRAM, "set exposure %d", gainOm[3]);
 		break;
 	    }
 	}
@@ -2164,7 +2162,7 @@ static void qual_upd(struct work_struct *work)
 
 	/* To protect gspca_dev->usb_buf and gspca_dev->usb_err */
 	mutex_lock(&gspca_dev->usb_lock);
-	gspca_dbg(gspca_dev, D_STREAM, "qual_upd %d%%\n", sd->quality);
+	PDEBUG(D_STREAM, "qual_upd %d%%", sd->quality);
 	gspca_dev->usb_err = 0;
 	setjpegqual(gspca_dev);
 	mutex_unlock(&gspca_dev->usb_lock);
@@ -2586,7 +2584,7 @@ static void do_autogain(struct gspca_dev *gspca_dev)
 	sd->ag_cnt = AG_CNT_START;
 
 	delta = atomic_read(&sd->avg_lum);
-	gspca_dbg(gspca_dev, D_FRAM, "mean lum %d\n", delta);
+	PDEBUG(D_FRAM, "mean lum %d", delta);
 
 	if (sd->sensor == SENSOR_PO2030N) {
 		gspca_expo_autogain(gspca_dev, delta, luma_mean, luma_delta,

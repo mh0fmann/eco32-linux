@@ -108,8 +108,13 @@ ENTRY(_mcount)
 	mcount_get_lr	x1		//       function's lr (= parent's pc)
 	blr	x2			//   (*ftrace_trace_function)(pc, lr);
 
-skip_ftrace_call:			// }
-#ifdef CONFIG_FUNCTION_GRAPH_TRACER
+#ifndef CONFIG_FUNCTION_GRAPH_TRACER
+skip_ftrace_call:			//   return;
+	mcount_exit			// }
+#else
+	mcount_exit			//   return;
+					// }
+skip_ftrace_call:
 	ldr_l	x2, ftrace_graph_return
 	cmp	x0, x2			//   if ((ftrace_graph_return
 	b.ne	ftrace_graph_caller	//        != ftrace_stub)
@@ -118,8 +123,9 @@ skip_ftrace_call:			// }
 	adr_l	x0, ftrace_graph_entry_stub //     != ftrace_graph_entry_stub))
 	cmp	x0, x2
 	b.ne	ftrace_graph_caller	//     ftrace_graph_caller();
-#endif /* CONFIG_FUNCTION_GRAPH_TRACER */
+
 	mcount_exit
+#endif /* CONFIG_FUNCTION_GRAPH_TRACER */
 ENDPROC(_mcount)
 
 #else /* CONFIG_DYNAMIC_FTRACE */

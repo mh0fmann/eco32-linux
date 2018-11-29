@@ -15,7 +15,6 @@
 #include <linux/sched/task_stack.h>
 #include <linux/init.h>
 #include <linux/export.h>
-#include <linux/kexec.h>
 
 #include <asm/mmu_context.h>
 #include <asm/time.h>
@@ -425,9 +424,6 @@ const struct plat_smp_ops octeon_smp_ops = {
 	.cpu_disable		= octeon_cpu_disable,
 	.cpu_die		= octeon_cpu_die,
 #endif
-#ifdef CONFIG_KEXEC
-	.kexec_nonboot_cpu	= kexec_nonboot_cpu_jump,
-#endif
 };
 
 static irqreturn_t octeon_78xx_reched_interrupt(int irq, void *dev_id)
@@ -504,9 +500,6 @@ static const struct plat_smp_ops octeon_78xx_smp_ops = {
 #ifdef CONFIG_HOTPLUG_CPU
 	.cpu_disable		= octeon_cpu_disable,
 	.cpu_die		= octeon_cpu_die,
-#endif
-#ifdef CONFIG_KEXEC
-	.kexec_nonboot_cpu	= kexec_nonboot_cpu_jump,
 #endif
 };
 

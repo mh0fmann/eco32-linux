@@ -63,7 +63,6 @@ extern bool treesource_error;
 %token DT_BITS
 %token DT_DEL_PROP
 %token DT_DEL_NODE
-%token DT_OMIT_NO_REF
 %token <propnodename> DT_PROPNODENAME
 %token <integer> DT_LITERAL
 %token <integer> DT_CHAR_LITERAL
@@ -167,17 +166,7 @@ devicetree:
 		{
 			$$ = merge_nodes($1, $3);
 		}
-	| DT_REF nodedef
-		{
-			/*
-			 * We rely on the rule being always:
-			 *   versioninfo plugindecl memreserves devicetree
-			 * so $-1 is what we want (plugindecl)
-			 */
-			if (!($<flags>-1 & DTSF_PLUGIN))
-				ERROR(&@2, "Label or path %s not found", $1);
-			$$ = add_orphan_node(name_node(build_node(NULL, NULL), ""), $2, $1);
-		}
+
 	| devicetree DT_LABEL DT_REF nodedef
 		{
 			struct node *target = get_node_by_ref($1, $3);
@@ -191,21 +180,12 @@ devicetree:
 		}
 	| devicetree DT_REF nodedef
 		{
-			/*
-			 * We rely on the rule being always:
-			 *   versioninfo plugindecl memreserves devicetree
-			 * so $-1 is what we want (plugindecl)
-			 */
-			if ($<flags>-1 & DTSF_PLUGIN) {
-				add_orphan_node($1, $3, $2);
-			} else {
-				struct node *target = get_node_by_ref($1, $2);
+			struct node *target = get_node_by_ref($1, $2);
 
-				if (target)
-					merge_nodes(target, $3);
-				else
-					ERROR(&@2, "Label or path %s not found", $2);
-			}
+			if (target)
+				merge_nodes(target, $3);
+			else
+				ERROR(&@2, "Label or path %s not found", $2);
 			$$ = $1;
 		}
 	| devicetree DT_DEL_NODE DT_REF ';'
@@ -214,18 +194,6 @@ devicetree:
 
 			if (target)
 				delete_node(target);
-			else
-				ERROR(&@3, "Label or path %s not found", $3);
-
-
-			$$ = $1;
-		}
-	| devicetree DT_OMIT_NO_REF DT_REF ';'
-		{
-			struct node *target = get_node_by_ref($1, $3);
-
-			if (target)
-				omit_node_if_unused(target);
 			else
 				ERROR(&@3, "Label or path %s not found", $3);
 
@@ -287,7 +255,6 @@ propdata:
 		}
 	| propdataprefix DT_REF
 		{
-			$1 = data_add_marker($1, TYPE_STRING, $2);
 			$$ = data_add_marker($1, REF_PATH, $2);
 		}
 	| propdataprefix DT_INCBIN '(' DT_STRING ',' integer_prim ',' integer_prim ')'
@@ -341,27 +308,22 @@ arrayprefix:
 	DT_BITS DT_LITERAL '<'
 		{
 			unsigned long long bits;
-			enum markertype type = TYPE_UINT32;
 
 			bits = $2;
 
-			switch (bits) {
-			case 8: type = TYPE_UINT8; break;
-			case 16: type = TYPE_UINT16; break;
-			case 32: type = TYPE_UINT32; break;
-			case 64: type = TYPE_UINT64; break;
-			default:
+			if ((bits !=  8) && (bits != 16) &&
+			    (bits != 32) && (bits != 64)) {
 				ERROR(&@2, "Array elements must be"
 				      " 8, 16, 32 or 64-bits");
 				bits = 32;
 			}
 
-			$$.data = data_add_marker(empty_data, type, NULL);
+			$$.data = empty_data;
 			$$.bits = bits;
 		}
 	| '<'
 		{
-			$$.data = data_add_marker(empty_data, TYPE_UINT32, NULL);
+			$$.data = empty_data;
 			$$.bits = 32;
 		}
 	| arrayprefix integer_prim
@@ -505,7 +467,7 @@ integer_unary:
 bytestring:
 	  /* empty */
 		{
-			$$ = data_add_marker(empty_data, TYPE_UINT8, NULL);
+			$$ = empty_data;
 		}
 	| bytestring DT_BYTE
 		{
@@ -541,10 +503,6 @@ subnode:
 	| DT_DEL_NODE DT_PROPNODENAME ';'
 		{
 			$$ = name_node(build_node_delete(), $2);
-		}
-	| DT_OMIT_NO_REF subnode
-		{
-			$$ = omit_node_if_unused($2);
 		}
 	| DT_LABEL subnode
 		{

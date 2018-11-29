@@ -603,9 +603,9 @@ static void uwb_cnflt_update_work(struct work_struct *work)
 	mutex_unlock(&rc->rsvs_mutex);
 }
 
-static void uwb_cnflt_timer(struct timer_list *t)
+static void uwb_cnflt_timer(unsigned long arg)
 {
-	struct uwb_cnflt_alien *cnflt = from_timer(cnflt, t, timer);
+	struct uwb_cnflt_alien *cnflt = (struct uwb_cnflt_alien *)arg;
 
 	queue_work(cnflt->rc->rsv_workq, &cnflt->cnflt_update_work);
 }
@@ -642,7 +642,7 @@ static void uwb_drp_handle_alien_drp(struct uwb_rc *rc, struct uwb_ie_drp *drp_i
 	}
 
 	INIT_LIST_HEAD(&cnflt->rc_node);
-	timer_setup(&cnflt->timer, uwb_cnflt_timer, 0);
+	setup_timer(&cnflt->timer, uwb_cnflt_timer, (unsigned long)cnflt);
 
 	cnflt->rc = rc;
 	INIT_WORK(&cnflt->cnflt_update_work, uwb_cnflt_update_work);

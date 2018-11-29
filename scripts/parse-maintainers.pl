@@ -2,43 +2,8 @@
 # SPDX-License-Identifier: GPL-2.0
 
 use strict;
-use Getopt::Long qw(:config no_auto_abbrev);
-
-my $input_file = "MAINTAINERS";
-my $output_file = "MAINTAINERS.new";
-my $output_section = "SECTION.new";
-my $help = 0;
 
 my $P = $0;
-
-if (!GetOptions(
-		'input=s' => \$input_file,
-		'output=s' => \$output_file,
-		'section=s' => \$output_section,
-		'h|help|usage' => \$help,
-	    )) {
-    die "$P: invalid argument - use --help if necessary\n";
-}
-
-if ($help != 0) {
-    usage();
-    exit 0;
-}
-
-sub usage {
-    print <<EOT;
-usage: $P [options] <pattern matching regexes>
-
-  --input => MAINTAINERS file to read (default: MAINTAINERS)
-  --output => sorted MAINTAINERS file to write (default: MAINTAINERS.new)
-  --section => new sorted MAINTAINERS file to write to (default: SECTION.new)
-
-If <pattern match regexes> exist, then the sections that match the
-regexes are not written to the output file but are written to the
-section file.
-
-EOT
-}
 
 # sort comparison functions
 sub by_category($$) {
@@ -91,20 +56,13 @@ sub trim {
 sub alpha_output {
     my ($hashref, $filename) = (@_);
 
-    return if ! scalar(keys %$hashref);
-
     open(my $file, '>', "$filename") or die "$P: $filename: open failed - $!\n";
-    my $separator;
     foreach my $key (sort by_category keys %$hashref) {
 	if ($key eq " ") {
+	    chomp $$hashref{$key};
 	    print $file $$hashref{$key};
 	} else {
-	    if (! defined $separator) {
-		$separator = "\n";
-	    } else {
-		print $file $separator;
-	    }
-	    print $file $key . "\n";
+	    print $file "\n" . $key . "\n";
 	    foreach my $pattern (sort by_pattern split('\n', %$hashref{$key})) {
 		print $file ($pattern . "\n");
 	    }
@@ -154,7 +112,7 @@ sub file_input {
 my %hash;
 my %new_hash;
 
-file_input(\%hash, $input_file);
+file_input(\%hash, "MAINTAINERS");
 
 foreach my $type (@ARGV) {
     foreach my $key (keys %hash) {
@@ -165,7 +123,7 @@ foreach my $type (@ARGV) {
     }
 }
 
-alpha_output(\%hash, $output_file);
-alpha_output(\%new_hash, $output_section);
+alpha_output(\%hash, "MAINTAINERS.new");
+alpha_output(\%new_hash, "SECTION.new");
 
 exit(0);

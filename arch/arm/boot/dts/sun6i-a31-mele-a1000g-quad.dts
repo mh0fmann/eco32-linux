@@ -107,7 +107,8 @@
 	pinctrl-0 = <&mmc0_pins_a>, <&mmc0_cd_pin_m9>;
 	vmmc-supply = <&reg_dcdc1>;
 	bus-width = <4>;
-	cd-gpios = <&pio 7 22 GPIO_ACTIVE_LOW>; /* PH22 */
+	cd-gpios = <&pio 7 22 GPIO_ACTIVE_HIGH>; /* PH22 */
+	cd-inverted;
 	status = "okay";
 };
 

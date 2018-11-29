@@ -23,6 +23,10 @@
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
+ *
+ * Should you need to contact me, the author, you can do so either by
+ * e-mail - mail your message to <vojtech@ucw.cz>, or by paper mail:
+ * Vojtech Pavlik, Simunkova 1594, Prague 8, 182 00 Czech Republic
  */
 
 #include <linux/kernel.h>
@@ -85,9 +89,9 @@ static struct tgfx {
  * tgfx_timer() reads and analyzes TurboGraFX joystick data.
  */
 
-static void tgfx_timer(struct timer_list *t)
+static void tgfx_timer(unsigned long private)
 {
-	struct tgfx *tgfx = from_timer(tgfx, t, timer);
+	struct tgfx *tgfx = (void *) private;
 	struct input_dev *dev;
 	int data1, data2, i;
 
@@ -196,7 +200,7 @@ static void tgfx_attach(struct parport *pp)
 	mutex_init(&tgfx->sem);
 	tgfx->pd = pd;
 	tgfx->parportno = pp->number;
-	timer_setup(&tgfx->timer, tgfx_timer, 0);
+	setup_timer(&tgfx->timer, tgfx_timer, (long)tgfx);
 
 	for (i = 0; i < n_devs; i++) {
 		if (n_buttons[i] < 1)

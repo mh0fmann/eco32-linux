@@ -1,10 +1,24 @@
-// SPDX-License-Identifier: GPL-2.0
 /*
  * Ultra Wide Band
  * AES-128 CCM Encryption
  *
  * Copyright (C) 2007 Intel Corporation
  * Inaky Perez-Gonzalez <inaky.perez-gonzalez@intel.com>
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License version
+ * 2 as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
+ * 02110-1301, USA.
+ *
  *
  * We don't do any encryption here; we use the Linux Kernel's AES-128
  * crypto modules to construct keys and payload blocks in a way
@@ -189,7 +203,7 @@ struct wusb_mac_scratch {
  * NOTE: blen is not aligned to a block size, we'll pad zeros, that's
  *       what sg[4] is for. Maybe there is a smarter way to do this.
  */
-static int wusb_ccm_mac(struct crypto_sync_skcipher *tfm_cbc,
+static int wusb_ccm_mac(struct crypto_skcipher *tfm_cbc,
 			struct crypto_cipher *tfm_aes,
 			struct wusb_mac_scratch *scratch,
 			void *mic,
@@ -198,11 +212,11 @@ static int wusb_ccm_mac(struct crypto_sync_skcipher *tfm_cbc,
 			size_t blen)
 {
 	int result = 0;
-	SYNC_SKCIPHER_REQUEST_ON_STACK(req, tfm_cbc);
+	SKCIPHER_REQUEST_ON_STACK(req, tfm_cbc);
 	struct scatterlist sg[4], sg_dst;
 	void *dst_buf;
 	size_t dst_size;
-	u8 *iv;
+	u8 iv[crypto_skcipher_ivsize(tfm_cbc)];
 	size_t zero_padding;
 
 	/*
@@ -224,9 +238,7 @@ static int wusb_ccm_mac(struct crypto_sync_skcipher *tfm_cbc,
 	if (!dst_buf)
 		goto error_dst_buf;
 
-	iv = kzalloc(crypto_sync_skcipher_ivsize(tfm_cbc), GFP_KERNEL);
-	if (!iv)
-		goto error_iv;
+	memset(iv, 0, sizeof(iv));
 
 	/* Setup B0 */
 	scratch->b0.flags = 0x59;	/* Format B0 */
@@ -251,7 +263,7 @@ static int wusb_ccm_mac(struct crypto_sync_skcipher *tfm_cbc,
 	sg_set_page(&sg[3], ZERO_PAGE(0), zero_padding, 0);
 	sg_init_one(&sg_dst, dst_buf, dst_size);
 
-	skcipher_request_set_sync_tfm(req, tfm_cbc);
+	skcipher_request_set_tfm(req, tfm_cbc);
 	skcipher_request_set_callback(req, 0, NULL, NULL);
 	skcipher_request_set_crypt(req, sg, &sg_dst, dst_size, iv);
 	result = crypto_skcipher_encrypt(req);
@@ -278,8 +290,6 @@ static int wusb_ccm_mac(struct crypto_sync_skcipher *tfm_cbc,
 	bytewise_xor(mic, &scratch->ax, iv, 8);
 	result = 8;
 error_cbc_crypt:
-	kfree(iv);
-error_iv:
 	kfree(dst_buf);
 error_dst_buf:
 	return result;
@@ -298,19 +308,19 @@ ssize_t wusb_prf(void *out, size_t out_size,
 {
 	ssize_t result, bytes = 0, bitr;
 	struct aes_ccm_nonce n = *_n;
-	struct crypto_sync_skcipher *tfm_cbc;
+	struct crypto_skcipher *tfm_cbc;
 	struct crypto_cipher *tfm_aes;
 	struct wusb_mac_scratch *scratch;
 	u64 sfn = 0;
 	__le64 sfn_le;
 
-	tfm_cbc = crypto_alloc_sync_skcipher("cbc(aes)", 0, 0);
+	tfm_cbc = crypto_alloc_skcipher("cbc(aes)", 0, CRYPTO_ALG_ASYNC);
 	if (IS_ERR(tfm_cbc)) {
 		result = PTR_ERR(tfm_cbc);
 		printk(KERN_ERR "E: can't load CBC(AES): %d\n", (int)result);
 		goto error_alloc_cbc;
 	}
-	result = crypto_sync_skcipher_setkey(tfm_cbc, key, 16);
+	result = crypto_skcipher_setkey(tfm_cbc, key, 16);
 	if (result < 0) {
 		printk(KERN_ERR "E: can't set CBC key: %d\n", (int)result);
 		goto error_setkey_cbc;
@@ -351,7 +361,7 @@ error_setkey_aes:
 	crypto_free_cipher(tfm_aes);
 error_alloc_aes:
 error_setkey_cbc:
-	crypto_free_sync_skcipher(tfm_cbc);
+	crypto_free_skcipher(tfm_cbc);
 error_alloc_cbc:
 	return result;
 }

@@ -22,7 +22,6 @@
 
 #include <linux/usb/otg.h>
 
-#include "board-mx31moboard.h"
 #include "common.h"
 #include "devices-imx31.h"
 #include "ehci.h"

@@ -101,13 +101,17 @@ static int cirrus_crtc_do_set_base(struct drm_crtc *crtc,
 				int x, int y, int atomic)
 {
 	struct cirrus_device *cdev = crtc->dev->dev_private;
+	struct drm_gem_object *obj;
+	struct cirrus_framebuffer *cirrus_fb;
 	struct cirrus_bo *bo;
 	int ret;
 	u64 gpu_addr;
 
 	/* push the previous fb to system ram */
 	if (!atomic && fb) {
-		bo = gem_to_cirrus_bo(fb->obj[0]);
+		cirrus_fb = to_cirrus_framebuffer(fb);
+		obj = cirrus_fb->obj;
+		bo = gem_to_cirrus_bo(obj);
 		ret = cirrus_bo_reserve(bo, false);
 		if (ret)
 			return ret;
@@ -115,7 +119,9 @@ static int cirrus_crtc_do_set_base(struct drm_crtc *crtc,
 		cirrus_bo_unreserve(bo);
 	}
 
-	bo = gem_to_cirrus_bo(crtc->primary->fb->obj[0]);
+	cirrus_fb = to_cirrus_framebuffer(crtc->primary->fb);
+	obj = cirrus_fb->obj;
+	bo = gem_to_cirrus_bo(obj);
 
 	ret = cirrus_bo_reserve(bo, false);
 	if (ret)
@@ -127,7 +133,7 @@ static int cirrus_crtc_do_set_base(struct drm_crtc *crtc,
 		return ret;
 	}
 
-	if (cdev->mode_info.gfbdev->gfb == crtc->primary->fb) {
+	if (&cdev->mode_info.gfbdev->gfb == cirrus_fb) {
 		/* if pushing console in kmap it */
 		ret = ttm_bo_kmap(&bo->bo, 0, bo->bo.num_pages, &bo->kmap);
 		if (ret)
@@ -288,7 +294,22 @@ static void cirrus_crtc_prepare(struct drm_crtc *crtc)
 {
 }
 
-static void cirrus_crtc_load_lut(struct drm_crtc *crtc)
+/*
+ * This is called after a mode is programmed. It should reverse anything done
+ * by the prepare function
+ */
+static void cirrus_crtc_commit(struct drm_crtc *crtc)
+{
+}
+
+/*
+ * The core can pass us a set of gamma values to program. We actually only
+ * use this for 8-bit mode so can't perform smooth fades on deeper modes,
+ * but it's a requirement that we provide the function
+ */
+static int cirrus_crtc_gamma_set(struct drm_crtc *crtc, u16 *red, u16 *green,
+				 u16 *blue, uint32_t size,
+				 struct drm_modeset_acquire_ctx *ctx)
 {
 	struct drm_device *dev = crtc->dev;
 	struct cirrus_device *cdev = dev->dev_private;
@@ -296,7 +317,7 @@ static void cirrus_crtc_load_lut(struct drm_crtc *crtc)
 	int i;
 
 	if (!crtc->enabled)
-		return;
+		return 0;
 
 	r = crtc->gamma_store;
 	g = r + crtc->gamma_size;
@@ -309,27 +330,6 @@ static void cirrus_crtc_load_lut(struct drm_crtc *crtc)
 		WREG8(PALETTE_DATA, *g++ >> 8);
 		WREG8(PALETTE_DATA, *b++ >> 8);
 	}
-}
-
-/*
- * This is called after a mode is programmed. It should reverse anything done
- * by the prepare function
- */
-static void cirrus_crtc_commit(struct drm_crtc *crtc)
-{
-	cirrus_crtc_load_lut(crtc);
-}
-
-/*
- * The core can pass us a set of gamma values to program. We actually only
- * use this for 8-bit mode so can't perform smooth fades on deeper modes,
- * but it's a requirement that we provide the function
- */
-static int cirrus_crtc_gamma_set(struct drm_crtc *crtc, u16 *red, u16 *green,
-				 u16 *blue, uint32_t size,
-				 struct drm_modeset_acquire_ctx *ctx)
-{
-	cirrus_crtc_load_lut(crtc);
 
 	return 0;
 }
@@ -457,7 +457,7 @@ static struct drm_encoder *cirrus_connector_best_encoder(struct drm_connector
 	int enc_id = connector->encoder_ids[0];
 	/* pick the encoder ids */
 	if (enc_id)
-		return drm_encoder_find(connector->dev, NULL, enc_id);
+		return drm_encoder_find(connector->dev, enc_id);
 	return NULL;
 }
 
@@ -512,7 +512,7 @@ int cirrus_modeset_init(struct cirrus_device *cdev)
 	cdev->dev->mode_config.max_height = CIRRUS_MAX_FB_HEIGHT;
 
 	cdev->dev->mode_config.fb_base = cdev->mc.vram_base;
-	cdev->dev->mode_config.preferred_depth = cirrus_bpp;
+	cdev->dev->mode_config.preferred_depth = 24;
 	/* don't prefer a shadow on virt GPU */
 	cdev->dev->mode_config.prefer_shadow = 0;
 
@@ -530,7 +530,7 @@ int cirrus_modeset_init(struct cirrus_device *cdev)
 		return -1;
 	}
 
-	drm_connector_attach_encoder(connector, encoder);
+	drm_mode_connector_attach_encoder(connector, encoder);
 
 	ret = cirrus_fbdev_init(cdev);
 	if (ret) {

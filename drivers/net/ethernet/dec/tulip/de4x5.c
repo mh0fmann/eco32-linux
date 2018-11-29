@@ -912,7 +912,7 @@ static int     de4x5_init(struct net_device *dev);
 static int     de4x5_sw_reset(struct net_device *dev);
 static int     de4x5_rx(struct net_device *dev);
 static int     de4x5_tx(struct net_device *dev);
-static void    de4x5_ast(struct timer_list *t);
+static void    de4x5_ast(struct net_device *dev);
 static int     de4x5_txur(struct net_device *dev);
 static int     de4x5_rx_ovfc(struct net_device *dev);
 
@@ -1147,7 +1147,9 @@ de4x5_hw_init(struct net_device *dev, u_long iobase, struct device *gendev)
 	lp->timeout = -1;
 	lp->gendev = gendev;
 	spin_lock_init(&lp->lock);
-	timer_setup(&lp->timer, de4x5_ast, 0);
+	init_timer(&lp->timer);
+	lp->timer.function = (void (*)(unsigned long))de4x5_ast;
+	lp->timer.data = (unsigned long)dev;
 	de4x5_parse_params(dev);
 
 	/*
@@ -1740,10 +1742,9 @@ de4x5_tx(struct net_device *dev)
 }
 
 static void
-de4x5_ast(struct timer_list *t)
+de4x5_ast(struct net_device *dev)
 {
-	struct de4x5_private *lp = from_timer(lp, t, timer);
-	struct net_device *dev = dev_get_drvdata(lp->gendev);
+	struct de4x5_private *lp = netdev_priv(dev);
 	int next_tick = DE4X5_AUTOSENSE_MS;
 	int dt;
 
@@ -2369,7 +2370,7 @@ autoconf_media(struct net_device *dev)
 	lp->media = INIT;
 	lp->tcount = 0;
 
-	de4x5_ast(&lp->timer);
+	de4x5_ast(dev);
 
 	return lp->media;
 }
@@ -3204,8 +3205,6 @@ srom_map_media(struct net_device *dev)
       case SROM_10BASETF:
 	if (!lp->params.fdx) return -1;
 	lp->fdx = true;
-	/* fall through */
-
       case SROM_10BASET:
 	if (lp->params.fdx && !lp->fdx) return -1;
 	if ((lp->chipset == DC21140) || ((lp->chipset & ~0x00ff) == DC2114x)) {
@@ -3226,8 +3225,6 @@ srom_map_media(struct net_device *dev)
       case SROM_100BASETF:
         if (!lp->params.fdx) return -1;
 	lp->fdx = true;
-	/* fall through */
-
       case SROM_100BASET:
 	if (lp->params.fdx && !lp->fdx) return -1;
 	lp->media = _100Mb;
@@ -3240,8 +3237,6 @@ srom_map_media(struct net_device *dev)
       case SROM_100BASEFF:
 	if (!lp->params.fdx) return -1;
 	lp->fdx = true;
-	/* fall through */
-
       case SROM_100BASEF:
 	if (lp->params.fdx && !lp->fdx) return -1;
 	lp->media = _100Mb;

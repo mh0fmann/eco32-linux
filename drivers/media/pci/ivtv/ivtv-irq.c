@@ -1074,9 +1074,9 @@ irqreturn_t ivtv_irq_handler(int irq, void *dev_id)
 	return vsync_force ? IRQ_NONE : IRQ_HANDLED;
 }
 
-void ivtv_unfinished_dma(struct timer_list *t)
+void ivtv_unfinished_dma(unsigned long arg)
 {
-	struct ivtv *itv = from_timer(itv, t, dma_timer);
+	struct ivtv *itv = (struct ivtv *)arg;
 
 	if (!test_bit(IVTV_F_I_DMA, &itv->i_flags))
 		return;

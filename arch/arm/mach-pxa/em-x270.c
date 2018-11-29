@@ -15,7 +15,8 @@
 
 #include <linux/dm9000.h>
 #include <linux/platform_data/rtc-v3020.h>
-#include <linux/mtd/platnand.h>
+#include <linux/mtd/rawnand.h>
+#include <linux/mtd/partitions.h>
 #include <linux/mtd/physmap.h>
 #include <linux/input.h>
 #include <linux/gpio_keys.h>
@@ -31,7 +32,7 @@
 #include <linux/apm-emulation.h>
 #include <linux/i2c.h>
 #include <linux/platform_data/pca953x.h>
-#include <linux/platform_data/i2c-pxa.h>
+#include <linux/i2c/pxa-i2c.h>
 #include <linux/regulator/userspace-consumer.h>
 
 #include <asm/mach-types.h>
@@ -284,10 +285,11 @@ static void nand_cs_off(void)
 }
 
 /* hardware specific access to control-lines */
-static void em_x270_nand_cmd_ctl(struct nand_chip *this, int dat,
+static void em_x270_nand_cmd_ctl(struct mtd_info *mtd, int dat,
 				 unsigned int ctrl)
 {
-	unsigned long nandaddr = (unsigned long)this->legacy.IO_ADDR_W;
+	struct nand_chip *this = mtd_to_nand(mtd);
+	unsigned long nandaddr = (unsigned long)this->IO_ADDR_W;
 
 	dsb();
 
@@ -307,15 +309,15 @@ static void em_x270_nand_cmd_ctl(struct nand_chip *this, int dat,
 	}
 
 	dsb();
-	this->legacy.IO_ADDR_W = (void __iomem *)nandaddr;
+	this->IO_ADDR_W = (void __iomem *)nandaddr;
 	if (dat != NAND_CMD_NONE)
-		writel(dat, this->legacy.IO_ADDR_W);
+		writel(dat, this->IO_ADDR_W);
 
 	dsb();
 }
 
 /* read device ready pin */
-static int em_x270_nand_device_ready(struct nand_chip *this)
+static int em_x270_nand_device_ready(struct mtd_info *mtd)
 {
 	dsb();
 
@@ -344,6 +346,7 @@ struct platform_nand_data em_x270_nand_platdata = {
 		.chip_delay = 20,
 	},
 	.ctrl = {
+		.hwcontrol = 0,
 		.dev_ready = em_x270_nand_device_ready,
 		.select_chip = 0,
 		.cmd_ctrl = em_x270_nand_cmd_ctl,
@@ -984,6 +987,7 @@ static struct fixed_voltage_config camera_dummy_config = {
 	.supply_name		= "camera_vdd",
 	.input_supply		= "vcc cam",
 	.microvolts		= 2800000,
+	.gpio			= -1,
 	.enable_high		= 0,
 	.init_data		= &camera_dummy_initdata,
 };

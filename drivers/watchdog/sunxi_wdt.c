@@ -39,7 +39,7 @@
 #define DRV_VERSION		"1.0"
 
 static bool nowayout = WATCHDOG_NOWAYOUT;
-static unsigned int timeout;
+static unsigned int timeout = WDT_MAX_TIMEOUT;
 
 /*
  * This structure stores the register offsets for different variants
@@ -234,6 +234,7 @@ MODULE_DEVICE_TABLE(of, sunxi_wdt_dt_ids);
 static int sunxi_wdt_probe(struct platform_device *pdev)
 {
 	struct sunxi_wdt_dev *sunxi_wdt;
+	const struct of_device_id *device;
 	struct resource *res;
 	int err;
 
@@ -241,9 +242,11 @@ static int sunxi_wdt_probe(struct platform_device *pdev)
 	if (!sunxi_wdt)
 		return -EINVAL;
 
-	sunxi_wdt->wdt_regs = of_device_get_match_data(&pdev->dev);
-	if (!sunxi_wdt->wdt_regs)
+	device = of_match_device(sunxi_wdt_dt_ids, &pdev->dev);
+	if (!device)
 		return -ENODEV;
+
+	sunxi_wdt->wdt_regs = device->data;
 
 	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	sunxi_wdt->wdt_base = devm_ioremap_resource(&pdev->dev, res);

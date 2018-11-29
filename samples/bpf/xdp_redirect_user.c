@@ -20,11 +20,10 @@
 #include <string.h>
 #include <unistd.h>
 #include <libgen.h>
-#include <sys/resource.h>
 
 #include "bpf_load.h"
 #include "bpf_util.h"
-#include <bpf/bpf.h>
+#include "libbpf.h"
 
 static int ifindex_in;
 static int ifindex_out;
@@ -34,9 +33,9 @@ static __u32 xdp_flags;
 
 static void int_exit(int sig)
 {
-	bpf_set_link_xdp_fd(ifindex_in, -1, xdp_flags);
+	set_link_xdp_fd(ifindex_in, -1, xdp_flags);
 	if (ifindex_out_xdp_dummy_attached)
-		bpf_set_link_xdp_fd(ifindex_out, -1, xdp_flags);
+		set_link_xdp_fd(ifindex_out, -1, xdp_flags);
 	exit(0);
 }
 
@@ -76,7 +75,6 @@ static void usage(const char *prog)
 
 int main(int argc, char **argv)
 {
-	struct rlimit r = {RLIM_INFINITY, RLIM_INFINITY};
 	const char *optstr = "SN";
 	char filename[256];
 	int ret, opt, key = 0;
@@ -100,11 +98,6 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
-	if (setrlimit(RLIMIT_MEMLOCK, &r)) {
-		perror("setrlimit(RLIMIT_MEMLOCK)");
-		return 1;
-	}
-
 	ifindex_in = strtoul(argv[optind], NULL, 0);
 	ifindex_out = strtoul(argv[optind + 1], NULL, 0);
 	printf("input: %d output: %d\n", ifindex_in, ifindex_out);
@@ -121,13 +114,13 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
-	if (bpf_set_link_xdp_fd(ifindex_in, prog_fd[0], xdp_flags) < 0) {
+	if (set_link_xdp_fd(ifindex_in, prog_fd[0], xdp_flags) < 0) {
 		printf("ERROR: link set xdp fd failed on %d\n", ifindex_in);
 		return 1;
 	}
 
 	/* Loading dummy XDP prog on out-device */
-	if (bpf_set_link_xdp_fd(ifindex_out, prog_fd[1],
+	if (set_link_xdp_fd(ifindex_out, prog_fd[1],
 			    (xdp_flags | XDP_FLAGS_UPDATE_IF_NOEXIST)) < 0) {
 		printf("WARN: link set xdp fd failed on %d\n", ifindex_out);
 		ifindex_out_xdp_dummy_attached = false;

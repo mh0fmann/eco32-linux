@@ -137,9 +137,7 @@ static int sii902x_get_modes(struct drm_connector *connector)
 	struct sii902x *sii902x = connector_to_sii902x(connector);
 	struct regmap *regmap = sii902x->regmap;
 	u32 bus_format = MEDIA_BUS_FMT_RGB888_1X24;
-	struct device *dev = &sii902x->i2c->dev;
 	unsigned long timeout;
-	unsigned int retries;
 	unsigned int status;
 	struct edid *edid;
 	int num = 0;
@@ -161,7 +159,7 @@ static int sii902x_get_modes(struct drm_connector *connector)
 		 time_before(jiffies, timeout));
 
 	if (!(status & SII902X_SYS_CTRL_DDC_BUS_GRTD)) {
-		dev_err(dev, "failed to acquire the i2c bus\n");
+		dev_err(&sii902x->i2c->dev, "failed to acquire the i2c bus\n");
 		return -ETIMEDOUT;
 	}
 
@@ -170,7 +168,7 @@ static int sii902x_get_modes(struct drm_connector *connector)
 		return ret;
 
 	edid = drm_get_edid(connector, sii902x->i2c->adapter);
-	drm_connector_update_edid_property(connector, edid);
+	drm_mode_connector_update_edid_property(connector, edid);
 	if (edid) {
 		num = drm_add_edid_modes(connector, edid);
 		kfree(edid);
@@ -181,19 +179,9 @@ static int sii902x_get_modes(struct drm_connector *connector)
 	if (ret)
 		return ret;
 
-	/*
-	 * Sometimes the I2C bus can stall after failure to use the
-	 * EDID channel. Retry a few times to see if things clear
-	 * up, else continue anyway.
-	 */
-	retries = 5;
-	do {
-		ret = regmap_read(regmap, SII902X_SYS_CTRL_DATA,
-				  &status);
-		retries--;
-	} while (ret && retries);
+	ret = regmap_read(regmap, SII902X_SYS_CTRL_DATA, &status);
 	if (ret)
-		dev_err(dev, "failed to read status (%d)\n", ret);
+		return ret;
 
 	ret = regmap_update_bits(regmap, SII902X_SYS_CTRL_DATA,
 				 SII902X_SYS_CTRL_DDC_BUS_REQ |
@@ -213,7 +201,7 @@ static int sii902x_get_modes(struct drm_connector *connector)
 
 	if (status & (SII902X_SYS_CTRL_DDC_BUS_REQ |
 		      SII902X_SYS_CTRL_DDC_BUS_GRTD)) {
-		dev_err(dev, "failed to release the i2c bus\n");
+		dev_err(&sii902x->i2c->dev, "failed to release the i2c bus\n");
 		return -ETIMEDOUT;
 	}
 
@@ -324,7 +312,7 @@ static int sii902x_bridge_attach(struct drm_bridge *bridge)
 	else
 		sii902x->connector.polled = DRM_CONNECTOR_POLL_CONNECT;
 
-	drm_connector_attach_encoder(&sii902x->connector, bridge->encoder);
+	drm_mode_connector_attach_encoder(&sii902x->connector, bridge->encoder);
 
 	return 0;
 }

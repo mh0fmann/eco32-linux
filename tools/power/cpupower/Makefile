@@ -26,11 +26,9 @@ endif
 
 ifneq ($(OUTPUT),)
 # check that the output directory actually exists
-OUTDIR := $(shell cd $(OUTPUT) && pwd)
+OUTDIR := $(shell cd $(OUTPUT) && /bin/pwd)
 $(if $(OUTDIR),, $(error output directory "$(OUTPUT)" does not exist))
 endif
-
-include ../../scripts/Makefile.arch
 
 # --- CONFIGURATION BEGIN ---
 
@@ -81,11 +79,7 @@ bindir ?=	/usr/bin
 sbindir ?=	/usr/sbin
 mandir ?=	/usr/man
 includedir ?=	/usr/include
-ifeq ($(IS_64_BIT), 1)
-libdir ?=	/usr/lib64
-else
 libdir ?=	/usr/lib
-endif
 localedir ?=	/usr/share/locale
 docdir ?=       /usr/share/doc/packages/cpupower
 confdir ?=      /etc/
@@ -129,7 +123,7 @@ WARNINGS += $(call cc-supports,-Wno-pointer-sign)
 WARNINGS += $(call cc-supports,-Wdeclaration-after-statement)
 WARNINGS += -Wshadow
 
-override CFLAGS += -DVERSION=\"$(VERSION)\" -DPACKAGE=\"$(PACKAGE)\" \
+CFLAGS += -DVERSION=\"$(VERSION)\" -DPACKAGE=\"$(PACKAGE)\" \
 		-DPACKAGE_BUGREPORT=\"$(PACKAGE_BUGREPORT)\" -D_GNU_SOURCE
 
 UTIL_OBJS =  utils/helpers/amd.o utils/helpers/msr.o \
@@ -156,12 +150,12 @@ LIB_SRC = 	lib/cpufreq.c lib/cpupower.c lib/cpuidle.c
 LIB_OBJS = 	lib/cpufreq.o lib/cpupower.o lib/cpuidle.o
 LIB_OBJS :=	$(addprefix $(OUTPUT),$(LIB_OBJS))
 
-override CFLAGS +=	-pipe
+CFLAGS +=	-pipe
 
 ifeq ($(strip $(NLS)),true)
 	INSTALL_NLS += install-gmo
 	COMPILE_NLS += create-gmo
-	override CFLAGS += -DNLS
+	CFLAGS += -DNLS
 endif
 
 ifeq ($(strip $(CPUFREQ_BENCH)),true)
@@ -175,7 +169,7 @@ ifeq ($(strip $(STATIC)),true)
         UTIL_SRC += $(LIB_SRC)
 endif
 
-override CFLAGS += $(WARNINGS)
+CFLAGS += $(WARNINGS)
 
 ifeq ($(strip $(V)),false)
 	QUIET=@
@@ -188,10 +182,10 @@ export QUIET ECHO
 
 # if DEBUG is enabled, then we do not strip or optimize
 ifeq ($(strip $(DEBUG)),true)
-	override CFLAGS += -O1 -g -DDEBUG
+	CFLAGS += -O1 -g -DDEBUG
 	STRIPCMD = /bin/true -Since_we_are_debugging
 else
-	override CFLAGS += $(OPTIMIZATION) -fomit-frame-pointer
+	CFLAGS += $(OPTIMIZATION) -fomit-frame-pointer
 	STRIPCMD = $(STRIP) -s --remove-section=.note --remove-section=.comment
 endif
 

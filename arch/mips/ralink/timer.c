@@ -109,9 +109,9 @@ static int rt_timer_probe(struct platform_device *pdev)
 	}
 
 	rt->irq = platform_get_irq(pdev, 0);
-	if (rt->irq < 0) {
+	if (!rt->irq) {
 		dev_err(&pdev->dev, "failed to load irq\n");
-		return rt->irq;
+		return -ENOENT;
 	}
 
 	rt->membase = devm_ioremap_resource(&pdev->dev, res);

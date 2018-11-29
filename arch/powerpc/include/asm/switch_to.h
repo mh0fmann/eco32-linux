@@ -35,6 +35,7 @@ static inline void disable_kernel_fp(void)
 	msr_check_and_clear(MSR_FP);
 }
 #else
+static inline void __giveup_fpu(struct task_struct *t) { }
 static inline void save_fpu(struct task_struct *t) { }
 static inline void flush_fp_to_thread(struct task_struct *t) { }
 #endif
@@ -90,9 +91,5 @@ static inline void clear_task_ebb(struct task_struct *t)
     t->thread.used_ebb = 0;
 #endif
 }
-
-extern int set_thread_uses_vas(void);
-
-extern int set_thread_tidr(struct task_struct *t);
 
 #endif /* _ASM_POWERPC_SWITCH_TO_H */

@@ -1,9 +1,12 @@
-// SPDX-License-Identifier: GPL-2.0
 /*
  * Performance event support for s390x - CPU-measurement Counter Facility
  *
  *  Copyright IBM Corp. 2012, 2017
  *  Author(s): Hendrik Brueckner <brueckner@linux.vnet.ibm.com>
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License (version 2 only)
+ * as published by the Free Software Foundation.
  */
 #define KMSG_COMPONENT	"cpum_cf"
 #define pr_fmt(fmt)	KMSG_COMPONENT ": " fmt
@@ -373,7 +376,7 @@ static int __hw_perf_event_init(struct perf_event *event)
 		return -ENOENT;
 
 	if (ev > PERF_CPUM_CF_MAX_CTR)
-		return -ENOENT;
+		return -EINVAL;
 
 	/* Obtain the counter set to which the specified counter belongs */
 	set = get_counter_set(ev);

@@ -486,7 +486,7 @@ static irqreturn_t max732x_irq_handler(int irq, void *devid)
 
 	do {
 		level = __ffs(pending);
-		handle_nested_irq(irq_find_mapping(chip->gpio_chip.irq.domain,
+		handle_nested_irq(irq_find_mapping(chip->gpio_chip.irqdomain,
 						   level));
 
 		pending &= ~(1 << level);
@@ -653,12 +653,6 @@ static int max732x_probe(struct i2c_client *client,
 		chip->client_group_a = client;
 		if (nr_port > 8) {
 			c = i2c_new_dummy(client->adapter, addr_b);
-			if (!c) {
-				dev_err(&client->dev,
-					"Failed to allocate I2C device\n");
-				ret = -ENODEV;
-				goto out_failed;
-			}
 			chip->client_group_b = chip->client_dummy = c;
 		}
 		break;
@@ -666,12 +660,6 @@ static int max732x_probe(struct i2c_client *client,
 		chip->client_group_b = client;
 		if (nr_port > 8) {
 			c = i2c_new_dummy(client->adapter, addr_a);
-			if (!c) {
-				dev_err(&client->dev,
-					"Failed to allocate I2C device\n");
-				ret = -ENODEV;
-				goto out_failed;
-			}
 			chip->client_group_a = chip->client_dummy = c;
 		}
 		break;
@@ -721,7 +709,8 @@ static int max732x_probe(struct i2c_client *client,
 	return 0;
 
 out_failed:
-	i2c_unregister_device(chip->client_dummy);
+	if (chip->client_dummy)
+		i2c_unregister_device(chip->client_dummy);
 	return ret;
 }
 
@@ -745,7 +734,8 @@ static int max732x_remove(struct i2c_client *client)
 	gpiochip_remove(&chip->gpio_chip);
 
 	/* unregister any dummy i2c_client */
-	i2c_unregister_device(chip->client_dummy);
+	if (chip->client_dummy)
+		i2c_unregister_device(chip->client_dummy);
 
 	return 0;
 }

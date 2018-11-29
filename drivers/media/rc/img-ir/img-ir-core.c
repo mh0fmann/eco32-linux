@@ -92,9 +92,10 @@ static int img_ir_probe(struct platform_device *pdev)
 
 	/* Private driver data */
 	priv = devm_kzalloc(&pdev->dev, sizeof(*priv), GFP_KERNEL);
-	if (!priv)
+	if (!priv) {
+		dev_err(&pdev->dev, "cannot allocate device data\n");
 		return -ENOMEM;
-
+	}
 	platform_set_drvdata(pdev, priv);
 	priv->dev = &pdev->dev;
 	spin_lock_init(&priv->lock);

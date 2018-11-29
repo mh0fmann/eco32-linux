@@ -282,7 +282,8 @@ static void taos_disconnect(struct serio *serio)
 {
 	struct taos_data *taos = serio_get_drvdata(serio);
 
-	i2c_unregister_device(taos->client);
+	if (taos->client)
+		i2c_unregister_device(taos->client);
 	i2c_del_adapter(&taos->adapter);
 	serio_close(serio);
 	kfree(taos);

@@ -38,11 +38,11 @@ static atomic_t ecryptfs_num_miscdev_opens;
  *
  * Returns the poll mask
  */
-static __poll_t
+static unsigned int
 ecryptfs_miscdev_poll(struct file *file, poll_table *pt)
 {
 	struct ecryptfs_daemon *daemon = file->private_data;
-	__poll_t mask = 0;
+	unsigned int mask = 0;
 
 	mutex_lock(&daemon->mux);
 	if (daemon->flags & ECRYPTFS_DAEMON_ZOMBIE) {
@@ -59,7 +59,7 @@ ecryptfs_miscdev_poll(struct file *file, poll_table *pt)
 	poll_wait(file, &daemon->wait, pt);
 	mutex_lock(&daemon->mux);
 	if (!list_empty(&daemon->msg_ctx_out_queue))
-		mask |= EPOLLIN | EPOLLRDNORM;
+		mask |= POLLIN | POLLRDNORM;
 out_unlock_daemon:
 	daemon->flags &= ~ECRYPTFS_DAEMON_IN_POLL;
 	mutex_unlock(&daemon->mux);
@@ -163,8 +163,12 @@ int ecryptfs_send_miscdev(char *data, size_t data_size,
 	struct ecryptfs_message *msg;
 
 	msg = kmalloc((sizeof(*msg) + data_size), GFP_KERNEL);
-	if (!msg)
+	if (!msg) {
+		printk(KERN_ERR "%s: Out of memory whilst attempting "
+		       "to kmalloc(%zd, GFP_KERNEL)\n", __func__,
+		       (sizeof(*msg) + data_size));
 		return -ENOMEM;
+	}
 
 	mutex_lock(&msg_ctx->mux);
 	msg_ctx->msg = msg;
@@ -379,7 +383,7 @@ ecryptfs_miscdev_write(struct file *file, const char __user *buf,
 		goto memdup;
 	} else if (count < MIN_MSG_PKT_SIZE || count > MAX_MSG_PKT_SIZE) {
 		printk(KERN_WARNING "%s: Acceptable packet size range is "
-		       "[%d-%zu], but amount of data written is [%zu].\n",
+		       "[%d-%zu], but amount of data written is [%zu].",
 		       __func__, MIN_MSG_PKT_SIZE, MAX_MSG_PKT_SIZE, count);
 		return -EINVAL;
 	}

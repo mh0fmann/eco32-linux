@@ -194,7 +194,7 @@ static int vxcan_newlink(struct net *net, struct net_device *dev,
 		tbp = peer_tb;
 	}
 
-	if (ifmp && tbp[IFLA_IFNAME]) {
+	if (tbp[IFLA_IFNAME]) {
 		nla_strlcpy(ifname, tbp[IFLA_IFNAME], IFNAMSIZ);
 		name_assign_type = NET_NAME_USER;
 	} else {
@@ -227,8 +227,10 @@ static int vxcan_newlink(struct net *net, struct net_device *dev,
 	netif_carrier_off(peer);
 
 	err = rtnl_configure_link(peer, ifmp);
-	if (err < 0)
-		goto unregister_network_device;
+	if (err < 0) {
+		unregister_netdevice(peer);
+		return err;
+	}
 
 	/* register first device */
 	if (tb[IFLA_IFNAME])
@@ -237,8 +239,10 @@ static int vxcan_newlink(struct net *net, struct net_device *dev,
 		snprintf(dev->name, IFNAMSIZ, DRV_NAME "%%d");
 
 	err = register_netdevice(dev);
-	if (err < 0)
-		goto unregister_network_device;
+	if (err < 0) {
+		unregister_netdevice(peer);
+		return err;
+	}
 
 	netif_carrier_off(dev);
 
@@ -250,10 +254,6 @@ static int vxcan_newlink(struct net *net, struct net_device *dev,
 	rcu_assign_pointer(priv->peer, dev);
 
 	return 0;
-
-unregister_network_device:
-	unregister_netdevice(peer);
-	return err;
 }
 
 static void vxcan_dellink(struct net_device *dev, struct list_head *head)

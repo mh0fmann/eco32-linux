@@ -15,6 +15,7 @@
  */
 
 #include <linux/clk.h>
+#include <linux/clkdev.h>
 #include <linux/clk-provider.h>
 #include <linux/of.h>
 #include <linux/of_address.h>
@@ -88,8 +89,8 @@ static void __init sun9i_a80_pll4_setup(struct device_node *node)
 
 	reg = of_io_request_and_map(node, 0, of_node_full_name(node));
 	if (IS_ERR(reg)) {
-		pr_err("Could not get registers for a80-pll4-clk: %pOFn\n",
-		       node);
+		pr_err("Could not get registers for a80-pll4-clk: %s\n",
+		       node->name);
 		return;
 	}
 
@@ -139,17 +140,21 @@ static DEFINE_SPINLOCK(sun9i_a80_gt_lock);
 static void __init sun9i_a80_gt_setup(struct device_node *node)
 {
 	void __iomem *reg;
+	struct clk *gt;
 
 	reg = of_io_request_and_map(node, 0, of_node_full_name(node));
 	if (IS_ERR(reg)) {
-		pr_err("Could not get registers for a80-gt-clk: %pOFn\n",
-		       node);
+		pr_err("Could not get registers for a80-gt-clk: %s\n",
+		       node->name);
 		return;
 	}
 
+	gt = sunxi_factors_register(node, &sun9i_a80_gt_data,
+				    &sun9i_a80_gt_lock, reg);
+
 	/* The GT bus clock needs to be always enabled */
-	sunxi_factors_register_critical(node, &sun9i_a80_gt_data,
-					&sun9i_a80_gt_lock, reg);
+	__clk_get(gt);
+	clk_prepare_enable(gt);
 }
 CLK_OF_DECLARE(sun9i_a80_gt, "allwinner,sun9i-a80-gt-clk", sun9i_a80_gt_setup);
 
@@ -197,8 +202,8 @@ static void __init sun9i_a80_ahb_setup(struct device_node *node)
 
 	reg = of_io_request_and_map(node, 0, of_node_full_name(node));
 	if (IS_ERR(reg)) {
-		pr_err("Could not get registers for a80-ahb-clk: %pOFn\n",
-		       node);
+		pr_err("Could not get registers for a80-ahb-clk: %s\n",
+		       node->name);
 		return;
 	}
 
@@ -223,8 +228,8 @@ static void __init sun9i_a80_apb0_setup(struct device_node *node)
 
 	reg = of_io_request_and_map(node, 0, of_node_full_name(node));
 	if (IS_ERR(reg)) {
-		pr_err("Could not get registers for a80-apb0-clk: %pOFn\n",
-		       node);
+		pr_err("Could not get registers for a80-apb0-clk: %s\n",
+		       node->name);
 		return;
 	}
 
@@ -280,8 +285,8 @@ static void __init sun9i_a80_apb1_setup(struct device_node *node)
 
 	reg = of_io_request_and_map(node, 0, of_node_full_name(node));
 	if (IS_ERR(reg)) {
-		pr_err("Could not get registers for a80-apb1-clk: %pOFn\n",
-		       node);
+		pr_err("Could not get registers for a80-apb1-clk: %s\n",
+		       node->name);
 		return;
 	}
 

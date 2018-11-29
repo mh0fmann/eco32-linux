@@ -255,7 +255,6 @@ cbq_classify(struct sk_buff *skb, struct Qdisc *sch, int *qerr)
 		case TC_ACT_STOLEN:
 		case TC_ACT_TRAP:
 			*qerr = NET_XMIT_SUCCESS | __NET_XMIT_STOLEN;
-			/* fall through */
 		case TC_ACT_SHOT:
 			return NULL;
 		case TC_ACT_RECLASSIFY:
@@ -1132,8 +1131,7 @@ static const struct nla_policy cbq_policy[TCA_CBQ_MAX + 1] = {
 	[TCA_CBQ_POLICE]	= { .len = sizeof(struct tc_cbq_police) },
 };
 
-static int cbq_init(struct Qdisc *sch, struct nlattr *opt,
-		    struct netlink_ext_ack *extack)
+static int cbq_init(struct Qdisc *sch, struct nlattr *opt)
 {
 	struct cbq_sched_data *q = qdisc_priv(sch);
 	struct nlattr *tb[TCA_CBQ_MAX + 1];
@@ -1144,39 +1142,30 @@ static int cbq_init(struct Qdisc *sch, struct nlattr *opt,
 	hrtimer_init(&q->delay_timer, CLOCK_MONOTONIC, HRTIMER_MODE_ABS_PINNED);
 	q->delay_timer.function = cbq_undelay;
 
-	if (!opt) {
-		NL_SET_ERR_MSG(extack, "CBQ options are required for this operation");
+	if (!opt)
 		return -EINVAL;
-	}
 
-	err = nla_parse_nested(tb, TCA_CBQ_MAX, opt, cbq_policy, extack);
+	err = nla_parse_nested(tb, TCA_CBQ_MAX, opt, cbq_policy, NULL);
 	if (err < 0)
 		return err;
 
-	if (!tb[TCA_CBQ_RTAB] || !tb[TCA_CBQ_RATE]) {
-		NL_SET_ERR_MSG(extack, "Rate specification missing or incomplete");
+	if (tb[TCA_CBQ_RTAB] == NULL || tb[TCA_CBQ_RATE] == NULL)
 		return -EINVAL;
-	}
 
 	r = nla_data(tb[TCA_CBQ_RATE]);
 
-	q->link.R_tab = qdisc_get_rtab(r, tb[TCA_CBQ_RTAB], extack);
-	if (!q->link.R_tab)
+	if ((q->link.R_tab = qdisc_get_rtab(r, tb[TCA_CBQ_RTAB])) == NULL)
 		return -EINVAL;
-
-	err = tcf_block_get(&q->link.block, &q->link.filter_list, sch, extack);
-	if (err)
-		goto put_rtab;
 
 	err = qdisc_class_hash_init(&q->clhash);
 	if (err < 0)
-		goto put_block;
+		goto put_rtab;
 
 	q->link.sibling = &q->link;
 	q->link.common.classid = sch->handle;
 	q->link.qdisc = sch;
 	q->link.q = qdisc_create_dflt(sch->dev_queue, &pfifo_qdisc_ops,
-				      sch->handle, NULL);
+				      sch->handle);
 	if (!q->link.q)
 		q->link.q = &noop_qdisc;
 	else
@@ -1203,9 +1192,6 @@ static int cbq_init(struct Qdisc *sch, struct nlattr *opt,
 
 	cbq_addprio(q, &q->link);
 	return 0;
-
-put_block:
-	tcf_block_put(q->link.block);
 
 put_rtab:
 	qdisc_put_rtab(q->link.R_tab);
@@ -1375,13 +1361,13 @@ cbq_dump_class_stats(struct Qdisc *sch, unsigned long arg,
 }
 
 static int cbq_graft(struct Qdisc *sch, unsigned long arg, struct Qdisc *new,
-		     struct Qdisc **old, struct netlink_ext_ack *extack)
+		     struct Qdisc **old)
 {
 	struct cbq_class *cl = (struct cbq_class *)arg;
 
 	if (new == NULL) {
-		new = qdisc_create_dflt(sch->dev_queue, &pfifo_qdisc_ops,
-					cl->common.classid, extack);
+		new = qdisc_create_dflt(sch->dev_queue,
+					&pfifo_qdisc_ops, cl->common.classid);
 		if (new == NULL)
 			return -ENOBUFS;
 	}
@@ -1418,7 +1404,7 @@ static void cbq_destroy_class(struct Qdisc *sch, struct cbq_class *cl)
 	WARN_ON(cl->filters);
 
 	tcf_block_put(cl->block);
-	qdisc_put(cl->q);
+	qdisc_destroy(cl->q);
 	qdisc_put_rtab(cl->R_tab);
 	gen_kill_estimator(&cl->rate_est);
 	if (cl != &q->link)
@@ -1456,7 +1442,7 @@ static void cbq_destroy(struct Qdisc *sch)
 
 static int
 cbq_change_class(struct Qdisc *sch, u32 classid, u32 parentid, struct nlattr **tca,
-		 unsigned long *arg, struct netlink_ext_ack *extack)
+		 unsigned long *arg)
 {
 	int err;
 	struct cbq_sched_data *q = qdisc_priv(sch);
@@ -1466,37 +1452,29 @@ cbq_change_class(struct Qdisc *sch, u32 classid, u32 parentid, struct nlattr **t
 	struct cbq_class *parent;
 	struct qdisc_rate_table *rtab = NULL;
 
-	if (!opt) {
-		NL_SET_ERR_MSG(extack, "Mandatory qdisc options missing");
+	if (opt == NULL)
 		return -EINVAL;
-	}
 
-	err = nla_parse_nested(tb, TCA_CBQ_MAX, opt, cbq_policy, extack);
+	err = nla_parse_nested(tb, TCA_CBQ_MAX, opt, cbq_policy, NULL);
 	if (err < 0)
 		return err;
 
-	if (tb[TCA_CBQ_OVL_STRATEGY] || tb[TCA_CBQ_POLICE]) {
-		NL_SET_ERR_MSG(extack, "Neither overlimit strategy nor policing attributes can be used for changing class params");
+	if (tb[TCA_CBQ_OVL_STRATEGY] || tb[TCA_CBQ_POLICE])
 		return -EOPNOTSUPP;
-	}
 
 	if (cl) {
 		/* Check parent */
 		if (parentid) {
 			if (cl->tparent &&
-			    cl->tparent->common.classid != parentid) {
-				NL_SET_ERR_MSG(extack, "Invalid parent id");
+			    cl->tparent->common.classid != parentid)
 				return -EINVAL;
-			}
-			if (!cl->tparent && parentid != TC_H_ROOT) {
-				NL_SET_ERR_MSG(extack, "Parent must be root");
+			if (!cl->tparent && parentid != TC_H_ROOT)
 				return -EINVAL;
-			}
 		}
 
 		if (tb[TCA_CBQ_RATE]) {
 			rtab = qdisc_get_rtab(nla_data(tb[TCA_CBQ_RATE]),
-					      tb[TCA_CBQ_RTAB], extack);
+					      tb[TCA_CBQ_RTAB]);
 			if (rtab == NULL)
 				return -EINVAL;
 		}
@@ -1508,7 +1486,6 @@ cbq_change_class(struct Qdisc *sch, u32 classid, u32 parentid, struct nlattr **t
 						    qdisc_root_sleeping_running(sch),
 						    tca[TCA_RATE]);
 			if (err) {
-				NL_SET_ERR_MSG(extack, "Failed to replace specified rate estimator");
 				qdisc_put_rtab(rtab);
 				return err;
 			}
@@ -1547,23 +1524,19 @@ cbq_change_class(struct Qdisc *sch, u32 classid, u32 parentid, struct nlattr **t
 	if (parentid == TC_H_ROOT)
 		return -EINVAL;
 
-	if (!tb[TCA_CBQ_WRROPT] || !tb[TCA_CBQ_RATE] || !tb[TCA_CBQ_LSSOPT]) {
-		NL_SET_ERR_MSG(extack, "One of the following attributes MUST be specified: WRR, rate or link sharing");
+	if (tb[TCA_CBQ_WRROPT] == NULL || tb[TCA_CBQ_RATE] == NULL ||
+	    tb[TCA_CBQ_LSSOPT] == NULL)
 		return -EINVAL;
-	}
 
-	rtab = qdisc_get_rtab(nla_data(tb[TCA_CBQ_RATE]), tb[TCA_CBQ_RTAB],
-			      extack);
+	rtab = qdisc_get_rtab(nla_data(tb[TCA_CBQ_RATE]), tb[TCA_CBQ_RTAB]);
 	if (rtab == NULL)
 		return -EINVAL;
 
 	if (classid) {
 		err = -EINVAL;
 		if (TC_H_MAJ(classid ^ sch->handle) ||
-		    cbq_class_lookup(q, classid)) {
-			NL_SET_ERR_MSG(extack, "Specified class not found");
+		    cbq_class_lookup(q, classid))
 			goto failure;
-		}
 	} else {
 		int i;
 		classid = TC_H_MAKE(sch->handle, 0x8000);
@@ -1575,10 +1548,8 @@ cbq_change_class(struct Qdisc *sch, u32 classid, u32 parentid, struct nlattr **t
 				break;
 		}
 		err = -ENOSR;
-		if (i >= 0x8000) {
-			NL_SET_ERR_MSG(extack, "Unable to generate classid");
+		if (i >= 0x8000)
 			goto failure;
-		}
 		classid = classid|q->hgenerator;
 	}
 
@@ -1586,10 +1557,8 @@ cbq_change_class(struct Qdisc *sch, u32 classid, u32 parentid, struct nlattr **t
 	if (parentid) {
 		parent = cbq_class_lookup(q, parentid);
 		err = -EINVAL;
-		if (!parent) {
-			NL_SET_ERR_MSG(extack, "Failed to find parentid");
+		if (parent == NULL)
 			goto failure;
-		}
 	}
 
 	err = -ENOBUFS;
@@ -1597,7 +1566,7 @@ cbq_change_class(struct Qdisc *sch, u32 classid, u32 parentid, struct nlattr **t
 	if (cl == NULL)
 		goto failure;
 
-	err = tcf_block_get(&cl->block, &cl->filter_list, sch, extack);
+	err = tcf_block_get(&cl->block, &cl->filter_list);
 	if (err) {
 		kfree(cl);
 		return err;
@@ -1609,7 +1578,6 @@ cbq_change_class(struct Qdisc *sch, u32 classid, u32 parentid, struct nlattr **t
 					qdisc_root_sleeping_running(sch),
 					tca[TCA_RATE]);
 		if (err) {
-			NL_SET_ERR_MSG(extack, "Couldn't create new estimator");
 			tcf_block_put(cl->block);
 			kfree(cl);
 			goto failure;
@@ -1618,8 +1586,7 @@ cbq_change_class(struct Qdisc *sch, u32 classid, u32 parentid, struct nlattr **t
 
 	cl->R_tab = rtab;
 	rtab = NULL;
-	cl->q = qdisc_create_dflt(sch->dev_queue, &pfifo_qdisc_ops, classid,
-				  NULL);
+	cl->q = qdisc_create_dflt(sch->dev_queue, &pfifo_qdisc_ops, classid);
 	if (!cl->q)
 		cl->q = &noop_qdisc;
 	else
@@ -1703,8 +1670,7 @@ static int cbq_delete(struct Qdisc *sch, unsigned long arg)
 	return 0;
 }
 
-static struct tcf_block *cbq_tcf_block(struct Qdisc *sch, unsigned long arg,
-				       struct netlink_ext_ack *extack)
+static struct tcf_block *cbq_tcf_block(struct Qdisc *sch, unsigned long arg)
 {
 	struct cbq_sched_data *q = qdisc_priv(sch);
 	struct cbq_class *cl = (struct cbq_class *)arg;

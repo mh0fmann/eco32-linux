@@ -1,5 +1,7 @@
 /*
- * Copyright (C) 2011 Texas Instruments Incorporated - http://www.ti.com/
+ * linux/drivers/video/omap2/dss/dispc_coefs.c
+ *
+ * Copyright (C) 2011 Texas Instruments
  * Author: Chandrabhanu Mahapatra <cmahapatra@ti.com>
  *
  * This program is free software; you can redistribute it and/or modify it

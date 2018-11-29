@@ -1,10 +1,14 @@
-// SPDX-License-Identifier: GPL-2.0+
 /*
  *  NXP (Philips) SCC+++(SCN+++) serial driver
  *
  *  Copyright (C) 2012 Alexander Shiyan <shc_work@mail.ru>
  *
  *  Based on sc26xx.c, by Thomas Bogendörfer (tsbogend@alpha.franken.de)
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
  */
 
 #if defined(CONFIG_SERIAL_SCCNXP_CONSOLE) && defined(CONFIG_MAGIC_SYSRQ)
@@ -14,7 +18,6 @@
 #include <linux/clk.h>
 #include <linux/err.h>
 #include <linux/module.h>
-#include <linux/mod_devicetable.h>
 #include <linux/device.h>
 #include <linux/console.h>
 #include <linux/serial_core.h>
@@ -462,9 +465,9 @@ static void sccnxp_handle_events(struct sccnxp_port *s)
 	} while (1);
 }
 
-static void sccnxp_timer(struct timer_list *t)
+static void sccnxp_timer(unsigned long data)
 {
-	struct sccnxp_port *s = from_timer(s, t, timer);
+	struct sccnxp_port *s = (struct sccnxp_port *)data;
 	unsigned long flags;
 
 	spin_lock_irqsave(&s->lock, flags);
@@ -984,7 +987,8 @@ static int sccnxp_probe(struct platform_device *pdev)
 
 		dev_err(&pdev->dev, "Unable to reguest IRQ %i\n", s->irq);
 	} else {
-		timer_setup(&s->timer, sccnxp_timer, 0);
+		init_timer(&s->timer);
+		setup_timer(&s->timer, sccnxp_timer, (unsigned long)s);
 		mod_timer(&s->timer, jiffies +
 			  usecs_to_jiffies(s->pdata.poll_time_us));
 		return 0;

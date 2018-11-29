@@ -403,7 +403,7 @@ static struct vio_dev *vio_create_one(struct mdesc_handle *hp, u64 mp,
 	if (err) {
 		printk(KERN_ERR "VIO: Could not register device %s, err=%d\n",
 		       dev_name(&vdev->dev), err);
-		put_device(&vdev->dev);
+		kfree(vdev);
 		return NULL;
 	}
 	if (vdev->dp)

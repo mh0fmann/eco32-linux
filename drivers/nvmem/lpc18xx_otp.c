@@ -64,6 +64,7 @@ static struct nvmem_config lpc18xx_otp_nvmem_config = {
 	.read_only = true,
 	.word_size = LPC18XX_OTP_WORD_SIZE,
 	.stride = LPC18XX_OTP_WORD_SIZE,
+	.owner = THIS_MODULE,
 	.reg_read = lpc18xx_otp_read,
 };
 
@@ -86,9 +87,20 @@ static int lpc18xx_otp_probe(struct platform_device *pdev)
 	lpc18xx_otp_nvmem_config.dev = &pdev->dev;
 	lpc18xx_otp_nvmem_config.priv = otp;
 
-	nvmem = devm_nvmem_register(&pdev->dev, &lpc18xx_otp_nvmem_config);
+	nvmem = nvmem_register(&lpc18xx_otp_nvmem_config);
+	if (IS_ERR(nvmem))
+		return PTR_ERR(nvmem);
 
-	return PTR_ERR_OR_ZERO(nvmem);
+	platform_set_drvdata(pdev, nvmem);
+
+	return 0;
+}
+
+static int lpc18xx_otp_remove(struct platform_device *pdev)
+{
+	struct nvmem_device *nvmem = platform_get_drvdata(pdev);
+
+	return nvmem_unregister(nvmem);
 }
 
 static const struct of_device_id lpc18xx_otp_dt_ids[] = {
@@ -99,6 +111,7 @@ MODULE_DEVICE_TABLE(of, lpc18xx_otp_dt_ids);
 
 static struct platform_driver lpc18xx_otp_driver = {
 	.probe	= lpc18xx_otp_probe,
+	.remove	= lpc18xx_otp_remove,
 	.driver = {
 		.name	= "lpc18xx_otp",
 		.of_match_table = lpc18xx_otp_dt_ids,

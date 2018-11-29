@@ -25,7 +25,7 @@
 
 int read_current_timer(unsigned long *timer_value)
 {
-	*timer_value = get_cycles();
+	*timer_value = mfspr(SPR_TTCR);
 	return 0;
 }
 

@@ -1,7 +1,7 @@
-// SPDX-License-Identifier: GPL-2.0 OR MIT
 /**************************************************************************
  *
- * Copyright 2012-2015 VMware, Inc., Palo Alto, CA., USA
+ * Copyright © 2012-2015 VMware, Inc., Palo Alto, CA., USA
+ * All Rights Reserved.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a
  * copy of this software and associated documentation files (the
@@ -225,7 +225,7 @@ static void vmw_takedown_otable_base(struct vmw_private *dev_priv,
 		ret = ttm_bo_reserve(bo, false, true, NULL);
 		BUG_ON(ret != 0);
 
-		vmw_bo_fence_single(bo, NULL);
+		vmw_fence_single_bo(bo, NULL);
 		ttm_bo_unreserve(bo);
 	}
 
@@ -240,10 +240,6 @@ static int vmw_otable_batch_setup(struct vmw_private *dev_priv,
 	unsigned long offset;
 	unsigned long bo_size;
 	struct vmw_otable *otables = batch->otables;
-	struct ttm_operation_ctx ctx = {
-		.interruptible = false,
-		.no_wait_gpu = false
-	};
 	SVGAOTableType i;
 	int ret;
 
@@ -260,14 +256,15 @@ static int vmw_otable_batch_setup(struct vmw_private *dev_priv,
 	ret = ttm_bo_create(&dev_priv->bdev, bo_size,
 			    ttm_bo_type_device,
 			    &vmw_sys_ne_placement,
-			    0, false, &batch->otable_bo);
+			    0, false, NULL,
+			    &batch->otable_bo);
 
 	if (unlikely(ret != 0))
 		goto out_no_bo;
 
 	ret = ttm_bo_reserve(batch->otable_bo, false, true, NULL);
 	BUG_ON(ret != 0);
-	ret = vmw_bo_driver.ttm_tt_populate(batch->otable_bo->ttm, &ctx);
+	ret = vmw_bo_driver.ttm_tt_populate(batch->otable_bo->ttm);
 	if (unlikely(ret != 0))
 		goto out_unreserve;
 	ret = vmw_bo_map_dma(batch->otable_bo);
@@ -362,7 +359,7 @@ static void vmw_otable_batch_takedown(struct vmw_private *dev_priv,
 	ret = ttm_bo_reserve(bo, false, true, NULL);
 	BUG_ON(ret != 0);
 
-	vmw_bo_fence_single(bo, NULL);
+	vmw_fence_single_bo(bo, NULL);
 	ttm_bo_unreserve(bo);
 
 	ttm_bo_unref(&batch->otable_bo);
@@ -433,24 +430,19 @@ static int vmw_mob_pt_populate(struct vmw_private *dev_priv,
 			       struct vmw_mob *mob)
 {
 	int ret;
-	struct ttm_operation_ctx ctx = {
-		.interruptible = false,
-		.no_wait_gpu = false
-	};
-
 	BUG_ON(mob->pt_bo != NULL);
 
 	ret = ttm_bo_create(&dev_priv->bdev, mob->num_pages * PAGE_SIZE,
 			    ttm_bo_type_device,
 			    &vmw_sys_ne_placement,
-			    0, false, &mob->pt_bo);
+			    0, false, NULL, &mob->pt_bo);
 	if (unlikely(ret != 0))
 		return ret;
 
 	ret = ttm_bo_reserve(mob->pt_bo, false, true, NULL);
 
 	BUG_ON(ret != 0);
-	ret = vmw_bo_driver.ttm_tt_populate(mob->pt_bo->ttm, &ctx);
+	ret = vmw_bo_driver.ttm_tt_populate(mob->pt_bo->ttm);
 	if (unlikely(ret != 0))
 		goto out_unreserve;
 	ret = vmw_bo_map_dma(mob->pt_bo);
@@ -620,7 +612,7 @@ void vmw_mob_unbind(struct vmw_private *dev_priv,
 		vmw_fifo_commit(dev_priv, sizeof(*cmd));
 	}
 	if (bo) {
-		vmw_bo_fence_single(bo, NULL);
+		vmw_fence_single_bo(bo, NULL);
 		ttm_bo_unreserve(bo);
 	}
 	vmw_fifo_resource_dec(dev_priv);

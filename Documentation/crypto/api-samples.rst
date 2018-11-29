@@ -7,27 +7,59 @@ Code Example For Symmetric Key Cipher Operation
 ::
 
 
+    struct tcrypt_result {
+        struct completion completion;
+        int err;
+    };
+
     /* tie all data structures together */
     struct skcipher_def {
         struct scatterlist sg;
         struct crypto_skcipher *tfm;
         struct skcipher_request *req;
-        struct crypto_wait wait;
+        struct tcrypt_result result;
     };
+
+    /* Callback function */
+    static void test_skcipher_cb(struct crypto_async_request *req, int error)
+    {
+        struct tcrypt_result *result = req->data;
+
+        if (error == -EINPROGRESS)
+            return;
+        result->err = error;
+        complete(&result->completion);
+        pr_info("Encryption finished successfully\n");
+    }
 
     /* Perform cipher operation */
     static unsigned int test_skcipher_encdec(struct skcipher_def *sk,
                          int enc)
     {
-        int rc;
+        int rc = 0;
 
         if (enc)
-            rc = crypto_wait_req(crypto_skcipher_encrypt(sk->req), &sk->wait);
+            rc = crypto_skcipher_encrypt(sk->req);
         else
-            rc = crypto_wait_req(crypto_skcipher_decrypt(sk->req), &sk->wait);
+            rc = crypto_skcipher_decrypt(sk->req);
 
-	if (rc)
-		pr_info("skcipher encrypt returned with result %d\n", rc);
+        switch (rc) {
+        case 0:
+            break;
+        case -EINPROGRESS:
+        case -EBUSY:
+            rc = wait_for_completion_interruptible(
+                &sk->result.completion);
+            if (!rc && !sk->result.err) {
+                reinit_completion(&sk->result.completion);
+                break;
+            }
+        default:
+            pr_info("skcipher encrypt returned with %d result %d\n",
+                rc, sk->result.err);
+            break;
+        }
+        init_completion(&sk->result.completion);
 
         return rc;
     }
@@ -57,8 +89,8 @@ Code Example For Symmetric Key Cipher Operation
         }
 
         skcipher_request_set_callback(req, CRYPTO_TFM_REQ_MAY_BACKLOG,
-                          crypto_req_done,
-                          &sk.wait);
+                          test_skcipher_cb,
+                          &sk.result);
 
         /* AES 256 with random key */
         get_random_bytes(&key, 32);
@@ -90,7 +122,7 @@ Code Example For Symmetric Key Cipher Operation
         /* We encrypt one block */
         sg_init_one(&sk.sg, scratchpad, 16);
         skcipher_request_set_crypt(req, &sk.sg, &sk.sg, 16, ivdata);
-        crypto_init_wait(&sk.wait);
+        init_completion(&sk.result.completion);
 
         /* encrypt data */
         ret = test_skcipher_encdec(&sk, 1);
@@ -162,7 +194,7 @@ Code Example For Use of Operational State Memory With SHASH
         char *hash_alg_name = "sha1-padlock-nano";
         int ret;
 
-        alg = crypto_alloc_shash(hash_alg_name, 0, 0);
+        alg = crypto_alloc_shash(hash_alg_name, CRYPTO_ALG_TYPE_SHASH, 0);
         if (IS_ERR(alg)) {
                 pr_info("can't alloc alg %s\n", hash_alg_name);
                 return PTR_ERR(alg);

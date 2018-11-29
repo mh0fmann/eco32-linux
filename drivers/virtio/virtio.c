@@ -303,21 +303,11 @@ void unregister_virtio_driver(struct virtio_driver *driver)
 }
 EXPORT_SYMBOL_GPL(unregister_virtio_driver);
 
-/**
- * register_virtio_device - register virtio device
- * @dev        : virtio device to be registered
- *
- * On error, the caller must call put_device on &@dev->dev (and not kfree),
- * as another code path may have obtained a reference to @dev.
- *
- * Returns: 0 on suceess, -error on failure
- */
 int register_virtio_device(struct virtio_device *dev)
 {
 	int err;
 
 	dev->dev.bus = &virtio_bus;
-	device_initialize(&dev->dev);
 
 	/* Assign a unique device index and hence name. */
 	err = ida_simple_get(&virtio_index_ida, 0, 0, GFP_KERNEL);
@@ -340,13 +330,9 @@ int register_virtio_device(struct virtio_device *dev)
 
 	INIT_LIST_HEAD(&dev->vqs);
 
-	/*
-	 * device_add() causes the bus infrastructure to look for a matching
-	 * driver.
-	 */
-	err = device_add(&dev->dev);
-	if (err)
-		ida_simple_remove(&virtio_index_ida, dev->index);
+	/* device_register() causes the bus infrastructure to look for a
+	 * matching driver. */
+	err = device_register(&dev->dev);
 out:
 	if (err)
 		virtio_add_status(dev, VIRTIO_CONFIG_S_FAILED);

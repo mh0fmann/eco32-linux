@@ -20,6 +20,7 @@
 MODULE_AUTHOR("Dmitry Torokhov <dtor@mail.ru>");
 MODULE_DESCRIPTION("Generic implementation of a polled input device");
 MODULE_LICENSE("GPL v2");
+MODULE_VERSION("0.1");
 
 static void input_polldev_queue_work(struct input_polled_dev *dev)
 {

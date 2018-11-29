@@ -19,7 +19,7 @@
 
 int fd;
 const char v = 'V';
-static const char sopts[] = "bdehp:t:Tn:N";
+static const char sopts[] = "bdehp:t:";
 static const struct option lopts[] = {
 	{"bootstatus",          no_argument, NULL, 'b'},
 	{"disable",             no_argument, NULL, 'd'},
@@ -27,9 +27,6 @@ static const struct option lopts[] = {
 	{"help",                no_argument, NULL, 'h'},
 	{"pingrate",      required_argument, NULL, 'p'},
 	{"timeout",       required_argument, NULL, 't'},
-	{"gettimeout",          no_argument, NULL, 'T'},
-	{"pretimeout",    required_argument, NULL, 'n'},
-	{"getpretimeout",       no_argument, NULL, 'N'},
 	{NULL,                  no_argument, NULL, 0x0}
 };
 
@@ -74,13 +71,9 @@ static void usage(char *progname)
 	printf(" -h, --help          Print the help message\n");
 	printf(" -p, --pingrate=P    Set ping rate to P seconds (default %d)\n", DEFAULT_PING_RATE);
 	printf(" -t, --timeout=T     Set timeout to T seconds\n");
-	printf(" -T, --gettimeout    Get the timeout\n");
-	printf(" -n, --pretimeout=T  Set the pretimeout to T seconds\n");
-	printf(" -N, --getpretimeout Get the pretimeout\n");
 	printf("\n");
 	printf("Parameters are parsed left-to-right in real-time.\n");
 	printf("Example: %s -d -t 10 -p 5 -e\n", progname);
-	printf("Example: %s -t 12 -T -n 7 -N\n", progname);
 }
 
 int main(int argc, char *argv[])
@@ -96,13 +89,7 @@ int main(int argc, char *argv[])
 	fd = open("/dev/watchdog", O_WRONLY);
 
 	if (fd == -1) {
-		if (errno == ENOENT)
-			printf("Watchdog device not enabled.\n");
-		else if (errno == EACCES)
-			printf("Run watchdog as root.\n");
-		else
-			printf("Watchdog device open failed %s\n",
-				strerror(errno));
+		printf("Watchdog device not enabled.\n");
 		exit(-1);
 	}
 
@@ -116,27 +103,23 @@ int main(int argc, char *argv[])
 				printf("Last boot is caused by: %s.\n", (flags != 0) ?
 					"Watchdog" : "Power-On-Reset");
 			else
-				printf("WDIOC_GETBOOTSTATUS error '%s'\n", strerror(errno));
+				printf("WDIOC_GETBOOTSTATUS errno '%s'\n", strerror(errno));
 			break;
 		case 'd':
 			flags = WDIOS_DISABLECARD;
 			ret = ioctl(fd, WDIOC_SETOPTIONS, &flags);
 			if (!ret)
 				printf("Watchdog card disabled.\n");
-			else {
-				printf("WDIOS_DISABLECARD error '%s'\n", strerror(errno));
-				oneshot = 1;
-			}
+			else
+				printf("WDIOS_DISABLECARD errno '%s'\n", strerror(errno));
 			break;
 		case 'e':
 			flags = WDIOS_ENABLECARD;
 			ret = ioctl(fd, WDIOC_SETOPTIONS, &flags);
 			if (!ret)
 				printf("Watchdog card enabled.\n");
-			else {
-				printf("WDIOS_ENABLECARD error '%s'\n", strerror(errno));
-				oneshot = 1;
-			}
+			else
+				printf("WDIOS_ENABLECARD errno '%s'\n", strerror(errno));
 			break;
 		case 'p':
 			ping_rate = strtoul(optarg, NULL, 0);
@@ -149,36 +132,8 @@ int main(int argc, char *argv[])
 			ret = ioctl(fd, WDIOC_SETTIMEOUT, &flags);
 			if (!ret)
 				printf("Watchdog timeout set to %u seconds.\n", flags);
-			else {
-				printf("WDIOC_SETTIMEOUT error '%s'\n", strerror(errno));
-				oneshot = 1;
-			}
-			break;
-		case 'T':
-			oneshot = 1;
-			ret = ioctl(fd, WDIOC_GETTIMEOUT, &flags);
-			if (!ret)
-				printf("WDIOC_GETTIMEOUT returns %u seconds.\n", flags);
 			else
-				printf("WDIOC_GETTIMEOUT error '%s'\n", strerror(errno));
-			break;
-		case 'n':
-			flags = strtoul(optarg, NULL, 0);
-			ret = ioctl(fd, WDIOC_SETPRETIMEOUT, &flags);
-			if (!ret)
-				printf("Watchdog pretimeout set to %u seconds.\n", flags);
-			else {
-				printf("WDIOC_SETPRETIMEOUT error '%s'\n", strerror(errno));
-				oneshot = 1;
-			}
-			break;
-		case 'N':
-			oneshot = 1;
-			ret = ioctl(fd, WDIOC_GETPRETIMEOUT, &flags);
-			if (!ret)
-				printf("WDIOC_GETPRETIMEOUT returns %u seconds.\n", flags);
-			else
-				printf("WDIOC_GETPRETIMEOUT error '%s'\n", strerror(errno));
+				printf("WDIOC_SETTIMEOUT errno '%s'\n", strerror(errno));
 			break;
 		default:
 			usage(argv[0]);

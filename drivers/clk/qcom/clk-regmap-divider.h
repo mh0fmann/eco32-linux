@@ -25,6 +25,5 @@ struct clk_regmap_div {
 };
 
 extern const struct clk_ops clk_regmap_div_ops;
-extern const struct clk_ops clk_regmap_div_ro_ops;
 
 #endif

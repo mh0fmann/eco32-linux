@@ -206,7 +206,7 @@ static struct omap_usb_config palmz71_usb_config __initdata = {
 	.pins[0]	= 2,
 };
 
-static const struct omap_lcd_config palmz71_lcd_config __initconst = {
+static struct omap_lcd_config palmz71_lcd_config __initdata = {
 	.ctrl_name = "internal",
 };
 

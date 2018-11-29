@@ -27,17 +27,21 @@
 
 #include <linux/i2c.h>
 #include <media/v4l2-subdev.h>
-#include <media/dvb_frontend.h>
+#include "dvb_frontend.h"
 
 /**
  * struct rtl2832_sdr_platform_data - Platform data for the rtl2832_sdr driver
  * @clk: Clock frequency (4000000, 16000000, 25000000, 28800000).
  * @tuner: Used tuner model.
- * @regmap: pointer to &struct regmap.
+ * @i2c_client: rtl2832 demod driver I2C client.
+ * @bulk_read: rtl2832 driver private I/O interface.
+ * @bulk_write: rtl2832 driver private I/O interface.
+ * @update_bits: rtl2832 driver private I/O interface.
  * @dvb_frontend: rtl2832 DVB frontend.
  * @v4l2_subdev: Tuner v4l2 controls.
  * @dvb_usb_device: DVB USB interface for USB streaming.
  */
+
 struct rtl2832_sdr_platform_data {
 	u32 clk;
 	/*

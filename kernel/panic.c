@@ -27,15 +27,12 @@
 #include <linux/console.h>
 #include <linux/bug.h>
 #include <linux/ratelimit.h>
-#include <linux/debugfs.h>
-#include <asm/sections.h>
 
 #define PANIC_TIMER_STEP 100
 #define PANIC_BLINK_SPD 18
 
 int panic_on_oops = CONFIG_PANIC_ON_OOPS_VALUE;
-static unsigned long tainted_mask =
-	IS_ENABLED(CONFIG_GCC_PLUGIN_RANDSTRUCT) ? (1 << TAINT_RANDSTRUCT) : 0;
+static unsigned long tainted_mask;
 static int pause_on_oops;
 static int pause_on_oops_flag;
 static DEFINE_SPINLOCK(pause_on_oops_lock);
@@ -136,7 +133,7 @@ void panic(const char *fmt, ...)
 {
 	static char buf[1024];
 	va_list args;
-	long i, i_next = 0, len;
+	long i, i_next = 0;
 	int state = 0;
 	int old_cpu, this_cpu;
 	bool _crash_kexec_post_notifiers = crash_kexec_post_notifiers;
@@ -173,12 +170,8 @@ void panic(const char *fmt, ...)
 	console_verbose();
 	bust_spinlocks(1);
 	va_start(args, fmt);
-	len = vscnprintf(buf, sizeof(buf), fmt, args);
+	vsnprintf(buf, sizeof(buf), fmt, args);
 	va_end(args);
-
-	if (len && buf[len - 1] == '\n')
-		buf[len - 1] = '\0';
-
 	pr_emerg("Kernel panic - not syncing: %s\n", buf);
 #ifdef CONFIG_DEBUG_BUGVERBOSE
 	/*
@@ -294,7 +287,7 @@ void panic(const char *fmt, ...)
 		disabled_wait(caller);
 	}
 #endif
-	pr_emerg("---[ end Kernel panic - not syncing: %s ]---\n", buf);
+	pr_emerg("---[ end Kernel panic - not syncing: %s\n", buf);
 	local_irq_enable();
 	for (i = 0; ; i += PANIC_TIMER_STEP) {
 		touch_softlockup_watchdog();
@@ -313,39 +306,49 @@ EXPORT_SYMBOL(panic);
  * is being removed anyway.
  */
 const struct taint_flag taint_flags[TAINT_FLAGS_COUNT] = {
-	[ TAINT_PROPRIETARY_MODULE ]	= { 'P', 'G', true },
-	[ TAINT_FORCED_MODULE ]		= { 'F', ' ', true },
-	[ TAINT_CPU_OUT_OF_SPEC ]	= { 'S', ' ', false },
-	[ TAINT_FORCED_RMMOD ]		= { 'R', ' ', false },
-	[ TAINT_MACHINE_CHECK ]		= { 'M', ' ', false },
-	[ TAINT_BAD_PAGE ]		= { 'B', ' ', false },
-	[ TAINT_USER ]			= { 'U', ' ', false },
-	[ TAINT_DIE ]			= { 'D', ' ', false },
-	[ TAINT_OVERRIDDEN_ACPI_TABLE ]	= { 'A', ' ', false },
-	[ TAINT_WARN ]			= { 'W', ' ', false },
-	[ TAINT_CRAP ]			= { 'C', ' ', true },
-	[ TAINT_FIRMWARE_WORKAROUND ]	= { 'I', ' ', false },
-	[ TAINT_OOT_MODULE ]		= { 'O', ' ', true },
-	[ TAINT_UNSIGNED_MODULE ]	= { 'E', ' ', true },
-	[ TAINT_SOFTLOCKUP ]		= { 'L', ' ', false },
-	[ TAINT_LIVEPATCH ]		= { 'K', ' ', true },
-	[ TAINT_AUX ]			= { 'X', ' ', true },
-	[ TAINT_RANDSTRUCT ]		= { 'T', ' ', true },
+	{ 'P', 'G', true },	/* TAINT_PROPRIETARY_MODULE */
+	{ 'F', ' ', true },	/* TAINT_FORCED_MODULE */
+	{ 'S', ' ', false },	/* TAINT_CPU_OUT_OF_SPEC */
+	{ 'R', ' ', false },	/* TAINT_FORCED_RMMOD */
+	{ 'M', ' ', false },	/* TAINT_MACHINE_CHECK */
+	{ 'B', ' ', false },	/* TAINT_BAD_PAGE */
+	{ 'U', ' ', false },	/* TAINT_USER */
+	{ 'D', ' ', false },	/* TAINT_DIE */
+	{ 'A', ' ', false },	/* TAINT_OVERRIDDEN_ACPI_TABLE */
+	{ 'W', ' ', false },	/* TAINT_WARN */
+	{ 'C', ' ', true },	/* TAINT_CRAP */
+	{ 'I', ' ', false },	/* TAINT_FIRMWARE_WORKAROUND */
+	{ 'O', ' ', true },	/* TAINT_OOT_MODULE */
+	{ 'E', ' ', true },	/* TAINT_UNSIGNED_MODULE */
+	{ 'L', ' ', false },	/* TAINT_SOFTLOCKUP */
+	{ 'K', ' ', true },	/* TAINT_LIVEPATCH */
 };
 
 /**
- * print_tainted - return a string to represent the kernel taint state.
+ *	print_tainted - return a string to represent the kernel taint state.
  *
- * For individual taint flag meanings, see Documentation/sysctl/kernel.txt
+ *  'P' - Proprietary module has been loaded.
+ *  'F' - Module has been forcibly loaded.
+ *  'S' - SMP with CPUs not designed for SMP.
+ *  'R' - User forced a module unload.
+ *  'M' - System experienced a machine check exception.
+ *  'B' - System has hit bad_page.
+ *  'U' - Userspace-defined naughtiness.
+ *  'D' - Kernel has oopsed before
+ *  'A' - ACPI table overridden.
+ *  'W' - Taint on warning.
+ *  'C' - modules from drivers/staging are loaded.
+ *  'I' - Working around severe firmware bug.
+ *  'O' - Out-of-tree module has been loaded.
+ *  'E' - Unsigned module has been loaded.
+ *  'L' - A soft lockup has previously occurred.
+ *  'K' - Kernel has been live patched.
  *
- * The string is overwritten by the next call to print_tainted(),
- * but is always NULL terminated.
+ *	The string is overwritten by the next call to print_tainted().
  */
 const char *print_tainted(void)
 {
 	static char buf[TAINT_FLAGS_COUNT + sizeof("Tainted: ")];
-
-	BUILD_BUG_ON(ARRAY_SIZE(taint_flags) != TAINT_FLAGS_COUNT);
 
 	if (tainted_mask) {
 		char *s;
@@ -515,8 +518,7 @@ void __warn(const char *file, int line, void *caller, unsigned taint,
 {
 	disable_trace_on_warning();
 
-	if (args)
-		pr_warn(CUT_HERE);
+	pr_warn("------------[ cut here ]------------\n");
 
 	if (file)
 		pr_warn("WARNING: CPU: %d PID: %d at %s:%d %pS\n",
@@ -546,8 +548,6 @@ void __warn(const char *file, int line, void *caller, unsigned taint,
 		show_regs(regs);
 	else
 		dump_stack();
-
-	print_irqtrace_events(current);
 
 	print_oops_end_marker();
 
@@ -582,52 +582,12 @@ EXPORT_SYMBOL(warn_slowpath_fmt_taint);
 
 void warn_slowpath_null(const char *file, int line)
 {
-	pr_warn(CUT_HERE);
 	__warn(file, line, __builtin_return_address(0), TAINT_WARN, NULL, NULL);
 }
 EXPORT_SYMBOL(warn_slowpath_null);
-#else
-void __warn_printk(const char *fmt, ...)
-{
-	va_list args;
-
-	pr_warn(CUT_HERE);
-
-	va_start(args, fmt);
-	vprintk(fmt, args);
-	va_end(args);
-}
-EXPORT_SYMBOL(__warn_printk);
 #endif
 
-#ifdef CONFIG_BUG
-
-/* Support resetting WARN*_ONCE state */
-
-static int clear_warn_once_set(void *data, u64 val)
-{
-	generic_bug_clear_once();
-	memset(__start_once, 0, __end_once - __start_once);
-	return 0;
-}
-
-DEFINE_SIMPLE_ATTRIBUTE(clear_warn_once_fops,
-			NULL,
-			clear_warn_once_set,
-			"%lld\n");
-
-static __init int register_warn_debugfs(void)
-{
-	/* Don't care about failure */
-	debugfs_create_file("clear_warn_once", 0200, NULL,
-			    NULL, &clear_warn_once_fops);
-	return 0;
-}
-
-device_initcall(register_warn_debugfs);
-#endif
-
-#ifdef CONFIG_STACKPROTECTOR
+#ifdef CONFIG_CC_STACKPROTECTOR
 
 /*
  * Called when gcc's -fstack-protector feature is used, and
@@ -635,7 +595,7 @@ device_initcall(register_warn_debugfs);
  */
 __visible void __stack_chk_fail(void)
 {
-	panic("stack-protector: Kernel stack is corrupted in: %pB",
+	panic("stack-protector: Kernel stack is corrupted in: %p\n",
 		__builtin_return_address(0));
 }
 EXPORT_SYMBOL(__stack_chk_fail);

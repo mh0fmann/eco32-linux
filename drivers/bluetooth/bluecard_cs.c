@@ -156,9 +156,9 @@ static void bluecard_detach(struct pcmcia_device *p_dev);
 /* ======================== LED handling routines ======================== */
 
 
-static void bluecard_activity_led_timeout(struct timer_list *t)
+static void bluecard_activity_led_timeout(u_long arg)
 {
-	struct bluecard_info *info = from_timer(info, t, timer);
+	struct bluecard_info *info = (struct bluecard_info *)arg;
 	unsigned int iobase = info->p_dev->resource[0]->start;
 
 	if (test_bit(CARD_ACTIVITY, &(info->hw_state))) {
@@ -302,7 +302,9 @@ static void bluecard_write_wakeup(struct bluecard_info *info)
 			}
 
 			/* Wait until the command reaches the baseband */
-			mdelay(100);
+			prepare_to_wait(&wq, &wait, TASK_INTERRUPTIBLE);
+			schedule_timeout(HZ/10);
+			finish_wait(&wq, &wait);
 
 			/* Set baud on baseband */
 			info->ctrl_reg &= ~0x03;
@@ -314,7 +316,9 @@ static void bluecard_write_wakeup(struct bluecard_info *info)
 			outb(info->ctrl_reg, iobase + REG_CONTROL);
 
 			/* Wait before the next HCI packet can be send */
-			mdelay(1000);
+			prepare_to_wait(&wq, &wait, TASK_INTERRUPTIBLE);
+			schedule_timeout(HZ);
+			finish_wait(&wq, &wait);
 		}
 
 		if (len == skb->len) {
@@ -565,7 +569,7 @@ static int bluecard_hci_set_baud_rate(struct hci_dev *hdev, int baud)
 	/* Ericsson baud rate command */
 	unsigned char cmd[] = { HCI_COMMAND_PKT, 0x09, 0xfc, 0x01, 0x03 };
 
-	skb = bt_skb_alloc(HCI_MAX_FRAME_SIZE, GFP_KERNEL);
+	skb = bt_skb_alloc(HCI_MAX_FRAME_SIZE, GFP_ATOMIC);
 	if (!skb) {
 		BT_ERR("Can't allocate mem for new packet");
 		return -1;
@@ -687,7 +691,8 @@ static int bluecard_open(struct bluecard_info *info)
 
 	spin_lock_init(&(info->lock));
 
-	timer_setup(&info->timer, bluecard_activity_led_timeout, 0);
+	setup_timer(&(info->timer), &bluecard_activity_led_timeout,
+		    (u_long)info);
 
 	skb_queue_head_init(&(info->txq));
 

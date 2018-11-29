@@ -275,6 +275,7 @@ int rtsx_send_cmd(struct rtsx_chip *chip, u8 card, int timeout)
 		dev_dbg(rtsx_dev(chip), "chip->int_reg = 0x%x\n",
 			chip->int_reg);
 		err = -ETIMEDOUT;
+		rtsx_trace(chip);
 		goto finish_send_cmd;
 	}
 
@@ -307,7 +308,7 @@ static inline void rtsx_add_sg_tbl(
 	do {
 		if (len > 0x80000) {
 			temp_len = 0x80000;
-			temp_opt = option & (~RTSX_SG_END);
+			temp_opt = option & (~SG_END);
 		} else {
 			temp_len = len;
 			temp_opt = option;
@@ -406,9 +407,9 @@ static int rtsx_transfer_sglist_adma_partial(struct rtsx_chip *chip, u8 card,
 			*index = *index + 1;
 		}
 		if ((i == (sg_cnt - 1)) || !resid)
-			option = RTSX_SG_VALID | RTSX_SG_END | RTSX_SG_TRANS_DATA;
+			option = SG_VALID | SG_END | SG_TRANS_DATA;
 		else
-			option = RTSX_SG_VALID | RTSX_SG_TRANS_DATA;
+			option = SG_VALID | SG_TRANS_DATA;
 
 		rtsx_add_sg_tbl(chip, (u32)addr, (u32)len, option);
 
@@ -554,9 +555,9 @@ static int rtsx_transfer_sglist_adma(struct rtsx_chip *chip, u8 card,
 				(unsigned int)addr, len);
 
 			if (j == (sg_cnt - 1))
-				option = RTSX_SG_VALID | RTSX_SG_END | RTSX_SG_TRANS_DATA;
+				option = SG_VALID | SG_END | SG_TRANS_DATA;
 			else
-				option = RTSX_SG_VALID | RTSX_SG_TRANS_DATA;
+				option = SG_VALID | SG_TRANS_DATA;
 
 			rtsx_add_sg_tbl(chip, (u32)addr, (u32)len, option);
 

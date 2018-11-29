@@ -56,10 +56,11 @@ static u32 spu_hw_mbox_stat_read(struct spu_context *ctx)
 	return in_be32(&ctx->spu->problem->mb_stat_R);
 }
 
-static __poll_t spu_hw_mbox_stat_poll(struct spu_context *ctx, __poll_t events)
+static unsigned int spu_hw_mbox_stat_poll(struct spu_context *ctx,
+					  unsigned int events)
 {
 	struct spu *spu = ctx->spu;
-	__poll_t ret = 0;
+	int ret = 0;
 	u32 stat;
 
 	spin_lock_irq(&spu->register_lock);
@@ -70,17 +71,17 @@ static __poll_t spu_hw_mbox_stat_poll(struct spu_context *ctx, __poll_t events)
 	   but first mark any pending interrupts as done so
 	   we don't get woken up unnecessarily */
 
-	if (events & (EPOLLIN | EPOLLRDNORM)) {
+	if (events & (POLLIN | POLLRDNORM)) {
 		if (stat & 0xff0000)
-			ret |= EPOLLIN | EPOLLRDNORM;
+			ret |= POLLIN | POLLRDNORM;
 		else {
 			spu_int_stat_clear(spu, 2, CLASS2_MAILBOX_INTR);
 			spu_int_mask_or(spu, 2, CLASS2_ENABLE_MAILBOX_INTR);
 		}
 	}
-	if (events & (EPOLLOUT | EPOLLWRNORM)) {
+	if (events & (POLLOUT | POLLWRNORM)) {
 		if (stat & 0x00ff00)
-			ret = EPOLLOUT | EPOLLWRNORM;
+			ret = POLLOUT | POLLWRNORM;
 		else {
 			spu_int_stat_clear(spu, 2,
 					CLASS2_MAILBOX_THRESHOLD_INTR);

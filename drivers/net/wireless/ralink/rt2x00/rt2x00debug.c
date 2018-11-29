@@ -164,13 +164,13 @@ void rt2x00debug_dump_frame(struct rt2x00_dev *rt2x00dev,
 	struct skb_frame_desc *skbdesc = get_skb_frame_desc(skb);
 	struct sk_buff *skbcopy;
 	struct rt2x00dump_hdr *dump_hdr;
-	struct timespec64 timestamp;
+	struct timeval timestamp;
 	u32 data_len;
 
 	if (likely(!test_bit(FRAME_DUMP_FILE_OPEN, &intf->frame_dump_flags)))
 		return;
 
-	ktime_get_ts64(&timestamp);
+	do_gettimeofday(&timestamp);
 
 	if (skb_queue_len(&intf->frame_dump_skbqueue) > 20) {
 		rt2x00_dbg(rt2x00dev, "txrx dump queue length exceeded\n");
@@ -200,8 +200,7 @@ void rt2x00debug_dump_frame(struct rt2x00_dev *rt2x00dev,
 	dump_hdr->queue_index = entry->queue->qid;
 	dump_hdr->entry_index = entry->entry_idx;
 	dump_hdr->timestamp_sec = cpu_to_le32(timestamp.tv_sec);
-	dump_hdr->timestamp_usec = cpu_to_le32(timestamp.tv_nsec /
-					       NSEC_PER_USEC);
+	dump_hdr->timestamp_usec = cpu_to_le32(timestamp.tv_usec);
 
 	if (!(skbdesc->flags & SKBDESC_DESC_IN_SKB))
 		skb_put_data(skbcopy, skbdesc->desc, skbdesc->desc_len);
@@ -301,7 +300,7 @@ exit:
 	return status;
 }
 
-static __poll_t rt2x00debug_poll_queue_dump(struct file *file,
+static unsigned int rt2x00debug_poll_queue_dump(struct file *file,
 						poll_table *wait)
 {
 	struct rt2x00debug_intf *intf = file->private_data;
@@ -309,7 +308,7 @@ static __poll_t rt2x00debug_poll_queue_dump(struct file *file,
 	poll_wait(file, &intf->frame_dump_waitqueue, wait);
 
 	if (!skb_queue_empty(&intf->frame_dump_skbqueue))
-		return EPOLLOUT | EPOLLWRNORM;
+		return POLLOUT | POLLWRNORM;
 
 	return 0;
 }
@@ -397,7 +396,7 @@ static ssize_t rt2x00debug_read_crypto_stats(struct file *file,
 	if (*offset)
 		return 0;
 
-	data = kcalloc(1 + CIPHER_MAX, MAX_LINE_LENGTH, GFP_KERNEL);
+	data = kzalloc((1 + CIPHER_MAX) * MAX_LINE_LENGTH, GFP_KERNEL);
 	if (!data)
 		return -ENOMEM;
 
@@ -464,7 +463,11 @@ static ssize_t rt2x00debug_read_##__name(struct file *file,	\
 								\
 	size = sprintf(line, __format, value);			\
 								\
-	return simple_read_from_buffer(buf, length, offset, line, size); \
+	if (copy_to_user(buf, line, size))			\
+		return -EFAULT;					\
+								\
+	*offset += size;					\
+	return size;						\
 }
 
 #define RT2X00DEBUGFS_OPS_WRITE(__name, __type)			\
@@ -541,7 +544,11 @@ static ssize_t rt2x00debug_read_dev_flags(struct file *file,
 
 	size = sprintf(line, "0x%.8x\n", (unsigned int)intf->rt2x00dev->flags);
 
-	return simple_read_from_buffer(buf, length, offset, line, size);
+	if (copy_to_user(buf, line, size))
+		return -EFAULT;
+
+	*offset += size;
+	return size;
 }
 
 static const struct file_operations rt2x00debug_fop_dev_flags = {
@@ -566,7 +573,11 @@ static ssize_t rt2x00debug_read_cap_flags(struct file *file,
 
 	size = sprintf(line, "0x%.8x\n", (unsigned int)intf->rt2x00dev->cap_flags);
 
-	return simple_read_from_buffer(buf, length, offset, line, size);
+	if (copy_to_user(buf, line, size))
+		return -EFAULT;
+
+	*offset += size;
+	return size;
 }
 
 static const struct file_operations rt2x00debug_fop_cap_flags = {
@@ -594,7 +605,7 @@ static struct dentry *rt2x00debug_create_file_driver(const char *name,
 	data += sprintf(data, "version:\t%s\n", DRV_VERSION);
 	blob->size = strlen(blob->data);
 
-	return debugfs_create_blob(name, 0400, intf->driver_folder, blob);
+	return debugfs_create_blob(name, S_IRUSR, intf->driver_folder, blob);
 }
 
 static struct dentry *rt2x00debug_create_file_chipset(const char *name,
@@ -635,7 +646,7 @@ static struct dentry *rt2x00debug_create_file_chipset(const char *name,
 
 	blob->size = strlen(blob->data);
 
-	return debugfs_create_blob(name, 0400, intf->driver_folder, blob);
+	return debugfs_create_blob(name, S_IRUSR, intf->driver_folder, blob);
 }
 
 void rt2x00debug_register(struct rt2x00_dev *rt2x00dev)
@@ -670,13 +681,13 @@ void rt2x00debug_register(struct rt2x00_dev *rt2x00dev)
 	if (IS_ERR(intf->chipset_entry) || !intf->chipset_entry)
 		goto exit;
 
-	intf->dev_flags = debugfs_create_file("dev_flags", 0400,
+	intf->dev_flags = debugfs_create_file("dev_flags", S_IRUSR,
 					      intf->driver_folder, intf,
 					      &rt2x00debug_fop_dev_flags);
 	if (IS_ERR(intf->dev_flags) || !intf->dev_flags)
 		goto exit;
 
-	intf->cap_flags = debugfs_create_file("cap_flags", 0400,
+	intf->cap_flags = debugfs_create_file("cap_flags", S_IRUSR,
 					      intf->driver_folder, intf,
 					      &rt2x00debug_fop_cap_flags);
 	if (IS_ERR(intf->cap_flags) || !intf->cap_flags)
@@ -687,28 +698,27 @@ void rt2x00debug_register(struct rt2x00_dev *rt2x00dev)
 	if (IS_ERR(intf->register_folder) || !intf->register_folder)
 		goto exit;
 
-#define RT2X00DEBUGFS_CREATE_REGISTER_ENTRY(__intf, __name)		\
-({									\
-	if (debug->__name.read) {					\
-		(__intf)->__name##_off_entry =				\
-			debugfs_create_u32(__stringify(__name) "_offset", \
-					   0600,			\
-					   (__intf)->register_folder,	\
-					   &(__intf)->offset_##__name);	\
-		if (IS_ERR((__intf)->__name##_off_entry) ||		\
-		    !(__intf)->__name##_off_entry)			\
-			goto exit;					\
-									\
-		(__intf)->__name##_val_entry =				\
-			debugfs_create_file(__stringify(__name) "_value", \
-					    0600,			\
-					    (__intf)->register_folder,	\
-					    (__intf),			\
-					    &rt2x00debug_fop_##__name); \
-		if (IS_ERR((__intf)->__name##_val_entry) ||		\
-		    !(__intf)->__name##_val_entry)			\
-			goto exit;					\
-	}								\
+#define RT2X00DEBUGFS_CREATE_REGISTER_ENTRY(__intf, __name)			\
+({										\
+	if (debug->__name.read) {						\
+		(__intf)->__name##_off_entry =					\
+		debugfs_create_u32(__stringify(__name) "_offset",		\
+				       S_IRUSR | S_IWUSR,			\
+				       (__intf)->register_folder,		\
+				       &(__intf)->offset_##__name);		\
+		if (IS_ERR((__intf)->__name##_off_entry)			\
+				|| !(__intf)->__name##_off_entry)		\
+			goto exit;						\
+										\
+		(__intf)->__name##_val_entry =					\
+		debugfs_create_file(__stringify(__name) "_value",		\
+					S_IRUSR | S_IWUSR,			\
+					(__intf)->register_folder,		\
+					(__intf), &rt2x00debug_fop_##__name);	\
+		if (IS_ERR((__intf)->__name##_val_entry)			\
+				|| !(__intf)->__name##_val_entry)		\
+			goto exit;						\
+	}									\
 })
 
 	RT2X00DEBUGFS_CREATE_REGISTER_ENTRY(intf, csr);
@@ -725,8 +735,8 @@ void rt2x00debug_register(struct rt2x00_dev *rt2x00dev)
 		goto exit;
 
 	intf->queue_frame_dump_entry =
-		debugfs_create_file("dump", 0400, intf->queue_folder,
-				    intf, &rt2x00debug_fop_queue_dump);
+	    debugfs_create_file("dump", S_IRUSR, intf->queue_folder,
+				intf, &rt2x00debug_fop_queue_dump);
 	if (IS_ERR(intf->queue_frame_dump_entry)
 		|| !intf->queue_frame_dump_entry)
 		goto exit;
@@ -735,15 +745,14 @@ void rt2x00debug_register(struct rt2x00_dev *rt2x00dev)
 	init_waitqueue_head(&intf->frame_dump_waitqueue);
 
 	intf->queue_stats_entry =
-		debugfs_create_file("queue", 0400, intf->queue_folder,
-				    intf, &rt2x00debug_fop_queue_stats);
+	    debugfs_create_file("queue", S_IRUSR, intf->queue_folder,
+				intf, &rt2x00debug_fop_queue_stats);
 
 #ifdef CONFIG_RT2X00_LIB_CRYPTO
 	if (rt2x00_has_cap_hw_crypto(rt2x00dev))
 		intf->crypto_stats_entry =
-			debugfs_create_file("crypto", 0444, intf->queue_folder,
-					    intf,
-					    &rt2x00debug_fop_crypto_stats);
+		    debugfs_create_file("crypto", S_IRUGO, intf->queue_folder,
+					intf, &rt2x00debug_fop_crypto_stats);
 #endif
 
 	return;

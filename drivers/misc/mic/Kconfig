@@ -1,5 +1,3 @@
-menu "Intel MIC & related support"
-
 comment "Intel MIC Bus Driver"
 
 config INTEL_MIC_BUS
@@ -152,5 +150,3 @@ config VOP
 if VOP
 source "drivers/vhost/Kconfig.vringh"
 endif
-
-endmenu

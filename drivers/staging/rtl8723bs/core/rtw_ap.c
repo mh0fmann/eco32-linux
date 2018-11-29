@@ -1,7 +1,15 @@
-// SPDX-License-Identifier: GPL-2.0
 /******************************************************************************
  *
  * Copyright(c) 2007 - 2012 Realtek Corporation. All rights reserved.
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms of version 2 of the GNU General Public License as
+ * published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
+ * more details.
  *
  ******************************************************************************/
 #define _RTW_AP_C_
@@ -861,7 +869,7 @@ void start_bss_network(struct adapter *padapter, u8 *pbuf)
 		update_hw_ht_param(padapter);
 	}
 
-	if (!pmlmepriv->cur_network.join_res) { /* setting only at  first time */
+	if (pmlmepriv->cur_network.join_res != true) { /* setting only at  first time */
 
 		/* WEP Key will be set before this function, do not clear CAM. */
 		if (
@@ -899,7 +907,7 @@ void start_bss_network(struct adapter *padapter, u8 *pbuf)
 
 	rtw_hal_set_hwreg(padapter, HW_VAR_DO_IQK, NULL);
 
-	if (!pmlmepriv->cur_network.join_res) { /* setting only at  first time */
+	if (pmlmepriv->cur_network.join_res != true) { /* setting only at  first time */
 
 		/* u32 initialgain; */
 
@@ -992,7 +1000,7 @@ void start_bss_network(struct adapter *padapter, u8 *pbuf)
 	);
 
 
-	if (pmlmeext->bstart_bss) {
+	if (true == pmlmeext->bstart_bss) {
 
 		update_beacon(padapter, _TIM_IE_, NULL, true);
 
@@ -1047,11 +1055,11 @@ int rtw_check_beacon_data(struct adapter *padapter, u8 *pbuf,  int len)
 
 	DBG_871X("%s, len =%d\n", __func__, len);
 
-	if (!check_fwstate(pmlmepriv, WIFI_AP_STATE))
+	if (check_fwstate(pmlmepriv, WIFI_AP_STATE) != true)
 		return _FAIL;
 
 
-	if (len < 0 || len > MAX_IE_SZ)
+	if (len > MAX_IE_SZ)
 		return _FAIL;
 
 	pbss_network->IELength = len;
@@ -1379,7 +1387,7 @@ int rtw_check_beacon_data(struct adapter *padapter, u8 *pbuf,  int len)
 	}
 
 	/* ht_cap */
-	if (pregistrypriv->ht_enable && ht_cap) {
+	if (pregistrypriv->ht_enable && ht_cap == true) {
 
 		pmlmepriv->htpriv.ht_option = true;
 		pmlmepriv->qospriv.qos_option = 1;
@@ -1482,7 +1490,7 @@ int rtw_acl_add_sta(struct adapter *padapter, u8 *addr)
 	spin_unlock_bh(&(pacl_node_q->lock));
 
 
-	if (added)
+	if (added == true)
 		return ret;
 
 
@@ -1492,7 +1500,7 @@ int rtw_acl_add_sta(struct adapter *padapter, u8 *addr)
 
 		paclnode = &pacl_list->aclnode[i];
 
-		if (!paclnode->valid) {
+		if (paclnode->valid == false) {
 
 			INIT_LIST_HEAD(&paclnode->list);
 
@@ -1547,7 +1555,7 @@ int rtw_acl_remove_sta(struct adapter *padapter, u8 *addr)
 			!memcmp(baddr, addr, ETH_ALEN)
 		) {
 
-			if (paclnode->valid) {
+			if (paclnode->valid == true) {
 
 				paclnode->valid = false;
 
@@ -1573,13 +1581,15 @@ u8 rtw_ap_set_pairwise_key(struct adapter *padapter, struct sta_info *psta)
 	struct cmd_priv *pcmdpriv = &padapter->cmdpriv;
 	u8 res = _SUCCESS;
 
-	ph2c = rtw_zmalloc(sizeof(struct cmd_obj));
+	ph2c = (struct cmd_obj *)rtw_zmalloc(sizeof(struct cmd_obj));
 	if (ph2c == NULL) {
 		res = _FAIL;
 		goto exit;
 	}
 
-	psetstakey_para = rtw_zmalloc(sizeof(struct set_stakey_parm));
+	psetstakey_para = (struct set_stakey_parm *)rtw_zmalloc(
+		sizeof(struct set_stakey_parm)
+	);
 	if (psetstakey_para == NULL) {
 		kfree((u8 *) ph2c);
 		res = _FAIL;
@@ -1620,12 +1630,12 @@ static int rtw_ap_set_key(
 
 	/* DBG_871X("%s\n", __func__); */
 
-	pcmd = rtw_zmalloc(sizeof(struct cmd_obj));
+	pcmd = (struct cmd_obj *)rtw_zmalloc(sizeof(struct cmd_obj));
 	if (pcmd == NULL) {
 		res = _FAIL;
 		goto exit;
 	}
-	psetkeyparm = rtw_zmalloc(sizeof(struct setkey_parm));
+	psetkeyparm = (struct setkey_parm *)rtw_zmalloc(sizeof(struct setkey_parm));
 	if (psetkeyparm == NULL) {
 		kfree((unsigned char *)pcmd);
 		res = _FAIL;
@@ -1912,7 +1922,7 @@ void update_beacon(struct adapter *padapter, u8 ie_id, u8 *oui, u8 tx)
 	pmlmeext = &(padapter->mlmeextpriv);
 	/* pmlmeinfo = &(pmlmeext->mlmext_info); */
 
-	if (!pmlmeext->bstart_bss)
+	if (false == pmlmeext->bstart_bss)
 		return;
 
 	spin_lock_bh(&pmlmepriv->bcn_update_lock);
@@ -1998,7 +2008,7 @@ static int rtw_ht_operation_update(struct adapter *padapter)
 	struct mlme_priv *pmlmepriv = &(padapter->mlmepriv);
 	struct ht_priv *phtpriv_ap = &pmlmepriv->htpriv;
 
-	if (pmlmepriv->htpriv.ht_option)
+	if (pmlmepriv->htpriv.ht_option == true)
 		return 0;
 
 	/* if (!iface->conf->ieee80211n || iface->conf->ht_op_mode_fixed) */
@@ -2066,7 +2076,7 @@ static int rtw_ht_operation_update(struct adapter *padapter)
 void associated_clients_update(struct adapter *padapter, u8 updated)
 {
 	/* update associcated stations cap. */
-	if (updated) {
+	if (updated == true) {
 
 		struct list_head	*phead, *plist;
 		struct sta_info *psta = NULL;
@@ -2458,7 +2468,7 @@ void sta_info_update(struct adapter *padapter, struct sta_info *psta)
 		psta->htpriv.ht_option = false;
 	}
 
-	if (!pmlmepriv->htpriv.ht_option)
+	if (pmlmepriv->htpriv.ht_option == false)
 		psta->htpriv.ht_option = false;
 
 	update_sta_info_apmode(padapter, psta);

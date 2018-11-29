@@ -19,6 +19,7 @@
 #include <asm/inst.h>
 #include <asm/elf.h>
 #include <asm/bugs.h>
+#define UASM_ISA	_UASM_ISA_CLASSIC
 #include <asm/uasm.h>
 
 #define RS_MASK		0x1f

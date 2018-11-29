@@ -55,9 +55,7 @@ ENDPROC(printhex4)
 
 ENTRY(printhex2)
 		mov	r1, #2
-printhex:	adr	r2, hexbuf_rel
-		ldr	r3, [r2]
-		add	r2, r2, r3
+printhex:	adr	r2, hexbuf
 		add	r3, r2, r1
 		mov	r1, #0
 		strb	r1, [r3]
@@ -73,11 +71,7 @@ printhex:	adr	r2, hexbuf_rel
 		b	printascii
 ENDPROC(printhex2)
 
-		.pushsection .bss
-hexbuf_addr:	.space 16
-		.popsection
-		.align
-hexbuf_rel:	.long	hexbuf_addr - .
+hexbuf:		.space 16
 
 		.ltorg
 
@@ -85,28 +79,25 @@ hexbuf_rel:	.long	hexbuf_addr - .
 
 ENTRY(printascii)
 		addruart_current r3, r1, r2
-1:		teq	r0, #0
+		b	2f
+1:		waituart r2, r3
+		senduart r1, r3
+		busyuart r2, r3
+		teq	r1, #'\n'
+		moveq	r1, #'\r'
+		beq	1b
+2:		teq	r0, #0
 		ldrneb	r1, [r0], #1
 		teqne	r1, #0
-		reteq	lr
-2:		teq     r1, #'\n'
-		bne	3f
-		mov	r1, #'\r'
-		waituart r2, r3
-		senduart r1, r3
-		busyuart r2, r3
-		mov	r1, #'\n'
-3:		waituart r2, r3
-		senduart r1, r3
-		busyuart r2, r3
-		b	1b
+		bne	1b
+		ret	lr
 ENDPROC(printascii)
 
 ENTRY(printch)
 		addruart_current r3, r1, r2
 		mov	r1, r0
 		mov	r0, #0
-		b	2b
+		b	1b
 ENDPROC(printch)
 
 #ifdef CONFIG_MMU
@@ -133,9 +124,7 @@ ENTRY(printascii)
 ENDPROC(printascii)
 
 ENTRY(printch)
-		adr	r1, hexbuf_rel
-		ldr	r2, [r1]
-		add	r1, r1, r2
+		adr	r1, hexbuf
 		strb	r0, [r1]
 		mov	r0, #0x03		@ SYS_WRITEC
 	ARM(	svc	#0x123456	)

@@ -98,9 +98,11 @@ struct saa7164_buffer *saa7164_buffer_alloc(struct saa7164_port *port,
 		goto ret;
 	}
 
-	buf = kzalloc(sizeof(*buf), GFP_KERNEL);
-	if (!buf)
+	buf = kzalloc(sizeof(struct saa7164_buffer), GFP_KERNEL);
+	if (!buf) {
+		log_warn("%s() SAA_ERR_NO_RESOURCES\n", __func__);
 		goto ret;
+	}
 
 	buf->idx = -1;
 	buf->port = port;
@@ -281,7 +283,7 @@ struct saa7164_user_buffer *saa7164_buffer_alloc_user(struct saa7164_dev *dev,
 {
 	struct saa7164_user_buffer *buf;
 
-	buf = kzalloc(sizeof(*buf), GFP_KERNEL);
+	buf = kzalloc(sizeof(struct saa7164_user_buffer), GFP_KERNEL);
 	if (!buf)
 		return NULL;
 

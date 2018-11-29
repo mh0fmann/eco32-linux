@@ -23,6 +23,7 @@ struct dev_archdata {
 #ifdef CONFIG_XEN
 	const struct dma_map_ops *dev_dma_ops;
 #endif
+	bool dma_coherent;
 };
 
 struct pdev_archdata {

@@ -14,8 +14,6 @@
 #include <linux/percpu.h>
 #include <linux/smp.h>
 
-#include "cpu.h"
-
 struct aperfmperf_sample {
 	unsigned int	khz;
 	ktime_t	time;
@@ -26,7 +24,7 @@ struct aperfmperf_sample {
 static DEFINE_PER_CPU(struct aperfmperf_sample, samples);
 
 #define APERFMPERF_CACHE_THRESHOLD_MS	10
-#define APERFMPERF_REFRESH_DELAY_MS	10
+#define APERFMPERF_REFRESH_DELAY_MS	20
 #define APERFMPERF_STALE_THRESHOLD_MS	1000
 
 /*
@@ -40,7 +38,13 @@ static void aperfmperf_snapshot_khz(void *dummy)
 	u64 aperf, aperf_delta;
 	u64 mperf, mperf_delta;
 	struct aperfmperf_sample *s = this_cpu_ptr(&samples);
+	ktime_t now = ktime_get();
+	s64 time_delta = ktime_ms_delta(now, s->time);
 	unsigned long flags;
+
+	/* Don't bother re-computing within the cache threshold time. */
+	if (time_delta < APERFMPERF_CACHE_THRESHOLD_MS)
+		return;
 
 	local_irq_save(flags);
 	rdmsrl(MSR_IA32_APERF, aperf);
@@ -57,68 +61,31 @@ static void aperfmperf_snapshot_khz(void *dummy)
 	if (mperf_delta == 0)
 		return;
 
-	s->time = ktime_get();
+	s->time = now;
 	s->aperf = aperf;
 	s->mperf = mperf;
-	s->khz = div64_u64((cpu_khz * aperf_delta), mperf_delta);
-}
 
-static bool aperfmperf_snapshot_cpu(int cpu, ktime_t now, bool wait)
-{
-	s64 time_delta = ktime_ms_delta(now, per_cpu(samples.time, cpu));
-
-	/* Don't bother re-computing within the cache threshold time. */
-	if (time_delta < APERFMPERF_CACHE_THRESHOLD_MS)
-		return true;
-
-	smp_call_function_single(cpu, aperfmperf_snapshot_khz, NULL, wait);
-
-	/* Return false if the previous iteration was too long ago. */
-	return time_delta <= APERFMPERF_STALE_THRESHOLD_MS;
-}
-
-unsigned int aperfmperf_get_khz(int cpu)
-{
-	if (!cpu_khz)
-		return 0;
-
-	if (!static_cpu_has(X86_FEATURE_APERFMPERF))
-		return 0;
-
-	aperfmperf_snapshot_cpu(cpu, ktime_get(), true);
-	return per_cpu(samples.khz, cpu);
-}
-
-void arch_freq_prepare_all(void)
-{
-	ktime_t now = ktime_get();
-	bool wait = false;
-	int cpu;
-
-	if (!cpu_khz)
-		return;
-
-	if (!static_cpu_has(X86_FEATURE_APERFMPERF))
-		return;
-
-	for_each_online_cpu(cpu)
-		if (!aperfmperf_snapshot_cpu(cpu, now, false))
-			wait = true;
-
-	if (wait)
-		msleep(APERFMPERF_REFRESH_DELAY_MS);
+	/* If the previous iteration was too long ago, discard it. */
+	if (time_delta > APERFMPERF_STALE_THRESHOLD_MS)
+		s->khz = 0;
+	else
+		s->khz = div64_u64((cpu_khz * aperf_delta), mperf_delta);
 }
 
 unsigned int arch_freq_get_on_cpu(int cpu)
 {
+	unsigned int khz;
+
 	if (!cpu_khz)
 		return 0;
 
 	if (!static_cpu_has(X86_FEATURE_APERFMPERF))
 		return 0;
 
-	if (aperfmperf_snapshot_cpu(cpu, ktime_get(), true))
-		return per_cpu(samples.khz, cpu);
+	smp_call_function_single(cpu, aperfmperf_snapshot_khz, NULL, 1);
+	khz = per_cpu(samples.khz, cpu);
+	if (khz)
+		return khz;
 
 	msleep(APERFMPERF_REFRESH_DELAY_MS);
 	smp_call_function_single(cpu, aperfmperf_snapshot_khz, NULL, 1);

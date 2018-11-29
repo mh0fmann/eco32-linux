@@ -1,10 +1,10 @@
-// SPDX-License-Identifier: GPL-2.0
-/*
- * Simple stub driver to reserve a PCI device
+/* pci-stub - simple stub driver to reserve a pci device
  *
  * Copyright (C) 2008 Red Hat, Inc.
  * Author:
  *	Chris Wright
+ *
+ * This work is licensed under the terms of the GNU GPL, version 2.
  *
  * Usage is simple, allocate a new id to the stub driver and bind the
  * device to it.  For example:
@@ -28,7 +28,7 @@ MODULE_PARM_DESC(ids, "Initial PCI IDs to add to the stub driver, format is "
 
 static int pci_stub_probe(struct pci_dev *dev, const struct pci_device_id *id)
 {
-	pci_info(dev, "claimed by stub\n");
+	dev_info(&dev->dev, "claimed by stub\n");
 	return 0;
 }
 

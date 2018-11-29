@@ -1268,7 +1268,8 @@ rt_mutex_slowlock(struct rt_mutex *lock, int state,
 
 	if (unlikely(ret)) {
 		__set_current_state(TASK_RUNNING);
-		remove_waiter(lock, &waiter);
+		if (rt_mutex_has_waiters(lock))
+			remove_waiter(lock, &waiter);
 		rt_mutex_handle_deadlock(ret, chwalk, &waiter);
 	}
 
@@ -1285,19 +1286,6 @@ rt_mutex_slowlock(struct rt_mutex *lock, int state,
 		hrtimer_cancel(&timeout->timer);
 
 	debug_rt_mutex_free_waiter(&waiter);
-
-	return ret;
-}
-
-static inline int __rt_mutex_slowtrylock(struct rt_mutex *lock)
-{
-	int ret = try_to_take_rt_mutex(lock, current, NULL);
-
-	/*
-	 * try_to_take_rt_mutex() sets the lock waiters bit
-	 * unconditionally. Clean this up.
-	 */
-	fixup_rt_mutex_waiters(lock);
 
 	return ret;
 }
@@ -1324,7 +1312,13 @@ static inline int rt_mutex_slowtrylock(struct rt_mutex *lock)
 	 */
 	raw_spin_lock_irqsave(&lock->wait_lock, flags);
 
-	ret = __rt_mutex_slowtrylock(lock);
+	ret = try_to_take_rt_mutex(lock, current, NULL);
+
+	/*
+	 * try_to_take_rt_mutex() sets the lock waiters bit
+	 * unconditionally. Clean this up.
+	 */
+	fixup_rt_mutex_waiters(lock);
 
 	raw_spin_unlock_irqrestore(&lock->wait_lock, flags);
 
@@ -1465,29 +1459,6 @@ rt_mutex_fastunlock(struct rt_mutex *lock,
 		rt_mutex_postunlock(&wake_q);
 }
 
-static inline void __rt_mutex_lock(struct rt_mutex *lock, unsigned int subclass)
-{
-	might_sleep();
-
-	mutex_acquire(&lock->dep_map, subclass, 0, _RET_IP_);
-	rt_mutex_fastlock(lock, TASK_UNINTERRUPTIBLE, rt_mutex_slowlock);
-}
-
-#ifdef CONFIG_DEBUG_LOCK_ALLOC
-/**
- * rt_mutex_lock_nested - lock a rt_mutex
- *
- * @lock: the rt_mutex to be locked
- * @subclass: the lockdep subclass
- */
-void __sched rt_mutex_lock_nested(struct rt_mutex *lock, unsigned int subclass)
-{
-	__rt_mutex_lock(lock, subclass);
-}
-EXPORT_SYMBOL_GPL(rt_mutex_lock_nested);
-
-#else /* !CONFIG_DEBUG_LOCK_ALLOC */
-
 /**
  * rt_mutex_lock - lock a rt_mutex
  *
@@ -1495,10 +1466,12 @@ EXPORT_SYMBOL_GPL(rt_mutex_lock_nested);
  */
 void __sched rt_mutex_lock(struct rt_mutex *lock)
 {
-	__rt_mutex_lock(lock, 0);
+	might_sleep();
+
+	mutex_acquire(&lock->dep_map, 0, 0, _RET_IP_);
+	rt_mutex_fastlock(lock, TASK_UNINTERRUPTIBLE, rt_mutex_slowlock);
 }
 EXPORT_SYMBOL_GPL(rt_mutex_lock);
-#endif
 
 /**
  * rt_mutex_lock_interruptible - lock a rt_mutex interruptible
@@ -1530,11 +1503,6 @@ EXPORT_SYMBOL_GPL(rt_mutex_lock_interruptible);
 int __sched rt_mutex_futex_trylock(struct rt_mutex *lock)
 {
 	return rt_mutex_slowtrylock(lock);
-}
-
-int __sched __rt_mutex_futex_trylock(struct rt_mutex *lock)
-{
-	return __rt_mutex_slowtrylock(lock);
 }
 
 /**
@@ -1636,12 +1604,11 @@ bool __sched __rt_mutex_futex_unlock(struct rt_mutex *lock,
 void __sched rt_mutex_futex_unlock(struct rt_mutex *lock)
 {
 	DEFINE_WAKE_Q(wake_q);
-	unsigned long flags;
 	bool postunlock;
 
-	raw_spin_lock_irqsave(&lock->wait_lock, flags);
+	raw_spin_lock_irq(&lock->wait_lock);
 	postunlock = __rt_mutex_futex_unlock(lock, &wake_q);
-	raw_spin_unlock_irqrestore(&lock->wait_lock, flags);
+	raw_spin_unlock_irq(&lock->wait_lock);
 
 	if (postunlock)
 		rt_mutex_postunlock(&wake_q);

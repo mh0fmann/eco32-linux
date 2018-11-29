@@ -65,7 +65,6 @@ acpi-y +=		\
 	exresnte.o	\
 	exresolv.o	\
 	exresop.o	\
-	exserial.o	\
 	exstore.o	\
 	exstoren.o	\
 	exstorob.o	\
@@ -179,7 +178,6 @@ acpi-y +=		\
 	utresrc.o	\
 	utstate.o	\
 	utstring.o	\
-	utstrsuppt.o	\
 	utstrtoul64.o	\
 	utxface.o	\
 	utxfinit.o	\

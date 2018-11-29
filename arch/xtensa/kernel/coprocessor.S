@@ -212,7 +212,8 @@ ENDPROC(coprocessor_restore)
 ENTRY(fast_coprocessor_double)
 
 	wsr	a0, excsave1
-	call0	unrecoverable_exception
+	movi	a0, unrecoverable_exception
+	callx0	a0
 
 ENDPROC(fast_coprocessor_double)
 

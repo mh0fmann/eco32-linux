@@ -56,16 +56,17 @@ static ssize_t fsl_timer_wakeup_show(struct device *dev,
 				struct device_attribute *attr,
 				char *buf)
 {
-	time64_t interval = 0;
+	struct timeval interval;
+	int val = 0;
 
 	mutex_lock(&sysfs_lock);
 	if (fsl_wakeup->timer) {
 		mpic_get_remain_time(fsl_wakeup->timer, &interval);
-		interval++;
+		val = interval.tv_sec + 1;
 	}
 	mutex_unlock(&sysfs_lock);
 
-	return sprintf(buf, "%lld\n", interval);
+	return sprintf(buf, "%d\n", val);
 }
 
 static ssize_t fsl_timer_wakeup_store(struct device *dev,
@@ -73,10 +74,11 @@ static ssize_t fsl_timer_wakeup_store(struct device *dev,
 				const char *buf,
 				size_t count)
 {
-	time64_t interval;
+	struct timeval interval;
 	int ret;
 
-	if (kstrtoll(buf, 0, &interval))
+	interval.tv_usec = 0;
+	if (kstrtol(buf, 0, &interval.tv_sec))
 		return -EINVAL;
 
 	mutex_lock(&sysfs_lock);
@@ -87,13 +89,13 @@ static ssize_t fsl_timer_wakeup_store(struct device *dev,
 		fsl_wakeup->timer = NULL;
 	}
 
-	if (!interval) {
+	if (!interval.tv_sec) {
 		mutex_unlock(&sysfs_lock);
 		return count;
 	}
 
 	fsl_wakeup->timer = mpic_request_timer(fsl_mpic_timer_irq,
-						fsl_wakeup, interval);
+						fsl_wakeup, &interval);
 	if (!fsl_wakeup->timer) {
 		mutex_unlock(&sysfs_lock);
 		return -EINVAL;

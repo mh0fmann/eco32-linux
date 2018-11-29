@@ -7,7 +7,7 @@
 #include <linux/mm.h>
 #include <linux/pci.h>
 #include <linux/gfp.h>
-#include <linux/memblock.h>
+#include <linux/bootmem.h>
 #include <linux/export.h>
 #include <linux/scatterlist.h>
 #include <linux/log2.h>
@@ -74,26 +74,26 @@ iommu_arena_new_node(int nid, struct pci_controller *hose, dma_addr_t base,
 
 #ifdef CONFIG_DISCONTIGMEM
 
-	arena = memblock_alloc_node(sizeof(*arena), align, nid);
+	arena = alloc_bootmem_node(NODE_DATA(nid), sizeof(*arena));
 	if (!NODE_DATA(nid) || !arena) {
 		printk("%s: couldn't allocate arena from node %d\n"
 		       "    falling back to system-wide allocation\n",
 		       __func__, nid);
-		arena = memblock_alloc(sizeof(*arena), SMP_CACHE_BYTES);
+		arena = alloc_bootmem(sizeof(*arena));
 	}
 
-	arena->ptes = memblock_alloc_node(sizeof(*arena), align, nid);
+	arena->ptes = __alloc_bootmem_node(NODE_DATA(nid), mem_size, align, 0);
 	if (!NODE_DATA(nid) || !arena->ptes) {
 		printk("%s: couldn't allocate arena ptes from node %d\n"
 		       "    falling back to system-wide allocation\n",
 		       __func__, nid);
-		arena->ptes = memblock_alloc_from(mem_size, align, 0);
+		arena->ptes = __alloc_bootmem(mem_size, align, 0);
 	}
 
 #else /* CONFIG_DISCONTIGMEM */
 
-	arena = memblock_alloc(sizeof(*arena), SMP_CACHE_BYTES);
-	arena->ptes = memblock_alloc_from(mem_size, align, 0);
+	arena = alloc_bootmem(sizeof(*arena));
+	arena->ptes = __alloc_bootmem(mem_size, align, 0);
 
 #endif /* CONFIG_DISCONTIGMEM */
 
@@ -950,4 +950,6 @@ const struct dma_map_ops alpha_pci_ops = {
 	.mapping_error		= alpha_pci_mapping_error,
 	.dma_supported		= alpha_pci_supported,
 };
-EXPORT_SYMBOL(alpha_pci_ops);
+
+const struct dma_map_ops *dma_ops = &alpha_pci_ops;
+EXPORT_SYMBOL(dma_ops);

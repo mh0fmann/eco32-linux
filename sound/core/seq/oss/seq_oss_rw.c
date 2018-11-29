@@ -196,21 +196,21 @@ insert_queue(struct seq_oss_devinfo *dp, union evrec *rec, struct file *opt)
  * select / poll
  */
   
-__poll_t
+unsigned int
 snd_seq_oss_poll(struct seq_oss_devinfo *dp, struct file *file, poll_table * wait)
 {
-	__poll_t mask = 0;
+	unsigned int mask = 0;
 
 	/* input */
 	if (dp->readq && is_read_mode(dp->file_mode)) {
 		if (snd_seq_oss_readq_poll(dp->readq, file, wait))
-			mask |= EPOLLIN | EPOLLRDNORM;
+			mask |= POLLIN | POLLRDNORM;
 	}
 
 	/* output */
 	if (dp->writeq && is_write_mode(dp->file_mode)) {
 		if (snd_seq_kernel_client_write_poll(dp->cseq, file, wait))
-			mask |= EPOLLOUT | EPOLLWRNORM;
+			mask |= POLLOUT | POLLWRNORM;
 	}
 	return mask;
 }

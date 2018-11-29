@@ -170,7 +170,6 @@ struct net_local {
     spinlock_t lock;
     struct net_device *next_module;
     struct timer_list timer;	/* Media selection timer. */
-    struct net_device *dev;	/* Timer dev. */
     unsigned long last_rx_time;	/* Last Rx, in jiffies, to handle Rx hang. */
     int saved_tx_size;
     unsigned int tx_unit_busy:1;
@@ -185,7 +184,7 @@ struct net_local {
 #define TIMED_CHECKER (HZ/4)
 #ifdef TIMED_CHECKER
 #include <linux/timer.h>
-static void atp_timed_checker(struct timer_list *t);
+static void atp_timed_checker(unsigned long ignored);
 #endif
 
 /* Index to functions, as function prototypes. */
@@ -439,9 +438,10 @@ static int net_open(struct net_device *dev)
 
 	hardware_init(dev);
 
-	lp->dev = dev;
-	timer_setup(&lp->timer, atp_timed_checker, 0);
+	init_timer(&lp->timer);
 	lp->timer.expires = jiffies + TIMED_CHECKER;
+	lp->timer.data = (unsigned long)dev;
+	lp->timer.function = atp_timed_checker;    /* timer handler */
 	add_timer(&lp->timer);
 
 	netif_start_queue(dev);
@@ -710,11 +710,11 @@ static irqreturn_t atp_interrupt(int irq, void *dev_instance)
 #ifdef TIMED_CHECKER
 /* This following code fixes a rare (and very difficult to track down)
    problem where the adapter forgets its ethernet address. */
-static void atp_timed_checker(struct timer_list *t)
+static void atp_timed_checker(unsigned long data)
 {
-	struct net_local *lp = from_timer(lp, t, timer);
-	struct net_device *dev = lp->dev;
+	struct net_device *dev = (struct net_device *)data;
 	long ioaddr = dev->base_addr;
+	struct net_local *lp = netdev_priv(dev);
 	int tickssofar = jiffies - lp->last_rx_time;
 	int i;
 

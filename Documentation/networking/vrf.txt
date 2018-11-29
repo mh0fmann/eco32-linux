@@ -71,12 +71,7 @@ Setup
        ip ru add iif vrf-blue table 10
 
 3. Set the default route for the table (and hence default route for the VRF).
-       ip route add table 10 unreachable default metric 4278198272
-
-   This high metric value ensures that the default unreachable route can
-   be overridden by a routing protocol suite.  FRRouting interprets
-   kernel metrics as a combined admin distance (upper byte) and priority
-   (lower 3 bytes).  Thus the above metric translates to [255/8192].
+       ip route add table 10 unreachable default
 
 4. Enslave L3 interfaces to a VRF device.
        ip link set dev eth1 master vrf-blue
@@ -261,7 +256,7 @@ older form without it.
 
    For example:
    $ ip route show vrf red
-   unreachable default  metric 4278198272
+   prohibit default
    broadcast 10.2.1.0 dev eth1  proto kernel  scope link  src 10.2.1.2
    10.2.1.0/24 dev eth1  proto kernel  scope link  src 10.2.1.2
    local 10.2.1.2 dev eth1  proto kernel  scope host  src 10.2.1.2
@@ -287,7 +282,7 @@ older form without it.
    ff00::/8 dev red  metric 256  pref medium
    ff00::/8 dev eth1  metric 256  pref medium
    ff00::/8 dev eth2  metric 256  pref medium
-   unreachable default dev lo  metric 4278198272  error -101 pref medium
+
 
 8. Route Lookup for a VRF
 
@@ -336,7 +331,7 @@ function vrf_create
     ip link add ${VRF} type vrf table ${TBID}
 
     if [ "${VRF}" != "mgmt" ]; then
-        ip route add table ${TBID} unreachable default metric 4278198272
+        ip route add table ${TBID} unreachable default
     fi
     ip link set dev ${VRF} up
 }

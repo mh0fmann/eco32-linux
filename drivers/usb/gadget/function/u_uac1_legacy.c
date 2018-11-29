@@ -1,9 +1,12 @@
-// SPDX-License-Identifier: GPL-2.0+
 /*
  * u_uac1.c -- ALSA audio utilities for Gadget stack
  *
  * Copyright (C) 2008 Bryan Wu <cooloney@kernel.org>
  * Copyright (C) 2008 Analog Devices, Inc
+ *
+ * Enter bugs at http://blackfin.uclinux.org/
+ *
+ * Licensed under the GPL-2 or later.
  */
 
 #include <linux/kernel.h>

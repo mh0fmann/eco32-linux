@@ -242,9 +242,9 @@ static void nfc_llcp_timeout_work(struct work_struct *work)
 	nfc_dep_link_down(local->dev);
 }
 
-static void nfc_llcp_symm_timer(struct timer_list *t)
+static void nfc_llcp_symm_timer(unsigned long data)
 {
-	struct nfc_llcp_local *local = from_timer(local, t, link_timer);
+	struct nfc_llcp_local *local = (struct nfc_llcp_local *) data;
 
 	pr_err("SYMM timeout\n");
 
@@ -285,9 +285,9 @@ static void nfc_llcp_sdreq_timeout_work(struct work_struct *work)
 		nfc_genl_llc_send_sdres(local->dev, &nl_sdres_list);
 }
 
-static void nfc_llcp_sdreq_timer(struct timer_list *t)
+static void nfc_llcp_sdreq_timer(unsigned long data)
 {
-	struct nfc_llcp_local *local = from_timer(local, t, sdreq_timer);
+	struct nfc_llcp_local *local = (struct nfc_llcp_local *) data;
 
 	schedule_work(&local->sdreq_timeout_work);
 }
@@ -1573,7 +1573,9 @@ int nfc_llcp_register_device(struct nfc_dev *ndev)
 	INIT_LIST_HEAD(&local->list);
 	kref_init(&local->ref);
 	mutex_init(&local->sdp_lock);
-	timer_setup(&local->link_timer, nfc_llcp_symm_timer, 0);
+	init_timer(&local->link_timer);
+	local->link_timer.data = (unsigned long) local;
+	local->link_timer.function = nfc_llcp_symm_timer;
 
 	skb_queue_head_init(&local->tx_queue);
 	INIT_WORK(&local->tx_work, nfc_llcp_tx_work);
@@ -1599,7 +1601,9 @@ int nfc_llcp_register_device(struct nfc_dev *ndev)
 
 	mutex_init(&local->sdreq_lock);
 	INIT_HLIST_HEAD(&local->pending_sdreqs);
-	timer_setup(&local->sdreq_timer, nfc_llcp_sdreq_timer, 0);
+	init_timer(&local->sdreq_timer);
+	local->sdreq_timer.data = (unsigned long) local;
+	local->sdreq_timer.function = nfc_llcp_sdreq_timer;
 	INIT_WORK(&local->sdreq_timeout_work, nfc_llcp_sdreq_timeout_work);
 
 	list_add(&local->list, &llcp_devices);

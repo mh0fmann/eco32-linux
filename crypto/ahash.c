@@ -92,14 +92,13 @@ int crypto_hash_walk_done(struct crypto_hash_walk *walk, int err)
 
 	if (nbytes && walk->offset & alignmask && !err) {
 		walk->offset = ALIGN(walk->offset, alignmask + 1);
+		walk->data += walk->offset;
+
 		nbytes = min(nbytes,
 			     ((unsigned int)(PAGE_SIZE)) - walk->offset);
 		walk->entrylen -= nbytes;
 
-		if (nbytes) {
-			walk->data += walk->offset;
-			return nbytes;
-		}
+		return nbytes;
 	}
 
 	if (walk->flags & CRYPTO_ALG_ASYNC)
@@ -194,18 +193,11 @@ int crypto_ahash_setkey(struct crypto_ahash *tfm, const u8 *key,
 			unsigned int keylen)
 {
 	unsigned long alignmask = crypto_ahash_alignmask(tfm);
-	int err;
 
 	if ((unsigned long)key & alignmask)
-		err = ahash_setkey_unaligned(tfm, key, keylen);
-	else
-		err = tfm->setkey(tfm, key, keylen);
+		return ahash_setkey_unaligned(tfm, key, keylen);
 
-	if (err)
-		return err;
-
-	crypto_ahash_clear_flags(tfm, CRYPTO_TFM_NEED_KEY);
-	return 0;
+	return tfm->setkey(tfm, key, keylen);
 }
 EXPORT_SYMBOL_GPL(crypto_ahash_setkey);
 
@@ -342,7 +334,9 @@ static int ahash_op_unaligned(struct ahash_request *req,
 		return err;
 
 	err = op(req);
-	if (err == -EINPROGRESS || err == -EBUSY)
+	if (err == -EINPROGRESS ||
+	    (err == -EBUSY && (ahash_request_flags(req) &
+			       CRYPTO_TFM_REQ_MAY_BACKLOG)))
 		return err;
 
 	ahash_restore_req(req, err);
@@ -364,35 +358,19 @@ static int crypto_ahash_op(struct ahash_request *req,
 
 int crypto_ahash_final(struct ahash_request *req)
 {
-	int ret;
-
-	ret = crypto_ahash_op(req, crypto_ahash_reqtfm(req)->final);
-	crypto_stat_ahash_final(req, ret);
-	return ret;
+	return crypto_ahash_op(req, crypto_ahash_reqtfm(req)->final);
 }
 EXPORT_SYMBOL_GPL(crypto_ahash_final);
 
 int crypto_ahash_finup(struct ahash_request *req)
 {
-	int ret;
-
-	ret = crypto_ahash_op(req, crypto_ahash_reqtfm(req)->finup);
-	crypto_stat_ahash_final(req, ret);
-	return ret;
+	return crypto_ahash_op(req, crypto_ahash_reqtfm(req)->finup);
 }
 EXPORT_SYMBOL_GPL(crypto_ahash_finup);
 
 int crypto_ahash_digest(struct ahash_request *req)
 {
-	struct crypto_ahash *tfm = crypto_ahash_reqtfm(req);
-	int ret;
-
-	if (crypto_ahash_get_flags(tfm) & CRYPTO_TFM_NEED_KEY)
-		ret = -ENOKEY;
-	else
-		ret = crypto_ahash_op(req, tfm->digest);
-	crypto_stat_ahash_final(req, ret);
-	return ret;
+	return crypto_ahash_op(req, crypto_ahash_reqtfm(req)->digest);
 }
 EXPORT_SYMBOL_GPL(crypto_ahash_digest);
 
@@ -416,7 +394,9 @@ static int ahash_def_finup_finish1(struct ahash_request *req, int err)
 	req->base.complete = ahash_def_finup_done2;
 
 	err = crypto_ahash_reqtfm(req)->final(req);
-	if (err == -EINPROGRESS || err == -EBUSY)
+	if (err == -EINPROGRESS ||
+	    (err == -EBUSY && (ahash_request_flags(req) &
+			       CRYPTO_TFM_REQ_MAY_BACKLOG)))
 		return err;
 
 out:
@@ -452,10 +432,22 @@ static int ahash_def_finup(struct ahash_request *req)
 		return err;
 
 	err = tfm->update(req);
-	if (err == -EINPROGRESS || err == -EBUSY)
+	if (err == -EINPROGRESS ||
+	    (err == -EBUSY && (ahash_request_flags(req) &
+			       CRYPTO_TFM_REQ_MAY_BACKLOG)))
 		return err;
 
 	return ahash_def_finup_finish1(req, err);
+}
+
+static int ahash_no_export(struct ahash_request *req, void *out)
+{
+	return -ENOSYS;
+}
+
+static int ahash_no_import(struct ahash_request *req, const void *in)
+{
+	return -ENOSYS;
 }
 
 static int crypto_ahash_init_tfm(struct crypto_tfm *tfm)
@@ -464,6 +456,9 @@ static int crypto_ahash_init_tfm(struct crypto_tfm *tfm)
 	struct ahash_alg *alg = crypto_ahash_alg(hash);
 
 	hash->setkey = ahash_nosetkey;
+	hash->has_setkey = false;
+	hash->export = ahash_no_export;
+	hash->import = ahash_no_import;
 
 	if (tfm->__crt_alg->cra_type != &crypto_ahash_type)
 		return crypto_init_shash_ops_async(tfm);
@@ -473,14 +468,15 @@ static int crypto_ahash_init_tfm(struct crypto_tfm *tfm)
 	hash->final = alg->final;
 	hash->finup = alg->finup ?: ahash_def_finup;
 	hash->digest = alg->digest;
-	hash->export = alg->export;
-	hash->import = alg->import;
 
 	if (alg->setkey) {
 		hash->setkey = alg->setkey;
-		if (!(alg->halg.base.cra_flags & CRYPTO_ALG_OPTIONAL_KEY))
-			crypto_ahash_set_flags(hash, CRYPTO_TFM_NEED_KEY);
+		hash->has_setkey = true;
 	}
+	if (alg->export)
+		hash->export = alg->export;
+	if (alg->import)
+		hash->import = alg->import;
 
 	return 0;
 }
@@ -561,8 +557,8 @@ static int ahash_prepare_alg(struct ahash_alg *alg)
 {
 	struct crypto_alg *base = &alg->halg.base;
 
-	if (alg->halg.digestsize > HASH_MAX_DIGESTSIZE ||
-	    alg->halg.statesize > HASH_MAX_STATESIZE ||
+	if (alg->halg.digestsize > PAGE_SIZE / 8 ||
+	    alg->halg.statesize > PAGE_SIZE / 8 ||
 	    alg->halg.statesize == 0)
 		return -EINVAL;
 
@@ -658,17 +654,6 @@ struct hash_alg_common *ahash_attr_alg(struct rtattr *rta, u32 type, u32 mask)
 	return IS_ERR(alg) ? ERR_CAST(alg) : __crypto_hash_alg_common(alg);
 }
 EXPORT_SYMBOL_GPL(ahash_attr_alg);
-
-bool crypto_hash_alg_has_setkey(struct hash_alg_common *halg)
-{
-	struct crypto_alg *alg = &halg->base;
-
-	if (alg->cra_type != &crypto_ahash_type)
-		return crypto_shash_alg_has_setkey(__crypto_shash_alg(alg));
-
-	return __crypto_ahash_alg(alg)->setkey != NULL;
-}
-EXPORT_SYMBOL_GPL(crypto_hash_alg_has_setkey);
 
 MODULE_LICENSE("GPL");
 MODULE_DESCRIPTION("Asynchronous cryptographic hash type");

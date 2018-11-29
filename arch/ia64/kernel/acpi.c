@@ -504,11 +504,6 @@ acpi_numa_memory_affinity_init(struct acpi_srat_mem_affinity *ma)
 	if (!(ma->flags & ACPI_SRAT_MEM_ENABLED))
 		return -1;
 
-	if (num_node_memblks >= NR_NODE_MEMBLKS) {
-		pr_err("NUMA: too many memblk ranges\n");
-		return -EINVAL;
-	}
-
 	/* record this node in proximity bitmap */
 	pxm_bit_set(pxm);
 
@@ -578,8 +573,8 @@ void __init acpi_numa_fixup(void)
 	if (!slit_table) {
 		for (i = 0; i < MAX_NUMNODES; i++)
 			for (j = 0; j < MAX_NUMNODES; j++)
-				slit_distance(i, j) = i == j ?
-					LOCAL_DISTANCE : REMOTE_DISTANCE;
+				node_distance(i, j) = i == j ? LOCAL_DISTANCE :
+							REMOTE_DISTANCE;
 		return;
 	}
 
@@ -592,7 +587,7 @@ void __init acpi_numa_fixup(void)
 			if (!pxm_bit_test(j))
 				continue;
 			node_to = pxm_to_node(j);
-			slit_distance(node_from, node_to) =
+			node_distance(node_from, node_to) =
 			    slit_table->entry[i * slit_table->locality_count + j];
 		}
 	}

@@ -83,9 +83,9 @@ show_test_oa_id(struct device *kdev, struct device_attribute *attr, char *buf)
 void
 i915_perf_load_test_config_bxt(struct drm_i915_private *dev_priv)
 {
-	strlcpy(dev_priv->perf.oa.test_config.uuid,
+	strncpy(dev_priv->perf.oa.test_config.uuid,
 		"5ee72f5c-092f-421e-8b70-225f7c3e9612",
-		sizeof(dev_priv->perf.oa.test_config.uuid));
+		UUID_STRING_LEN);
 	dev_priv->perf.oa.test_config.id = 1;
 
 	dev_priv->perf.oa.test_config.mux_regs = mux_config_test_oa;

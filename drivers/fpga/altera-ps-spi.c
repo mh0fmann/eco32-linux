@@ -238,7 +238,6 @@ static int altera_ps_probe(struct spi_device *spi)
 {
 	struct altera_ps_conf *conf;
 	const struct of_device_id *of_id;
-	struct fpga_manager *mgr;
 
 	conf = devm_kzalloc(&spi->dev, sizeof(*conf), GFP_KERNEL);
 	if (!conf)
@@ -250,7 +249,7 @@ static int altera_ps_probe(struct spi_device *spi)
 
 	conf->data = of_id->data;
 	conf->spi = spi;
-	conf->config = devm_gpiod_get(&spi->dev, "nconfig", GPIOD_OUT_LOW);
+	conf->config = devm_gpiod_get(&spi->dev, "nconfig", GPIOD_OUT_HIGH);
 	if (IS_ERR(conf->config)) {
 		dev_err(&spi->dev, "Failed to get config gpio: %ld\n",
 			PTR_ERR(conf->config));
@@ -274,21 +273,13 @@ static int altera_ps_probe(struct spi_device *spi)
 	snprintf(conf->mgr_name, sizeof(conf->mgr_name), "%s %s",
 		 dev_driver_string(&spi->dev), dev_name(&spi->dev));
 
-	mgr = devm_fpga_mgr_create(&spi->dev, conf->mgr_name,
-				   &altera_ps_ops, conf);
-	if (!mgr)
-		return -ENOMEM;
-
-	spi_set_drvdata(spi, mgr);
-
-	return fpga_mgr_register(mgr);
+	return fpga_mgr_register(&spi->dev, conf->mgr_name,
+				 &altera_ps_ops, conf);
 }
 
 static int altera_ps_remove(struct spi_device *spi)
 {
-	struct fpga_manager *mgr = spi_get_drvdata(spi);
-
-	fpga_mgr_unregister(mgr);
+	fpga_mgr_unregister(&spi->dev);
 
 	return 0;
 }

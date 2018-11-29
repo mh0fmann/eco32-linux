@@ -187,7 +187,7 @@ int s5k83a_probe(struct sd *sd)
 		return -ENODEV;
 	}
 
-	gspca_dbg(gspca_dev, D_PROBE, "Probing for a s5k83a sensor\n");
+	PDEBUG(D_PROBE, "Probing for a s5k83a sensor");
 
 	/* Preinit the sensor */
 	for (i = 0; i < ARRAY_SIZE(preinit_s5k83a) && !err; i++) {

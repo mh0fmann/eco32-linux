@@ -1,4 +1,3 @@
-// SPDX-License-Identifier: GPL-2.0+
 /**
  * dwc3-st.c Support for dwc3 platform devices on ST Microelectronics platforms
  *
@@ -10,6 +9,11 @@
  * Author: Giuseppe Cavallaro <peppe.cavallaro@st.com>
  * Contributors: Aymen Bouattay <aymen.bouattay@st.com>
  *               Peter Griffin <peter.griffin@linaro.org>
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
  *
  * Inspired by dwc3-omap.c and dwc3-exynos.c.
  */

@@ -1,4 +1,3 @@
-// SPDX-License-Identifier: GPL-2.0
 /*
  * DMA memory management for framework level HCD code (hc_driver)
  *
@@ -6,6 +5,7 @@
  * and should work with all USB controllers, regardless of bus type.
  *
  * Released under the GPLv2 only.
+ * SPDX-License-Identifier: GPL-2.0
  */
 
 #include <linux/module.h>
@@ -101,8 +101,12 @@ void hcd_buffer_destroy(struct usb_hcd *hcd)
 		return;
 
 	for (i = 0; i < HCD_BUFFER_POOLS; i++) {
-		dma_pool_destroy(hcd->pool[i]);
-		hcd->pool[i] = NULL;
+		struct dma_pool *pool = hcd->pool[i];
+
+		if (pool) {
+			dma_pool_destroy(pool);
+			hcd->pool[i] = NULL;
+		}
 	}
 }
 

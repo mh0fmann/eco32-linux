@@ -17,7 +17,7 @@
 #ifndef __MXL5007T_H__
 #define __MXL5007T_H__
 
-#include <media/dvb_frontend.h>
+#include "dvb_frontend.h"
 
 /* ------------------------------------------------------------------------- */
 

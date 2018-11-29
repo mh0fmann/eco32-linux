@@ -241,8 +241,8 @@ acpi_cpufreq_cpu_init (
 	}
 
 	/* alloc freq_table */
-	freq_table = kcalloc(data->acpi_data.state_count + 1,
-	                           sizeof(*freq_table),
+	freq_table = kzalloc(sizeof(*freq_table) *
+	                           (data->acpi_data.state_count + 1),
 	                           GFP_KERNEL);
 	if (!freq_table) {
 		result = -ENOMEM;
@@ -270,7 +270,10 @@ acpi_cpufreq_cpu_init (
 		}
 	}
 
-	policy->freq_table = freq_table;
+	result = cpufreq_table_validate_and_show(policy, freq_table);
+	if (result) {
+		goto err_freqfree;
+	}
 
 	/* notify BIOS that we exist */
 	acpi_processor_notify_smm(THIS_MODULE);
@@ -293,6 +296,8 @@ acpi_cpufreq_cpu_init (
 
 	return (result);
 
+ err_freqfree:
+	kfree(freq_table);
  err_unreg:
 	acpi_processor_unregister_performance(cpu);
  err_free:

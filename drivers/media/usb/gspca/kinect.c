@@ -151,9 +151,8 @@ static int send_cmd(struct gspca_dev *gspca_dev, uint16_t cmd, void *cmdbuf,
 	memcpy(obuf+sizeof(*chdr), cmdbuf, cmd_len);
 
 	res = kinect_write(udev, obuf, cmd_len + sizeof(*chdr));
-	gspca_dbg(gspca_dev, D_USBO, "Control cmd=%04x tag=%04x len=%04x: %d\n",
-		  cmd,
-		  sd->cam_tag, cmd_len, res);
+	PDEBUG(D_USBO, "Control cmd=%04x tag=%04x len=%04x: %d", cmd,
+		sd->cam_tag, cmd_len, res);
 	if (res < 0) {
 		pr_err("send_cmd: Output control transfer failed (%d)\n", res);
 		return res;
@@ -162,8 +161,8 @@ static int send_cmd(struct gspca_dev *gspca_dev, uint16_t cmd, void *cmdbuf,
 	do {
 		actual_len = kinect_read(udev, ibuf, 0x200);
 	} while (actual_len == 0);
-	gspca_dbg(gspca_dev, D_USBO, "Control reply: %d\n", actual_len);
-	if (actual_len < (int)sizeof(*rhdr)) {
+	PDEBUG(D_USBO, "Control reply: %d", actual_len);
+	if (actual_len < sizeof(*rhdr)) {
 		pr_err("send_cmd: Input control transfer failed (%d)\n",
 		       actual_len);
 		return actual_len < 0 ? actual_len : -EREMOTEIO;
@@ -214,7 +213,7 @@ static int write_register(struct gspca_dev *gspca_dev, uint16_t reg,
 	cmd[0] = cpu_to_le16(reg);
 	cmd[1] = cpu_to_le16(data);
 
-	gspca_dbg(gspca_dev, D_USBO, "Write Reg 0x%04x <= 0x%02x\n", reg, data);
+	PDEBUG(D_USBO, "Write Reg 0x%04x <= 0x%02x", reg, data);
 	res = send_cmd(gspca_dev, 0x03, cmd, 4, reply, 4);
 	if (res < 0)
 		return res;
@@ -275,7 +274,7 @@ static int sd_config_depth(struct gspca_dev *gspca_dev,
 /* this function is called at probe and resume time */
 static int sd_init(struct gspca_dev *gspca_dev)
 {
-	gspca_dbg(gspca_dev, D_PROBE, "Kinect Camera device.\n");
+	PDEBUG(D_PROBE, "Kinect Camera device.");
 
 	return 0;
 }

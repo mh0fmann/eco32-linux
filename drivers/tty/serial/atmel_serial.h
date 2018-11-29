@@ -1,4 +1,3 @@
-// SPDX-License-Identifier: GPL-2.0+
 /*
  * include/linux/atmel_serial.h
  *
@@ -7,6 +6,11 @@
  *
  * USART registers.
  * Based on AT91RM9200 datasheet revision E.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
  */
 
 #ifndef ATMEL_SERIAL_H
@@ -78,8 +82,7 @@
 #define	ATMEL_US_OVER		BIT(19)	/* Oversampling Mode */
 #define	ATMEL_US_INACK		BIT(20)	/* Inhibit Non Acknowledge */
 #define	ATMEL_US_DSNACK		BIT(21)	/* Disable Successive NACK */
-#define	ATMEL_US_MAX_ITER_MASK	GENMASK(26, 24)	/* Max Iterations */
-#define	ATMEL_US_MAX_ITER(n)	(((n) << 24) & ATMEL_US_MAX_ITER_MASK)
+#define	ATMEL_US_MAX_ITER	GENMASK(26, 24)	/* Max Iterations */
 #define	ATMEL_US_FILTER		BIT(28)	/* Infrared Receive Line Filter */
 
 #define ATMEL_US_IER		0x08	/* Interrupt Enable Register */

@@ -16,7 +16,7 @@
 #include <linux/security.h>
 
 #include "include/audit.h"
-#include "include/cred.h"
+#include "include/context.h"
 #include "include/resource.h"
 #include "include/policy.h"
 
@@ -47,7 +47,7 @@ static void audit_cb(struct audit_buffer *ab, void *va)
 /**
  * audit_resource - audit setting resource limit
  * @profile: profile being enforced  (NOT NULL)
- * @resource: rlimit being auditing
+ * @resoure: rlimit being auditing
  * @value: value being set
  * @error: error value
  *
@@ -124,11 +124,11 @@ int aa_task_setrlimit(struct aa_label *label, struct task_struct *task,
 	 */
 
 	if (label != peer &&
-	    aa_capable(label, CAP_SYS_RESOURCE, SECURITY_CAP_NOAUDIT) != 0)
+	    !aa_capable(label, CAP_SYS_RESOURCE, SECURITY_CAP_NOAUDIT))
 		error = fn_for_each(label, profile,
 				audit_resource(profile, resource,
 					       new_rlim->rlim_max, peer,
-					       "cap_sys_resource", -EACCES));
+					       "cap_sys_resoure", -EACCES));
 	else
 		error = fn_for_each_confined(label, profile,
 				profile_setrlimit(profile, resource, new_rlim));

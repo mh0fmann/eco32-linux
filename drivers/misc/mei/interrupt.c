@@ -173,12 +173,10 @@ static int mei_cl_irq_disconnect_rsp(struct mei_cl *cl, struct mei_cl_cb *cb,
 	int slots;
 	int ret;
 
-	msg_slots = mei_hbm2slots(sizeof(struct hbm_client_connect_response));
 	slots = mei_hbuf_empty_slots(dev);
-	if (slots < 0)
-		return -EOVERFLOW;
+	msg_slots = mei_data2slots(sizeof(struct hbm_client_connect_response));
 
-	if ((u32)slots < msg_slots)
+	if (slots < msg_slots)
 		return -EMSGSIZE;
 
 	ret = mei_hbm_cl_disconnect_rsp(dev, cl);
@@ -208,12 +206,10 @@ static int mei_cl_irq_read(struct mei_cl *cl, struct mei_cl_cb *cb,
 	if (!list_empty(&cl->rd_pending))
 		return 0;
 
-	msg_slots = mei_hbm2slots(sizeof(struct hbm_flow_control));
+	msg_slots = mei_data2slots(sizeof(struct hbm_flow_control));
 	slots = mei_hbuf_empty_slots(dev);
-	if (slots < 0)
-		return -EOVERFLOW;
 
-	if ((u32)slots < msg_slots)
+	if (slots < msg_slots)
 		return -EMSGSIZE;
 
 	ret = mei_hbm_cl_flow_control_req(dev, cl);
@@ -314,11 +310,8 @@ int mei_irq_read_handler(struct mei_device *dev,
 	if (&cl->link == &dev->file_list) {
 		/* A message for not connected fixed address clients
 		 * should be silently discarded
-		 * On power down client may be force cleaned,
-		 * silently discard such messages
 		 */
-		if (hdr_is_fixed(mei_hdr) ||
-		    dev->dev_state == MEI_DEV_POWER_DOWN) {
+		if (hdr_is_fixed(mei_hdr)) {
 			mei_irq_discard_msg(dev, mei_hdr);
 			ret = 0;
 			goto reset_slots;
@@ -372,10 +365,7 @@ int mei_irq_write_handler(struct mei_device *dev, struct list_head *cmpl_list)
 		return 0;
 
 	slots = mei_hbuf_empty_slots(dev);
-	if (slots < 0)
-		return -EOVERFLOW;
-
-	if (slots == 0)
+	if (slots <= 0)
 		return -EMSGSIZE;
 
 	/* complete all waiting for write CB */

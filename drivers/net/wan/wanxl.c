@@ -734,6 +734,7 @@ static int wanxl_pci_init_one(struct pci_dev *pdev,
 		return -ENODEV;
 	}
 
+	stat = 0;
 	timeout = jiffies + 5 * HZ;
 	do {
 		if ((stat = readl(card->plx + PLX_MAILBOX_5)) != 0)

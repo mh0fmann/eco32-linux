@@ -1,4 +1,3 @@
-// SPDX-License-Identifier: GPL-2.0
 /*
  * Driver for Zilog serial chips found on SGI workstations and
  * servers.  This driver could actually be made more generic.

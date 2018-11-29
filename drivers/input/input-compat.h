@@ -18,8 +18,7 @@
 #ifdef CONFIG_COMPAT
 
 struct input_event_compat {
-	compat_ulong_t sec;
-	compat_ulong_t usec;
+	struct compat_timeval time;
 	__u16 type;
 	__u16 code;
 	__s32 value;

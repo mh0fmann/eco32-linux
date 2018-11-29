@@ -13,7 +13,6 @@
 
 #include <linux/atomic.h>
 #include <linux/mm_types.h>
-#include <linux/sched.h>
 
 #include <asm/bitops.h>
 #include <asm/mmu.h>

@@ -53,10 +53,6 @@ struct arch_uprobe {
 			u8	fixups;
 			u8	ilen;
 		} 			defparam;
-		struct {
-			u8	reg_offset;	/* to the start of pt_regs */
-			u8	ilen;
-		}			push;
 	};
 };
 

@@ -28,7 +28,6 @@
 
 #include <asm/page.h>
 #include <asm/cache.h>
-#include <asm/thread_info.h>
 #include <asm-generic/vmlinux.lds.h>
 
 #ifdef __OR1K__

@@ -1,4 +1,3 @@
-/* SPDX-License-Identifier: GPL-2.0 */
 /*
  * remote processor messaging bus internals
  *
@@ -7,6 +6,15 @@
  *
  * Ohad Ben-Cohen <ohad@wizery.com>
  * Brian Swetland <swetland@google.com>
+ *
+ * This software is licensed under the terms of the GNU General Public
+ * License version 2, as published by the Free Software Foundation, and
+ * may be copied, distributed, and modified under those terms.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
  */
 
 #ifndef __RPMSG_INTERNAL_H__
@@ -63,7 +71,7 @@ struct rpmsg_endpoint_ops {
 	int (*trysendto)(struct rpmsg_endpoint *ept, void *data, int len, u32 dst);
 	int (*trysend_offchannel)(struct rpmsg_endpoint *ept, u32 src, u32 dst,
 			     void *data, int len);
-	__poll_t (*poll)(struct rpmsg_endpoint *ept, struct file *filp,
+	unsigned int (*poll)(struct rpmsg_endpoint *ept, struct file *filp,
 			     poll_table *wait);
 };
 

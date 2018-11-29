@@ -56,7 +56,6 @@
 #define ARIZONA_MAX_PDM_SPK 2
 
 struct regulator_init_data;
-struct gpio_desc;
 
 struct arizona_micbias {
 	int mV;                    /** Regulated voltage */
@@ -78,7 +77,7 @@ struct arizona_micd_range {
 };
 
 struct arizona_pdata {
-	struct gpio_desc *reset;      /** GPIO controlling /RESET, if any */
+	int reset;      /** GPIO controlling /RESET, if any */
 
 	/** Regulator configuration for MICVDD */
 	struct arizona_micsupp_pdata micvdd;
@@ -174,9 +173,6 @@ struct arizona_pdata {
 
 	/** Mode for outputs */
 	int out_mono[ARIZONA_MAX_OUTPUT];
-
-	/** Limit output volumes */
-	unsigned int out_vol_limit[2 * ARIZONA_MAX_OUTPUT];
 
 	/** PDM speaker mute setting */
 	unsigned int spk_mute[ARIZONA_MAX_PDM_SPK];

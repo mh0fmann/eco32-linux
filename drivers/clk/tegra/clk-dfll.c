@@ -1196,24 +1196,42 @@ static const struct file_operations attr_registers_fops = {
 	.release	= single_release,
 };
 
-static void dfll_debug_init(struct tegra_dfll *td)
+static int dfll_debug_init(struct tegra_dfll *td)
 {
-	struct dentry *root;
+	int ret;
 
 	if (!td || (td->mode == DFLL_UNINITIALIZED))
-		return;
+		return 0;
 
-	root = debugfs_create_dir("tegra_dfll_fcpu", NULL);
-	td->debugfs_dir = root;
+	td->debugfs_dir = debugfs_create_dir("tegra_dfll_fcpu", NULL);
+	if (!td->debugfs_dir)
+		return -ENOMEM;
 
-	debugfs_create_file("enable", S_IRUGO | S_IWUSR, root, td, &enable_fops);
-	debugfs_create_file("lock", S_IRUGO, root, td, &lock_fops);
-	debugfs_create_file("rate", S_IRUGO, root, td, &rate_fops);
-	debugfs_create_file("registers", S_IRUGO, root, td, &attr_registers_fops);
+	ret = -ENOMEM;
+
+	if (!debugfs_create_file("enable", S_IRUGO | S_IWUSR,
+				 td->debugfs_dir, td, &enable_fops))
+		goto err_out;
+
+	if (!debugfs_create_file("lock", S_IRUGO,
+				 td->debugfs_dir, td, &lock_fops))
+		goto err_out;
+
+	if (!debugfs_create_file("rate", S_IRUGO,
+				 td->debugfs_dir, td, &rate_fops))
+		goto err_out;
+
+	if (!debugfs_create_file("registers", S_IRUGO,
+				 td->debugfs_dir, td, &attr_registers_fops))
+		goto err_out;
+
+	return 0;
+
+err_out:
+	debugfs_remove_recursive(td->debugfs_dir);
+	return ret;
 }
 
-#else
-static void inline dfll_debug_init(struct tegra_dfll *td) { }
 #endif /* CONFIG_DEBUG_FS */
 
 /*
@@ -1609,12 +1627,8 @@ int tegra_dfll_register(struct platform_device *pdev,
 
 	td->vdd_reg = devm_regulator_get(td->dev, "vdd-cpu");
 	if (IS_ERR(td->vdd_reg)) {
-		ret = PTR_ERR(td->vdd_reg);
-		if (ret != -EPROBE_DEFER)
-			dev_err(td->dev, "couldn't get vdd_cpu regulator: %d\n",
-				ret);
-
-		return ret;
+		dev_err(td->dev, "couldn't get vdd_cpu regulator\n");
+		return PTR_ERR(td->vdd_reg);
 	}
 
 	td->dvco_rst = devm_reset_control_get(td->dev, "dvco");
@@ -1701,7 +1715,9 @@ int tegra_dfll_register(struct platform_device *pdev,
 		return ret;
 	}
 
+#ifdef CONFIG_DEBUG_FS
 	dfll_debug_init(td);
+#endif
 
 	return 0;
 }
@@ -1712,10 +1728,10 @@ EXPORT_SYMBOL(tegra_dfll_register);
  * @pdev: DFLL platform_device *
  *
  * Unbind this driver from the DFLL hardware device represented by
- * @pdev. The DFLL must be disabled for this to succeed. Returns a
- * soc pointer upon success or -EBUSY if the DFLL is still active.
+ * @pdev. The DFLL must be disabled for this to succeed. Returns 0
+ * upon success or -EBUSY if the DFLL is still active.
  */
-struct tegra_dfll_soc_data *tegra_dfll_unregister(struct platform_device *pdev)
+int tegra_dfll_unregister(struct platform_device *pdev)
 {
 	struct tegra_dfll *td = platform_get_drvdata(pdev);
 
@@ -1723,7 +1739,7 @@ struct tegra_dfll_soc_data *tegra_dfll_unregister(struct platform_device *pdev)
 	if (td->mode != DFLL_DISABLED) {
 		dev_err(&pdev->dev,
 			"must disable DFLL before removing driver\n");
-		return ERR_PTR(-EBUSY);
+		return -EBUSY;
 	}
 
 	debugfs_remove_recursive(td->debugfs_dir);
@@ -1737,6 +1753,6 @@ struct tegra_dfll_soc_data *tegra_dfll_unregister(struct platform_device *pdev)
 
 	reset_control_assert(td->dvco_rst);
 
-	return td->soc;
+	return 0;
 }
 EXPORT_SYMBOL(tegra_dfll_unregister);

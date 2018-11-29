@@ -17,13 +17,10 @@
 #include <linux/pci.h>
 #include <linux/module.h>
 
-#include "blk-mq.h"
-
 /**
  * blk_mq_pci_map_queues - provide a default queue mapping for PCI device
  * @set:	tagset to provide the mapping for
  * @pdev:	PCI device associated with @set.
- * @offset:	Offset to use for the pci irq vector
  *
  * This function assumes the PCI device @pdev has at least as many available
  * interrupt vectors as @set has queues.  It will then query the vector
@@ -31,14 +28,13 @@
  * that maps a queue to the CPUs that have irq affinity for the corresponding
  * vector.
  */
-int blk_mq_pci_map_queues(struct blk_mq_tag_set *set, struct pci_dev *pdev,
-			    int offset)
+int blk_mq_pci_map_queues(struct blk_mq_tag_set *set, struct pci_dev *pdev)
 {
 	const struct cpumask *mask;
 	unsigned int queue, cpu;
 
 	for (queue = 0; queue < set->nr_hw_queues; queue++) {
-		mask = pci_irq_get_affinity(pdev, queue + offset);
+		mask = pci_irq_get_affinity(pdev, queue);
 		if (!mask)
 			goto fallback;
 
@@ -50,7 +46,8 @@ int blk_mq_pci_map_queues(struct blk_mq_tag_set *set, struct pci_dev *pdev,
 
 fallback:
 	WARN_ON_ONCE(set->nr_hw_queues > 1);
-	blk_mq_clear_mq_map(set);
+	for_each_possible_cpu(cpu)
+		set->mq_map[cpu] = 0;
 	return 0;
 }
 EXPORT_SYMBOL_GPL(blk_mq_pci_map_queues);

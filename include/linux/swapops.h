@@ -4,7 +4,6 @@
 
 #include <linux/radix-tree.h>
 #include <linux/bug.h>
-#include <linux/mm_types.h>
 
 /*
  * swapcache pages are stored in the swapper_space radix tree.  We want to
@@ -18,8 +17,9 @@
  *
  * swp_entry_t's are *never* stored anywhere in their arch-dependent format.
  */
-#define SWP_TYPE_SHIFT	(BITS_PER_XA_VALUE - MAX_SWAPFILES_SHIFT)
-#define SWP_OFFSET_MASK	((1UL << SWP_TYPE_SHIFT) - 1)
+#define SWP_TYPE_SHIFT(e)	((sizeof(e.val) * 8) - \
+			(MAX_SWAPFILES_SHIFT + RADIX_TREE_EXCEPTIONAL_SHIFT))
+#define SWP_OFFSET_MASK(e)	((1UL << SWP_TYPE_SHIFT(e)) - 1)
 
 /*
  * Store a type+offset into a swp_entry_t in an arch-independent format
@@ -28,7 +28,8 @@ static inline swp_entry_t swp_entry(unsigned long type, pgoff_t offset)
 {
 	swp_entry_t ret;
 
-	ret.val = (type << SWP_TYPE_SHIFT) | (offset & SWP_OFFSET_MASK);
+	ret.val = (type << SWP_TYPE_SHIFT(ret)) |
+			(offset & SWP_OFFSET_MASK(ret));
 	return ret;
 }
 
@@ -38,7 +39,7 @@ static inline swp_entry_t swp_entry(unsigned long type, pgoff_t offset)
  */
 static inline unsigned swp_type(swp_entry_t entry)
 {
-	return (entry.val >> SWP_TYPE_SHIFT);
+	return (entry.val >> SWP_TYPE_SHIFT(entry));
 }
 
 /*
@@ -47,7 +48,7 @@ static inline unsigned swp_type(swp_entry_t entry)
  */
 static inline pgoff_t swp_offset(swp_entry_t entry)
 {
-	return entry.val & SWP_OFFSET_MASK;
+	return entry.val & SWP_OFFSET_MASK(entry);
 }
 
 #ifdef CONFIG_MMU
@@ -88,13 +89,16 @@ static inline swp_entry_t radix_to_swp_entry(void *arg)
 {
 	swp_entry_t entry;
 
-	entry.val = xa_to_value(arg);
+	entry.val = (unsigned long)arg >> RADIX_TREE_EXCEPTIONAL_SHIFT;
 	return entry;
 }
 
 static inline void *swp_to_radix_entry(swp_entry_t entry)
 {
-	return xa_mk_value(entry.val);
+	unsigned long value;
+
+	value = entry.val << RADIX_TREE_EXCEPTIONAL_SHIFT;
+	return (void *)(value | RADIX_TREE_EXCEPTIONAL_ENTRY);
 }
 
 #if IS_ENABLED(CONFIG_DEVICE_PRIVATE)
@@ -120,17 +124,12 @@ static inline bool is_write_device_private_entry(swp_entry_t entry)
 	return unlikely(swp_type(entry) == SWP_DEVICE_WRITE);
 }
 
-static inline unsigned long device_private_entry_to_pfn(swp_entry_t entry)
-{
-	return swp_offset(entry);
-}
-
 static inline struct page *device_private_entry_to_page(swp_entry_t entry)
 {
 	return pfn_to_page(swp_offset(entry));
 }
 
-vm_fault_t device_private_entry_fault(struct vm_area_struct *vma,
+int device_private_entry_fault(struct vm_area_struct *vma,
 		       unsigned long addr,
 		       swp_entry_t entry,
 		       unsigned int flags,
@@ -155,17 +154,12 @@ static inline bool is_write_device_private_entry(swp_entry_t entry)
 	return false;
 }
 
-static inline unsigned long device_private_entry_to_pfn(swp_entry_t entry)
-{
-	return 0;
-}
-
 static inline struct page *device_private_entry_to_page(swp_entry_t entry)
 {
 	return NULL;
 }
 
-static inline vm_fault_t device_private_entry_fault(struct vm_area_struct *vma,
+static inline int device_private_entry_fault(struct vm_area_struct *vma,
 				     unsigned long addr,
 				     swp_entry_t entry,
 				     unsigned int flags,
@@ -193,11 +187,6 @@ static inline int is_migration_entry(swp_entry_t entry)
 static inline int is_write_migration_entry(swp_entry_t entry)
 {
 	return unlikely(swp_type(entry) == SWP_MIGRATION_WRITE);
-}
-
-static inline unsigned long migration_entry_to_pfn(swp_entry_t entry)
-{
-	return swp_offset(entry);
 }
 
 static inline struct page *migration_entry_to_page(swp_entry_t entry)
@@ -229,12 +218,6 @@ static inline int is_migration_entry(swp_entry_t swp)
 {
 	return 0;
 }
-
-static inline unsigned long migration_entry_to_pfn(swp_entry_t entry)
-{
-	return 0;
-}
-
 static inline struct page *migration_entry_to_page(swp_entry_t entry)
 {
 	return NULL;
@@ -336,6 +319,11 @@ static inline int is_hwpoison_entry(swp_entry_t entry)
 	return swp_type(entry) == SWP_HWPOISON;
 }
 
+static inline bool test_set_page_hwpoison(struct page *page)
+{
+	return TestSetPageHWPoison(page);
+}
+
 static inline void num_poisoned_pages_inc(void)
 {
 	atomic_long_inc(&num_poisoned_pages);
@@ -356,6 +344,11 @@ static inline swp_entry_t make_hwpoison_entry(struct page *page)
 static inline int is_hwpoison_entry(swp_entry_t swp)
 {
 	return 0;
+}
+
+static inline bool test_set_page_hwpoison(struct page *page)
+{
+	return false;
 }
 
 static inline void num_poisoned_pages_inc(void)

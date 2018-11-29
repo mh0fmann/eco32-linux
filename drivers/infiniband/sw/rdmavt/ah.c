@@ -120,8 +120,7 @@ struct ib_ah *rvt_create_ah(struct ib_pd *pd,
 	dev->n_ahs_allocated++;
 	spin_unlock_irqrestore(&dev->n_ahs_lock, flags);
 
-	rdma_copy_ah_attr(&ah->attr, ah_attr);
-
+	ah->attr = *ah_attr;
 	atomic_set(&ah->refcount, 0);
 
 	if (dev->driver_f.notify_new_ah)
@@ -149,7 +148,6 @@ int rvt_destroy_ah(struct ib_ah *ibah)
 	dev->n_ahs_allocated--;
 	spin_unlock_irqrestore(&dev->n_ahs_lock, flags);
 
-	rdma_destroy_ah_attr(&ah->attr);
 	kfree(ah);
 
 	return 0;

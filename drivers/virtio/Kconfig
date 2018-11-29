@@ -5,11 +5,7 @@ config VIRTIO
 	  bus, such as CONFIG_VIRTIO_PCI, CONFIG_VIRTIO_MMIO, CONFIG_RPMSG
 	  or CONFIG_S390_GUEST.
 
-menuconfig VIRTIO_MENU
-	bool "Virtio drivers"
-	default y
-
-if VIRTIO_MENU
+menu "Virtio drivers"
 
 config VIRTIO_PCI
 	tristate "PCI driver for virtio devices"
@@ -83,4 +79,4 @@ config VIRTIO_MMIO_CMDLINE_DEVICES
 
 	 If unsure, say 'N'.
 
-endif # VIRTIO_MENU
+endmenu

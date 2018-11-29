@@ -53,8 +53,6 @@ static int check_all_cpu_dscr_defaults(unsigned long val)
 	}
 
 	while ((dp = readdir(sysfs))) {
-		int len;
-
 		if (!(dp->d_type & DT_DIR))
 			continue;
 		if (!strcmp(dp->d_name, "cpuidle"))
@@ -62,9 +60,7 @@ static int check_all_cpu_dscr_defaults(unsigned long val)
 		if (!strstr(dp->d_name, "cpu"))
 			continue;
 
-		len = snprintf(file, LEN_MAX, "%s%s/dscr", CPU_PATH, dp->d_name);
-		if (len >= LEN_MAX)
-			continue;
+		sprintf(file, "%s%s/dscr", CPU_PATH, dp->d_name);
 		if (access(file, F_OK))
 			continue;
 

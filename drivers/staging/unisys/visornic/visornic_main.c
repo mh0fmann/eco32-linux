@@ -1,6 +1,15 @@
-// SPDX-License-Identifier: GPL-2.0
 /* Copyright (c) 2012 - 2015 UNISYS CORPORATION
  * All rights reserved.
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms and conditions of the GNU General Public License,
+ * version 2, as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY OR FITNESS FOR A PARTICULAR PURPOSE, GOOD TITLE or
+ * NON INFRINGEMENT.  See the GNU General Public License for more
+ * details.
  */
 
 /* This driver lives in a spar partition, and registers to ethernet io
@@ -11,13 +20,12 @@
 
 #include <linux/debugfs.h>
 #include <linux/etherdevice.h>
-#include <linux/module.h>
 #include <linux/netdevice.h>
 #include <linux/kthread.h>
 #include <linux/skbuff.h>
 #include <linux/rtnetlink.h>
-#include <linux/visorbus.h>
 
+#include "visorbus.h"
 #include "iochannel.h"
 
 #define VISORNIC_INFINITE_RSP_WAIT 0
@@ -40,8 +48,7 @@ static struct visor_channeltype_descriptor visornic_channel_types[] = {
 	/* Note that the only channel type we expect to be reported by the
 	 * bus driver is the VISOR_VNIC channel.
 	 */
-	{ VISOR_VNIC_CHANNEL_GUID, "ultravnic", sizeof(struct channel_header),
-	  VISOR_VNIC_CHANNEL_VERSIONID },
+	{ VISOR_VNIC_CHANNEL_GUID, "ultravnic" },
 	{}
 };
 MODULE_DEVICE_TABLE(visorbus, visornic_channel_types);
@@ -849,7 +856,7 @@ static bool vnic_hit_low_watermark(struct visornic_devdata *devdata,
  *
  * Return: NETDEV_TX_OK.
  */
-static netdev_tx_t visornic_xmit(struct sk_buff *skb, struct net_device *netdev)
+static int visornic_xmit(struct sk_buff *skb, struct net_device *netdev)
 {
 	struct visornic_devdata *devdata;
 	int len, firstfraglen, padlen;
@@ -892,7 +899,7 @@ static netdev_tx_t visornic_xmit(struct sk_buff *skb, struct net_device *netdev)
 		return NETDEV_TX_OK;
 	}
 
-	if (len < ETH_MIN_PACKET_SIZE &&
+	if ((len < ETH_MIN_PACKET_SIZE) &&
 	    ((skb_end_pointer(skb) - skb->data) >= ETH_MIN_PACKET_SIZE)) {
 		/* pad the packet out to minimum size */
 		padlen = ETH_MIN_PACKET_SIZE - len;
@@ -1443,7 +1450,7 @@ static ssize_t info_debugfs_read(struct file *file, char __user *buf,
 	rcu_read_lock();
 	for_each_netdev_rcu(current->nsproxy->net_ns, dev) {
 		/* Only consider netdevs that are visornic, and are open */
-		if (dev->netdev_ops != &visornic_dev_ops ||
+		if ((dev->netdev_ops != &visornic_dev_ops) ||
 		    (!netif_queue_stopped(dev)))
 			continue;
 
@@ -1673,7 +1680,7 @@ static void service_resp_queue(struct uiscmdrsp *cmdrsp,
 			/* only call queue wake if we stopped it */
 			netdev = ((struct sk_buff *)cmdrsp->net.buf)->dev;
 			/* ASSERT netdev == vnicinfo->netdev; */
-			if (netdev == devdata->netdev &&
+			if ((netdev == devdata->netdev) &&
 			    netif_queue_stopped(netdev)) {
 				/* check if we have crossed the lower watermark
 				 * for netif_wake_queue()
@@ -1757,10 +1764,9 @@ static int visornic_poll(struct napi_struct *napi, int budget)
  * Main function of the vnic_incoming thread. Periodically check the response
  * queue and drain it if needed.
  */
-static void poll_for_irq(struct timer_list *t)
+static void poll_for_irq(unsigned long v)
 {
-	struct visornic_devdata *devdata = from_timer(devdata, t,
-						      irq_poll_timer);
+	struct visornic_devdata *devdata = (struct visornic_devdata *)v;
 
 	if (!visorchannel_signalempty(
 				   devdata->dev->visorchannel,
@@ -1891,7 +1897,8 @@ static int visornic_probe(struct visor_device *dev)
 	/* Let's start our threads to get responses */
 	netif_napi_add(netdev, &devdata->napi, visornic_poll, NAPI_WEIGHT);
 
-	timer_setup(&devdata->irq_poll_timer, poll_for_irq, 0);
+	setup_timer(&devdata->irq_poll_timer, poll_for_irq,
+		    (unsigned long)devdata);
 	/* Note: This time has to start running before the while
 	 * loop below because the napi routine is responsible for
 	 * setting enab_dis_acked
@@ -2126,19 +2133,30 @@ static struct visor_driver visornic_driver = {
  */
 static int visornic_init(void)
 {
-	int err;
+	struct dentry *ret;
+	int err = -ENOMEM;
 
 	visornic_debugfs_dir = debugfs_create_dir("visornic", NULL);
+	if (!visornic_debugfs_dir)
+		return err;
 
-	debugfs_create_file("info", 0400, visornic_debugfs_dir, NULL,
-			    &debugfs_info_fops);
-	debugfs_create_file("enable_ints", 0200, visornic_debugfs_dir, NULL,
-			    &debugfs_enable_ints_fops);
+	ret = debugfs_create_file("info", 0400, visornic_debugfs_dir, NULL,
+				  &debugfs_info_fops);
+	if (!ret)
+		goto cleanup_debugfs;
+	ret = debugfs_create_file("enable_ints", 0200, visornic_debugfs_dir,
+				  NULL, &debugfs_enable_ints_fops);
+	if (!ret)
+		goto cleanup_debugfs;
 
 	err = visorbus_register_visor_driver(&visornic_driver);
 	if (err)
-		debugfs_remove_recursive(visornic_debugfs_dir);
+		goto cleanup_debugfs;
 
+	return 0;
+
+cleanup_debugfs:
+	debugfs_remove_recursive(visornic_debugfs_dir);
 	return err;
 }
 

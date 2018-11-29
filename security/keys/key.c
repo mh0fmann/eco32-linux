@@ -460,7 +460,7 @@ static int __key_instantiate_and_link(struct key *key,
 			if (authkey)
 				key_revoke(authkey);
 
-			if (prep->expiry != TIME64_MAX) {
+			if (prep->expiry != TIME_T_MAX) {
 				key->expiry = prep->expiry;
 				key_schedule_gc(prep->expiry + key_gc_delay);
 			}
@@ -506,7 +506,7 @@ int key_instantiate_and_link(struct key *key,
 	prep.data = data;
 	prep.datalen = datalen;
 	prep.quotalen = key->type->def_datalen;
-	prep.expiry = TIME64_MAX;
+	prep.expiry = TIME_T_MAX;
 	if (key->type->preparse) {
 		ret = key->type->preparse(&prep);
 		if (ret < 0)
@@ -570,6 +570,7 @@ int key_reject_and_link(struct key *key,
 			struct key *authkey)
 {
 	struct assoc_array_edit *edit;
+	struct timespec now;
 	int ret, awaken, link_ret = 0;
 
 	key_check(key);
@@ -592,7 +593,8 @@ int key_reject_and_link(struct key *key,
 		/* mark the key as being negatively instantiated */
 		atomic_inc(&key->user->nikeys);
 		mark_key_instantiated(key, -error);
-		key->expiry = ktime_get_real_seconds() + timeout;
+		now = current_kernel_time();
+		key->expiry = now.tv_sec + timeout;
 		key_schedule_gc(key->expiry + key_gc_delay);
 
 		if (test_and_clear_bit(KEY_FLAG_USER_CONSTRUCT, &key->flags))
@@ -708,13 +710,16 @@ found_kernel_type:
 
 void key_set_timeout(struct key *key, unsigned timeout)
 {
-	time64_t expiry = 0;
+	struct timespec now;
+	time_t expiry = 0;
 
 	/* make the changes with the locks held to prevent races */
 	down_write(&key->sem);
 
-	if (timeout > 0)
-		expiry = ktime_get_real_seconds() + timeout;
+	if (timeout > 0) {
+		now = current_kernel_time();
+		expiry = now.tv_sec + timeout;
+	}
 
 	key->expiry = expiry;
 	key_schedule_gc(key->expiry + key_gc_delay);
@@ -833,6 +838,7 @@ key_ref_t key_create_or_update(key_ref_t keyring_ref,
 
 	key_check(keyring);
 
+	key_ref = ERR_PTR(-EPERM);
 	if (!(flags & KEY_ALLOC_BYPASS_RESTRICTION))
 		restrict_link = keyring->restrict_link;
 
@@ -844,7 +850,7 @@ key_ref_t key_create_or_update(key_ref_t keyring_ref,
 	prep.data = payload;
 	prep.datalen = plen;
 	prep.quotalen = index_key.type->def_datalen;
-	prep.expiry = TIME64_MAX;
+	prep.expiry = TIME_T_MAX;
 	if (index_key.type->preparse) {
 		ret = index_key.type->preparse(&prep);
 		if (ret < 0) {
@@ -988,7 +994,7 @@ int key_update(key_ref_t key_ref, const void *payload, size_t plen)
 	prep.data = payload;
 	prep.datalen = plen;
 	prep.quotalen = key->type->def_datalen;
-	prep.expiry = TIME64_MAX;
+	prep.expiry = TIME_T_MAX;
 	if (key->type->preparse) {
 		ret = key->type->preparse(&prep);
 		if (ret < 0)
@@ -1022,7 +1028,8 @@ EXPORT_SYMBOL(key_update);
  */
 void key_revoke(struct key *key)
 {
-	time64_t time;
+	struct timespec now;
+	time_t time;
 
 	key_check(key);
 
@@ -1037,7 +1044,8 @@ void key_revoke(struct key *key)
 		key->type->revoke(key);
 
 	/* set the death time to no more than the expiry time */
-	time = ktime_get_real_seconds();
+	now = current_kernel_time();
+	time = now.tv_sec;
 	if (key->revoked_at == 0 || key->revoked_at > time) {
 		key->revoked_at = time;
 		key_schedule_gc(key->revoked_at + key_gc_delay);

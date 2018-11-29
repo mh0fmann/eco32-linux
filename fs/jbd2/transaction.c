@@ -1,10 +1,13 @@
-// SPDX-License-Identifier: GPL-2.0+
 /*
  * linux/fs/jbd2/transaction.c
  *
  * Written by Stephen C. Tweedie <sct@redhat.com>, 1998
  *
  * Copyright 1998 Red Hat corp --- All Rights Reserved
+ *
+ * This file is part of the Linux kernel and is made available under
+ * the terms of the GNU General Public License, version 2, or at your
+ * option, any later version, incorporated herein by reference.
  *
  * Generic filesystem transaction handling code; part of the ext2fs
  * journaling system.
@@ -49,8 +52,10 @@ int __init jbd2_journal_init_transaction_cache(void)
 
 void jbd2_journal_destroy_transaction_cache(void)
 {
-	kmem_cache_destroy(transaction_cache);
-	transaction_cache = NULL;
+	if (transaction_cache) {
+		kmem_cache_destroy(transaction_cache);
+		transaction_cache = NULL;
+	}
 }
 
 void jbd2_journal_free_transaction(transaction_t *transaction)
@@ -490,10 +495,8 @@ void jbd2_journal_free_reserved(handle_t *handle)
 EXPORT_SYMBOL(jbd2_journal_free_reserved);
 
 /**
- * int jbd2_journal_start_reserved() - start reserved handle
+ * int jbd2_journal_start_reserved(handle_t *handle) - start reserved handle
  * @handle: handle to start
- * @type: for handle statistics
- * @line_no: for handle statistics
  *
  * Start handle that has been previously reserved with jbd2_journal_reserve().
  * This attaches @handle to the running transaction (or creates one if there's
@@ -530,7 +533,6 @@ int jbd2_journal_start_reserved(handle_t *handle, unsigned int type,
 	 */
 	ret = start_this_handle(journal, handle, GFP_NOFS);
 	if (ret < 0) {
-		handle->h_journal = journal;
 		jbd2_journal_free_reserved(handle);
 		return ret;
 	}
@@ -624,7 +626,6 @@ error_out:
  * int jbd2_journal_restart() - restart a handle .
  * @handle:  handle to restart
  * @nblocks: nr credits requested
- * @gfp_mask: memory allocation flags (for start_this_handle)
  *
  * Restart a handle for a multi-transaction filesystem
  * operation.
@@ -1361,13 +1362,6 @@ int jbd2_journal_dirty_metadata(handle_t *handle, struct buffer_head *bh)
 		if (jh->b_transaction == transaction &&
 		    jh->b_jlist != BJ_Metadata) {
 			jbd_lock_bh_state(bh);
-			if (jh->b_transaction == transaction &&
-			    jh->b_jlist != BJ_Metadata)
-				pr_err("JBD2: assertion failure: h_type=%u "
-				       "h_line_no=%u block_no=%llu jlist=%u\n",
-				       handle->h_type, handle->h_line_no,
-				       (unsigned long long) bh->b_blocknr,
-				       jh->b_jlist);
 			J_ASSERT_JH(jh, jh->b_transaction != transaction ||
 					jh->b_jlist == BJ_Metadata);
 			jbd_unlock_bh_state(bh);
@@ -1387,11 +1381,11 @@ int jbd2_journal_dirty_metadata(handle_t *handle, struct buffer_head *bh)
 		 * of the transaction. This needs to be done
 		 * once a transaction -bzzz
 		 */
+		jh->b_modified = 1;
 		if (handle->h_buffer_credits <= 0) {
 			ret = -ENOSPC;
 			goto out_unlock_bh;
 		}
-		jh->b_modified = 1;
 		handle->h_buffer_credits--;
 	}
 

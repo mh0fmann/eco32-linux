@@ -108,12 +108,10 @@ struct sock *nf_sk_lookup_slow_v4(struct net *net, const struct sk_buff *skb,
 	int doff = 0;
 
 	if (iph->protocol == IPPROTO_UDP || iph->protocol == IPPROTO_TCP) {
-		struct tcphdr _hdr;
-		struct udphdr *hp;
+		struct udphdr _hdr, *hp;
 
 		hp = skb_header_pointer(skb, ip_hdrlen(skb),
-					iph->protocol == IPPROTO_UDP ?
-					sizeof(*hp) : sizeof(_hdr), &_hdr);
+					sizeof(_hdr), &_hdr);
 		if (hp == NULL)
 			return NULL;
 

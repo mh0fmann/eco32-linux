@@ -27,10 +27,8 @@
 #include <core/client.h>
 #include <core/gpuobj.h>
 #include <core/notify.h>
-#include <subdev/mc.h>
 
 #include <nvif/event.h>
-#include <nvif/cl0080.h>
 #include <nvif/unpack.h>
 
 void
@@ -54,12 +52,6 @@ void
 nvkm_fifo_start(struct nvkm_fifo *fifo, unsigned long *flags)
 {
 	return fifo->func->start(fifo, flags);
-}
-
-void
-nvkm_fifo_fault(struct nvkm_fifo *fifo, struct nvkm_fault_data *info)
-{
-	return fifo->func->fault(fifo, info);
 }
 
 void
@@ -216,20 +208,6 @@ nvkm_fifo_uevent(struct nvkm_fifo *fifo)
 }
 
 static int
-nvkm_fifo_class_new_(struct nvkm_device *device,
-		     const struct nvkm_oclass *oclass, void *data, u32 size,
-		     struct nvkm_object **pobject)
-{
-	struct nvkm_fifo *fifo = nvkm_fifo(oclass->engine);
-	return fifo->func->class_new(fifo, oclass, data, size, pobject);
-}
-
-static const struct nvkm_device_oclass
-nvkm_fifo_class_ = {
-	.ctor = nvkm_fifo_class_new_,
-};
-
-static int
 nvkm_fifo_class_new(struct nvkm_device *device,
 		    const struct nvkm_oclass *oclass, void *data, u32 size,
 		    struct nvkm_object **pobject)
@@ -253,9 +231,13 @@ nvkm_fifo_class_get(struct nvkm_oclass *oclass, int index,
 	int c = 0;
 
 	if (fifo->func->class_get) {
-		int ret = fifo->func->class_get(fifo, index, oclass);
-		if (ret == 0)
-			*class = &nvkm_fifo_class_;
+		int ret = fifo->func->class_get(fifo, index, &sclass);
+		if (ret == 0) {
+			oclass->base = sclass->base;
+			oclass->engn = sclass;
+			*class = &nvkm_fifo_class;
+			return 0;
+		}
 		return ret;
 	}
 
@@ -288,32 +270,12 @@ nvkm_fifo_fini(struct nvkm_engine *engine, bool suspend)
 }
 
 static int
-nvkm_fifo_info(struct nvkm_engine *engine, u64 mthd, u64 *data)
-{
-	struct nvkm_fifo *fifo = nvkm_fifo(engine);
-	switch (mthd) {
-	case NV_DEVICE_FIFO_CHANNELS: *data = fifo->nr; return 0;
-	default:
-		if (fifo->func->info)
-			return fifo->func->info(fifo, mthd, data);
-		break;
-	}
-	return -ENOSYS;
-}
-
-static int
 nvkm_fifo_oneinit(struct nvkm_engine *engine)
 {
 	struct nvkm_fifo *fifo = nvkm_fifo(engine);
 	if (fifo->func->oneinit)
 		return fifo->func->oneinit(fifo);
 	return 0;
-}
-
-static void
-nvkm_fifo_preinit(struct nvkm_engine *engine)
-{
-	nvkm_mc_reset(engine->subdev.device, NVKM_ENGINE_FIFO);
 }
 
 static int
@@ -340,9 +302,7 @@ nvkm_fifo_dtor(struct nvkm_engine *engine)
 static const struct nvkm_engine_func
 nvkm_fifo = {
 	.dtor = nvkm_fifo_dtor,
-	.preinit = nvkm_fifo_preinit,
 	.oneinit = nvkm_fifo_oneinit,
-	.info = nvkm_fifo_info,
 	.init = nvkm_fifo_init,
 	.fini = nvkm_fifo_fini,
 	.intr = nvkm_fifo_intr,

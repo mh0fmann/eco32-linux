@@ -972,7 +972,6 @@ isar_pump_statev_fax(struct isar_ch *ch, u8 devt) {
 				break;
 			case PCTRL_CMD_FTM:
 				p1 = 2;
-				/* fall through */
 			case PCTRL_CMD_FTH:
 				send_mbox(ch->is, dps | ISAR_HIS_PUMPCTRL,
 					  PCTRL_CMD_SILON, 1, &p1);
@@ -1147,9 +1146,9 @@ mISDNisar_irq(struct isar_hw *isar)
 EXPORT_SYMBOL(mISDNisar_irq);
 
 static void
-ftimer_handler(struct timer_list *t)
+ftimer_handler(unsigned long data)
 {
-	struct isar_ch *ch = from_timer(ch, t, ftimer);
+	struct isar_ch *ch = (struct isar_ch *)data;
 
 	pr_debug("%s: ftimer flags %lx\n", ch->is->name, ch->bch.Flags);
 	test_and_clear_bit(FLG_FTI_RUN, &ch->bch.Flags);
@@ -1178,7 +1177,6 @@ setup_pump(struct isar_ch *ch) {
 			send_mbox(ch->is, dps | ISAR_HIS_PUMPCFG,
 				  PMOD_DTMF, 1, param);
 		}
-		/* fall through */
 	case ISDN_P_B_MODEM_ASYNC:
 		ctrl = PMOD_DATAMODEM;
 		if (test_bit(FLG_ORIGIN, &ch->bch.Flags)) {
@@ -1270,7 +1268,6 @@ setup_iom2(struct isar_ch *ch) {
 	case ISDN_P_B_MODEM_ASYNC:
 	case ISDN_P_B_T30_FAX:
 		cmsb |= IOM_CTRL_RCV;
-		/* fall through */
 	case ISDN_P_B_L2DTMF:
 		if (test_bit(FLG_DTMFSEND, &ch->bch.Flags))
 			cmsb |= IOM_CTRL_RCV;
@@ -1563,7 +1560,6 @@ isar_l2l1(struct mISDNchannel *ch, struct sk_buff *skb)
 				ich->is->name, hh->id);
 			ret = -EINVAL;
 		}
-		/* fall through */
 	default:
 		pr_info("%s: %s unknown prim(%x,%x)\n",
 			ich->is->name, __func__, hh->prim, hh->id);
@@ -1639,9 +1635,11 @@ init_isar(struct isar_hw *isar)
 	}
 	if (isar->version != 1)
 		return -EINVAL;
-	timer_setup(&isar->ch[0].ftimer, ftimer_handler, 0);
+	setup_timer(&isar->ch[0].ftimer, &ftimer_handler,
+		    (long)&isar->ch[0]);
 	test_and_set_bit(FLG_INITIALIZED, &isar->ch[0].bch.Flags);
-	timer_setup(&isar->ch[1].ftimer, ftimer_handler, 0);
+	setup_timer(&isar->ch[1].ftimer, &ftimer_handler,
+		    (long)&isar->ch[1]);
 	test_and_set_bit(FLG_INITIALIZED, &isar->ch[1].bch.Flags);
 	return 0;
 }

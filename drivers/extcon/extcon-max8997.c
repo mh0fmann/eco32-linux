@@ -1,9 +1,19 @@
-// SPDX-License-Identifier: GPL-2.0+
-//
-// extcon-max8997.c - MAX8997 extcon driver to support MAX8997 MUIC
-//
-//  Copyright (C) 2012 Samsung Electronics
-//  Donggeun Kim <dg77.kim@samsung.com>
+/*
+ * extcon-max8997.c - MAX8997 extcon driver to support MAX8997 MUIC
+ *
+ *  Copyright (C) 2012 Samsung Electronics
+ *  Donggeun Kim <dg77.kim@samsung.com>
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ */
 
 #include <linux/kernel.h>
 #include <linux/module.h>
@@ -15,7 +25,7 @@
 #include <linux/kobject.h>
 #include <linux/mfd/max8997.h>
 #include <linux/mfd/max8997-private.h>
-#include <linux/extcon-provider.h>
+#include <linux/extcon.h>
 #include <linux/irqdomain.h>
 
 #define	DEV_NAME			"max8997-muic"
@@ -194,7 +204,7 @@ static int max8997_muic_set_debounce_time(struct max8997_muic_info *info,
 static int max8997_muic_set_path(struct max8997_muic_info *info,
 		u8 val, bool attached)
 {
-	int ret;
+	int ret = 0;
 	u8 ctrl1, ctrl2 = 0;
 
 	if (attached)

@@ -14,6 +14,8 @@
 #include <linux/rtc.h>
 #include <linux/sysfs.h>
 
+#include "rtc-core.h"
+
 /*
  * Deprecated ABI compatibility, this should be removed at some point
  */
@@ -44,7 +46,7 @@ rtc_nvram_write(struct file *filp, struct kobject *kobj,
 	return nvmem_device_write(rtc->nvmem, off, count, buf);
 }
 
-static int rtc_nvram_register(struct rtc_device *rtc, size_t size)
+static int rtc_nvram_register(struct rtc_device *rtc)
 {
 	int err;
 
@@ -62,7 +64,7 @@ static int rtc_nvram_register(struct rtc_device *rtc, size_t size)
 
 	rtc->nvram->read = rtc_nvram_read;
 	rtc->nvram->write = rtc_nvram_write;
-	rtc->nvram->size = size;
+	rtc->nvram->size = rtc->nvmem_config->size;
 
 	err = sysfs_create_bin_file(&rtc->dev.parent->kobj,
 				    rtc->nvram);
@@ -82,28 +84,21 @@ static void rtc_nvram_unregister(struct rtc_device *rtc)
 /*
  * New ABI, uses nvmem
  */
-int rtc_nvmem_register(struct rtc_device *rtc,
-		       struct nvmem_config *nvmem_config)
+void rtc_nvmem_register(struct rtc_device *rtc)
 {
-	if (!IS_ERR_OR_NULL(rtc->nvmem))
-		return -EBUSY;
+	if (!rtc->nvmem_config)
+		return;
 
-	if (!nvmem_config)
-		return -ENODEV;
-
-	nvmem_config->dev = rtc->dev.parent;
-	nvmem_config->owner = rtc->owner;
-	rtc->nvmem = nvmem_register(nvmem_config);
-	if (IS_ERR(rtc->nvmem))
-		return PTR_ERR(rtc->nvmem);
+	rtc->nvmem_config->dev = &rtc->dev;
+	rtc->nvmem_config->owner = rtc->owner;
+	rtc->nvmem = nvmem_register(rtc->nvmem_config);
+	if (IS_ERR_OR_NULL(rtc->nvmem))
+		return;
 
 	/* Register the old ABI */
 	if (rtc->nvram_old_abi)
-		rtc_nvram_register(rtc, nvmem_config->size);
-
-	return 0;
+		rtc_nvram_register(rtc);
 }
-EXPORT_SYMBOL_GPL(rtc_nvmem_register);
 
 void rtc_nvmem_unregister(struct rtc_device *rtc)
 {

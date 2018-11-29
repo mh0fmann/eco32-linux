@@ -663,8 +663,6 @@ struct metapage *__get_metapage(struct inode *inode, unsigned long lblock,
 	} else {
 		INCREMENT(mpStat.pagealloc);
 		mp = alloc_metapage(GFP_NOFS);
-		if (!mp)
-			goto unlock;
 		mp->page = page;
 		mp->sb = inode->i_sb;
 		mp->flag = 0;
@@ -815,7 +813,7 @@ void __invalidate_metapages(struct inode *ip, s64 addr, int len)
 }
 
 #ifdef CONFIG_JFS_STATISTICS
-int jfs_mpstat_proc_show(struct seq_file *m, void *v)
+static int jfs_mpstat_proc_show(struct seq_file *m, void *v)
 {
 	seq_printf(m,
 		       "JFS Metapage statistics\n"
@@ -828,4 +826,16 @@ int jfs_mpstat_proc_show(struct seq_file *m, void *v)
 		       mpStat.lockwait);
 	return 0;
 }
+
+static int jfs_mpstat_proc_open(struct inode *inode, struct file *file)
+{
+	return single_open(file, jfs_mpstat_proc_show, NULL);
+}
+
+const struct file_operations jfs_mpstat_proc_fops = {
+	.open		= jfs_mpstat_proc_open,
+	.read		= seq_read,
+	.llseek		= seq_lseek,
+	.release	= single_release,
+};
 #endif

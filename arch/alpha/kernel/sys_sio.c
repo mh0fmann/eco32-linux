@@ -102,15 +102,6 @@ sio_pci_route(void)
 				   alpha_mv.sys.sio.route_tab);
 }
 
-static bool sio_pci_dev_irq_needs_level(const struct pci_dev *dev)
-{
-	if ((dev->class >> 16 == PCI_BASE_CLASS_BRIDGE) &&
-	    (dev->class >> 8 != PCI_CLASS_BRIDGE_PCMCIA))
-		return false;
-
-	return true;
-}
-
 static unsigned int __init
 sio_collect_irq_levels(void)
 {
@@ -119,7 +110,8 @@ sio_collect_irq_levels(void)
 
 	/* Iterate through the devices, collecting IRQ levels.  */
 	for_each_pci_dev(dev) {
-		if (!sio_pci_dev_irq_needs_level(dev))
+		if ((dev->class >> 16 == PCI_BASE_CLASS_BRIDGE) &&
+		    (dev->class >> 8 != PCI_CLASS_BRIDGE_PCMCIA))
 			continue;
 
 		if (dev->irq)
@@ -128,7 +120,8 @@ sio_collect_irq_levels(void)
 	return level_bits;
 }
 
-static void __sio_fixup_irq_levels(unsigned int level_bits, bool reset)
+static void __init
+sio_fixup_irq_levels(unsigned int level_bits)
 {
 	unsigned int old_level_bits;
 
@@ -146,19 +139,10 @@ static void __sio_fixup_irq_levels(unsigned int level_bits, bool reset)
 	 */
 	old_level_bits = inb(0x4d0) | (inb(0x4d1) << 8);
 
-	if (reset)
-		old_level_bits &= 0x71ff;
-
-	level_bits |= old_level_bits;
+	level_bits |= (old_level_bits & 0x71ff);
 
 	outb((level_bits >> 0) & 0xff, 0x4d0);
 	outb((level_bits >> 8) & 0xff, 0x4d1);
-}
-
-static inline void
-sio_fixup_irq_levels(unsigned int level_bits)
-{
-	__sio_fixup_irq_levels(level_bits, true);
 }
 
 static inline int
@@ -197,14 +181,7 @@ noname_map_irq(const struct pci_dev *dev, u8 slot, u8 pin)
 	const long min_idsel = 6, max_idsel = 14, irqs_per_slot = 5;
 	int irq = COMMON_TABLE_LOOKUP, tmp;
 	tmp = __kernel_extbl(alpha_mv.sys.sio.route_tab, irq);
-
-	irq = irq >= 0 ? tmp : -1;
-
-	/* Fixup IRQ level if an actual IRQ mapping is detected */
-	if (sio_pci_dev_irq_needs_level(dev) && irq >= 0)
-		__sio_fixup_irq_levels(1 << irq, false);
-
-	return irq;
+	return irq >= 0 ? tmp : -1;
 }
 
 static inline int

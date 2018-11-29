@@ -63,11 +63,7 @@ static struct notifier_block cosm_reboot = {
 /* Set system time from timespec value received from the host */
 static void cosm_set_time(struct cosm_msg *msg)
 {
-	struct timespec64 ts = {
-		.tv_sec = msg->timespec.tv_sec,
-		.tv_nsec = msg->timespec.tv_nsec,
-	};
-	int rc = do_settimeofday64(&ts);
+	int rc = do_settimeofday64(&msg->timespec);
 
 	if (rc)
 		dev_err(&client_spdev->dev, "%s: %d settimeofday rc %d\n",
@@ -164,7 +160,7 @@ static int cosm_scif_client(void *unused)
 
 	while (!kthread_should_stop()) {
 		pollepd.epd = client_epd;
-		pollepd.events = EPOLLIN;
+		pollepd.events = POLLIN;
 
 		rc = scif_poll(&pollepd, 1, COSM_HEARTBEAT_SEND_MSEC);
 		if (rc < 0) {
@@ -175,7 +171,7 @@ static int cosm_scif_client(void *unused)
 			continue;
 		}
 
-		if (pollepd.revents & EPOLLIN)
+		if (pollepd.revents & POLLIN)
 			cosm_client_recv();
 
 		msg.id = COSM_MSG_HEARTBEAT;

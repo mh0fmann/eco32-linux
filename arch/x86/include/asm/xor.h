@@ -1,4 +1,7 @@
-#ifndef _ASM_X86_XOR_H
+#ifdef CONFIG_KMEMCHECK
+/* kmemcheck doesn't handle MMX/SSE/SSE2 instructions */
+# include <asm-generic/xor.h>
+#elif !defined(_ASM_X86_XOR_H)
 #define _ASM_X86_XOR_H
 
 /*

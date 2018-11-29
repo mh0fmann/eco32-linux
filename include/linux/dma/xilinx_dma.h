@@ -27,7 +27,6 @@
  * @delay: Delay counter
  * @reset: Reset Channel
  * @ext_fsync: External Frame Sync source
- * @vflip_en:  Vertical Flip enable
  */
 struct xilinx_vdma_config {
 	int frm_dly;
@@ -40,7 +39,20 @@ struct xilinx_vdma_config {
 	int delay;
 	int reset;
 	int ext_fsync;
-	bool vflip_en;
+};
+
+/**
+ * enum xdma_ip_type: DMA IP type.
+ *
+ * XDMA_TYPE_AXIDMA: Axi dma ip.
+ * XDMA_TYPE_CDMA: Axi cdma ip.
+ * XDMA_TYPE_VDMA: Axi vdma ip.
+ *
+ */
+enum xdma_ip_type {
+	XDMA_TYPE_AXIDMA = 0,
+	XDMA_TYPE_CDMA,
+	XDMA_TYPE_VDMA,
 };
 
 int xilinx_vdma_channel_set_config(struct dma_chan *dchan,

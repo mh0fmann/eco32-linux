@@ -85,10 +85,9 @@ led_tg(struct sk_buff *skb, const struct xt_action_param *par)
 	return XT_CONTINUE;
 }
 
-static void led_timeout_callback(struct timer_list *t)
+static void led_timeout_callback(unsigned long data)
 {
-	struct xt_led_info_internal *ledinternal = from_timer(ledinternal, t,
-							      timer);
+	struct xt_led_info_internal *ledinternal = (struct xt_led_info_internal *)data;
 
 	led_trigger_event(&ledinternal->netfilter_led_trigger, LED_OFF);
 }
@@ -111,8 +110,10 @@ static int led_tg_check(const struct xt_tgchk_param *par)
 	struct xt_led_info_internal *ledinternal;
 	int err;
 
-	if (ledinfo->id[0] == '\0')
+	if (ledinfo->id[0] == '\0') {
+		pr_info("No 'id' parameter given.\n");
 		return -EINVAL;
+	}
 
 	mutex_lock(&xt_led_mutex);
 
@@ -136,14 +137,14 @@ static int led_tg_check(const struct xt_tgchk_param *par)
 
 	err = led_trigger_register(&ledinternal->netfilter_led_trigger);
 	if (err) {
-		pr_info_ratelimited("Trigger name is already in use.\n");
+		pr_err("Trigger name is already in use.\n");
 		goto exit_alloc;
 	}
 
-	/* Since the letinternal timer can be shared between multiple targets,
-	 * always set it up, even if the current target does not need it
-	 */
-	timer_setup(&ledinternal->timer, led_timeout_callback, 0);
+	/* See if we need to set up a timer */
+	if (ledinfo->delay > 0)
+		setup_timer(&ledinternal->timer, led_timeout_callback,
+			    (unsigned long)ledinternal);
 
 	list_add_tail(&ledinternal->list, &xt_led_triggers);
 
@@ -180,7 +181,8 @@ static void led_tg_destroy(const struct xt_tgdtor_param *par)
 
 	list_del(&ledinternal->list);
 
-	del_timer_sync(&ledinternal->timer);
+	if (ledinfo->delay > 0)
+		del_timer_sync(&ledinternal->timer);
 
 	led_trigger_unregister(&ledinternal->netfilter_led_trigger);
 
@@ -196,7 +198,6 @@ static struct xt_target led_tg_reg __read_mostly = {
 	.family		= NFPROTO_UNSPEC,
 	.target		= led_tg,
 	.targetsize	= sizeof(struct xt_led_info),
-	.usersize	= offsetof(struct xt_led_info, internal_data),
 	.checkentry	= led_tg_check,
 	.destroy	= led_tg_destroy,
 	.me		= THIS_MODULE,

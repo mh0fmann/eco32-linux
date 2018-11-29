@@ -1,6 +1,5 @@
-// SPDX-License-Identifier: GPL-2.0
 /*
- * Device Tree Source for the R-Car M1A (R8A77781) SoC
+ * Device Tree Source for Renesas r8a7778
  *
  * Copyright (C) 2013  Renesas Solutions Corp.
  * Copyright (C) 2013  Kuninori Morimoto <kuninori.morimoto.gx@renesas.com>
@@ -9,6 +8,10 @@
  *
  * Copyright (C) 2013 Renesas Solutions Corp.
  * Copyright (C) 2013 Simon Horman
+ *
+ * This file is licensed under the terms of the GNU General Public License
+ * version 2.  This program is licensed "as is" without any warranty of any
+ * kind, whether express or implied.
  */
 
 #include <dt-bindings/clock/r8a7778-clock.h>
@@ -30,7 +33,6 @@
 			compatible = "arm,cortex-a9";
 			reg = <0>;
 			clock-frequency = <800000000>;
-			clocks = <&z_clk>;
 		};
 	};
 
@@ -48,8 +50,7 @@
 	};
 
 	ether: ethernet@fde00000 {
-		compatible = "renesas,ether-r8a7778",
-			     "renesas,rcar-gen1-ether";
+		compatible = "renesas,ether-r8a7778";
 		reg = <0xfde00000 0x400>;
 		interrupts = <GIC_SPI 105 IRQ_TYPE_LEVEL_HIGH>;
 		clocks = <&mstp1_clks R8A7778_CLK_ETHER>;
@@ -87,7 +88,7 @@
 	};
 
 	gpio0: gpio@ffc40000 {
-		compatible = "renesas,gpio-r8a7778", "renesas,rcar-gen1-gpio";
+		compatible = "renesas,gpio-r8a7778", "renesas,gpio-rcar";
 		reg = <0xffc40000 0x2c>;
 		interrupts = <GIC_SPI 103 IRQ_TYPE_LEVEL_HIGH>;
 		#gpio-cells = <2>;
@@ -98,7 +99,7 @@
 	};
 
 	gpio1: gpio@ffc41000 {
-		compatible = "renesas,gpio-r8a7778", "renesas,rcar-gen1-gpio";
+		compatible = "renesas,gpio-r8a7778", "renesas,gpio-rcar";
 		reg = <0xffc41000 0x2c>;
 		interrupts = <GIC_SPI 103 IRQ_TYPE_LEVEL_HIGH>;
 		#gpio-cells = <2>;
@@ -109,7 +110,7 @@
 	};
 
 	gpio2: gpio@ffc42000 {
-		compatible = "renesas,gpio-r8a7778", "renesas,rcar-gen1-gpio";
+		compatible = "renesas,gpio-r8a7778", "renesas,gpio-rcar";
 		reg = <0xffc42000 0x2c>;
 		interrupts = <GIC_SPI 103 IRQ_TYPE_LEVEL_HIGH>;
 		#gpio-cells = <2>;
@@ -120,7 +121,7 @@
 	};
 
 	gpio3: gpio@ffc43000 {
-		compatible = "renesas,gpio-r8a7778", "renesas,rcar-gen1-gpio";
+		compatible = "renesas,gpio-r8a7778", "renesas,gpio-rcar";
 		reg = <0xffc43000 0x2c>;
 		interrupts = <GIC_SPI 103 IRQ_TYPE_LEVEL_HIGH>;
 		#gpio-cells = <2>;
@@ -131,7 +132,7 @@
 	};
 
 	gpio4: gpio@ffc44000 {
-		compatible = "renesas,gpio-r8a7778", "renesas,rcar-gen1-gpio";
+		compatible = "renesas,gpio-r8a7778", "renesas,gpio-rcar";
 		reg = <0xffc44000 0x2c>;
 		interrupts = <GIC_SPI 103 IRQ_TYPE_LEVEL_HIGH>;
 		#gpio-cells = <2>;
@@ -377,8 +378,7 @@
 	};
 
 	sdhi0: sd@ffe4c000 {
-		compatible = "renesas,sdhi-r8a7778",
-			     "renesas,rcar-gen1-sdhi";
+		compatible = "renesas,sdhi-r8a7778";
 		reg = <0xffe4c000 0x100>;
 		interrupts = <GIC_SPI 87 IRQ_TYPE_LEVEL_HIGH>;
 		clocks = <&mstp3_clks R8A7778_CLK_SDHI0>;
@@ -387,8 +387,7 @@
 	};
 
 	sdhi1: sd@ffe4d000 {
-		compatible = "renesas,sdhi-r8a7778",
-			     "renesas,rcar-gen1-sdhi";
+		compatible = "renesas,sdhi-r8a7778";
 		reg = <0xffe4d000 0x100>;
 		interrupts = <GIC_SPI 88 IRQ_TYPE_LEVEL_HIGH>;
 		clocks = <&mstp3_clks R8A7778_CLK_SDHI1>;
@@ -397,8 +396,7 @@
 	};
 
 	sdhi2: sd@ffe4f000 {
-		compatible = "renesas,sdhi-r8a7778",
-			     "renesas,rcar-gen1-sdhi";
+		compatible = "renesas,sdhi-r8a7778";
 		reg = <0xffe4f000 0x100>;
 		interrupts = <GIC_SPI 86 IRQ_TYPE_LEVEL_HIGH>;
 		clocks = <&mstp3_clks R8A7778_CLK_SDHI2>;

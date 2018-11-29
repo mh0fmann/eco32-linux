@@ -406,10 +406,10 @@ static void snd_mtpav_input_trigger(struct snd_rawmidi_substream *substream, int
  * timer interrupt for outputs
  */
 
-static void snd_mtpav_output_timer(struct timer_list *t)
+static void snd_mtpav_output_timer(unsigned long data)
 {
 	unsigned long flags;
-	struct mtpav *chip = from_timer(chip, t, timer);
+	struct mtpav *chip = (struct mtpav *)data;
 	int p;
 
 	spin_lock_irqsave(&chip->spinlock, flags);
@@ -707,7 +707,8 @@ static int snd_mtpav_probe(struct platform_device *dev)
 	mtp_card->share_irq = 0;
 	mtp_card->inmidistate = 0;
 	mtp_card->outmidihwport = 0xffffffff;
-	timer_setup(&mtp_card->timer, snd_mtpav_output_timer, 0);
+	setup_timer(&mtp_card->timer, snd_mtpav_output_timer,
+		    (unsigned long) mtp_card);
 
 	card->private_free = snd_mtpav_free;
 

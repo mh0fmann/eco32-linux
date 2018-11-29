@@ -1,6 +1,18 @@
-// SPDX-License-Identifier: GPL-2.0
 /*
  * Copyright (C) 2006 Jens Axboe <axboe@kernel.dk>
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
  *
  */
 #include <linux/kernel.h>
@@ -54,8 +66,7 @@ static struct tracer_flags blk_tracer_flags = {
 };
 
 /* Global reference count of probes */
-static DEFINE_MUTEX(blk_probe_mutex);
-static int blk_probes_ref;
+static atomic_t blk_probes_ref = ATOMIC_INIT(0);
 
 static void blk_register_tracepoints(void);
 static void blk_unregister_tracepoints(void);
@@ -318,29 +329,14 @@ static void blk_trace_free(struct blk_trace *bt)
 	kfree(bt);
 }
 
-static void get_probe_ref(void)
-{
-	mutex_lock(&blk_probe_mutex);
-	if (++blk_probes_ref == 1)
-		blk_register_tracepoints();
-	mutex_unlock(&blk_probe_mutex);
-}
-
-static void put_probe_ref(void)
-{
-	mutex_lock(&blk_probe_mutex);
-	if (!--blk_probes_ref)
-		blk_unregister_tracepoints();
-	mutex_unlock(&blk_probe_mutex);
-}
-
 static void blk_trace_cleanup(struct blk_trace *bt)
 {
 	blk_trace_free(bt);
-	put_probe_ref();
+	if (atomic_dec_and_test(&blk_probes_ref))
+		blk_unregister_tracepoints();
 }
 
-static int __blk_trace_remove(struct request_queue *q)
+int blk_trace_remove(struct request_queue *q)
 {
 	struct blk_trace *bt;
 
@@ -352,17 +348,6 @@ static int __blk_trace_remove(struct request_queue *q)
 		blk_trace_cleanup(bt);
 
 	return 0;
-}
-
-int blk_trace_remove(struct request_queue *q)
-{
-	int ret;
-
-	mutex_lock(&q->blk_trace_mutex);
-	ret = __blk_trace_remove(q);
-	mutex_unlock(&q->blk_trace_mutex);
-
-	return ret;
 }
 EXPORT_SYMBOL_GPL(blk_trace_remove);
 
@@ -482,9 +467,6 @@ static int do_blk_trace_setup(struct request_queue *q, char *name, dev_t dev,
 	if (!buts->buf_size || !buts->buf_nr)
 		return -EINVAL;
 
-	if (!blk_debugfs_root)
-		return -ENOENT;
-
 	strncpy(buts->name, name, BLKTRACE_BDEV_SIZE);
 	buts->name[BLKTRACE_BDEV_SIZE - 1] = '\0';
 
@@ -508,6 +490,9 @@ static int do_blk_trace_setup(struct request_queue *q, char *name, dev_t dev,
 		goto err;
 
 	ret = -ENOENT;
+
+	if (!blk_debugfs_root)
+		goto err;
 
 	dir = debugfs_lookup(buts->name, blk_debugfs_root);
 	if (!dir)
@@ -553,7 +538,8 @@ static int do_blk_trace_setup(struct request_queue *q, char *name, dev_t dev,
 	if (cmpxchg(&q->blk_trace, NULL, bt))
 		goto err;
 
-	get_probe_ref();
+	if (atomic_inc_return(&blk_probes_ref) == 1)
+		blk_register_tracepoints();
 
 	ret = 0;
 err:
@@ -564,8 +550,9 @@ err:
 	return ret;
 }
 
-static int __blk_trace_setup(struct request_queue *q, char *name, dev_t dev,
-			     struct block_device *bdev, char __user *arg)
+int blk_trace_setup(struct request_queue *q, char *name, dev_t dev,
+		    struct block_device *bdev,
+		    char __user *arg)
 {
 	struct blk_user_trace_setup buts;
 	int ret;
@@ -579,23 +566,10 @@ static int __blk_trace_setup(struct request_queue *q, char *name, dev_t dev,
 		return ret;
 
 	if (copy_to_user(arg, &buts, sizeof(buts))) {
-		__blk_trace_remove(q);
+		blk_trace_remove(q);
 		return -EFAULT;
 	}
 	return 0;
-}
-
-int blk_trace_setup(struct request_queue *q, char *name, dev_t dev,
-		    struct block_device *bdev,
-		    char __user *arg)
-{
-	int ret;
-
-	mutex_lock(&q->blk_trace_mutex);
-	ret = __blk_trace_setup(q, name, dev, bdev, arg);
-	mutex_unlock(&q->blk_trace_mutex);
-
-	return ret;
 }
 EXPORT_SYMBOL_GPL(blk_trace_setup);
 
@@ -625,7 +599,7 @@ static int compat_blk_trace_setup(struct request_queue *q, char *name,
 		return ret;
 
 	if (copy_to_user(arg, &buts.name, ARRAY_SIZE(buts.name))) {
-		__blk_trace_remove(q);
+		blk_trace_remove(q);
 		return -EFAULT;
 	}
 
@@ -633,7 +607,7 @@ static int compat_blk_trace_setup(struct request_queue *q, char *name,
 }
 #endif
 
-static int __blk_trace_startstop(struct request_queue *q, int start)
+int blk_trace_startstop(struct request_queue *q, int start)
 {
 	int ret;
 	struct blk_trace *bt = q->blk_trace;
@@ -672,17 +646,6 @@ static int __blk_trace_startstop(struct request_queue *q, int start)
 
 	return ret;
 }
-
-int blk_trace_startstop(struct request_queue *q, int start)
-{
-	int ret;
-
-	mutex_lock(&q->blk_trace_mutex);
-	ret = __blk_trace_startstop(q, start);
-	mutex_unlock(&q->blk_trace_mutex);
-
-	return ret;
-}
 EXPORT_SYMBOL_GPL(blk_trace_startstop);
 
 /*
@@ -713,7 +676,7 @@ int blk_trace_ioctl(struct block_device *bdev, unsigned cmd, char __user *arg)
 	switch (cmd) {
 	case BLKTRACESETUP:
 		bdevname(bdev, b);
-		ret = __blk_trace_setup(q, b, bdev->bd_dev, bdev, arg);
+		ret = blk_trace_setup(q, b, bdev->bd_dev, bdev, arg);
 		break;
 #if defined(CONFIG_COMPAT) && defined(CONFIG_X86_64)
 	case BLKTRACESETUP32:
@@ -724,10 +687,10 @@ int blk_trace_ioctl(struct block_device *bdev, unsigned cmd, char __user *arg)
 	case BLKTRACESTART:
 		start = 1;
 	case BLKTRACESTOP:
-		ret = __blk_trace_startstop(q, start);
+		ret = blk_trace_startstop(q, start);
 		break;
 	case BLKTRACETEARDOWN:
-		ret = __blk_trace_remove(q);
+		ret = blk_trace_remove(q);
 		break;
 	default:
 		ret = -ENOTTY;
@@ -745,14 +708,10 @@ int blk_trace_ioctl(struct block_device *bdev, unsigned cmd, char __user *arg)
  **/
 void blk_trace_shutdown(struct request_queue *q)
 {
-	mutex_lock(&q->blk_trace_mutex);
-
 	if (q->blk_trace) {
-		__blk_trace_startstop(q, 0);
-		__blk_trace_remove(q);
+		blk_trace_startstop(q, 0);
+		blk_trace_remove(q);
 	}
-
-	mutex_unlock(&q->blk_trace_mutex);
 }
 
 #ifdef CONFIG_BLK_CGROUP
@@ -860,7 +819,7 @@ static void blk_add_trace_rq_complete(void *ignore, struct request *rq,
  *
  **/
 static void blk_add_trace_bio(struct request_queue *q, struct bio *bio,
-			      u32 what, int error)
+			      u32 what, int error, union kernfs_node_id *cgid)
 {
 	struct blk_trace *bt = q->blk_trace;
 
@@ -868,21 +827,22 @@ static void blk_add_trace_bio(struct request_queue *q, struct bio *bio,
 		return;
 
 	__blk_add_trace(bt, bio->bi_iter.bi_sector, bio->bi_iter.bi_size,
-			bio_op(bio), bio->bi_opf, what, error, 0, NULL,
-			blk_trace_bio_get_cgid(q, bio));
+			bio_op(bio), bio->bi_opf, what, error, 0, NULL, cgid);
 }
 
 static void blk_add_trace_bio_bounce(void *ignore,
 				     struct request_queue *q, struct bio *bio)
 {
-	blk_add_trace_bio(q, bio, BLK_TA_BOUNCE, 0);
+	blk_add_trace_bio(q, bio, BLK_TA_BOUNCE, 0,
+			  blk_trace_bio_get_cgid(q, bio));
 }
 
 static void blk_add_trace_bio_complete(void *ignore,
 				       struct request_queue *q, struct bio *bio,
 				       int error)
 {
-	blk_add_trace_bio(q, bio, BLK_TA_COMPLETE, error);
+	blk_add_trace_bio(q, bio, BLK_TA_COMPLETE, error,
+			  blk_trace_bio_get_cgid(q, bio));
 }
 
 static void blk_add_trace_bio_backmerge(void *ignore,
@@ -890,7 +850,8 @@ static void blk_add_trace_bio_backmerge(void *ignore,
 					struct request *rq,
 					struct bio *bio)
 {
-	blk_add_trace_bio(q, bio, BLK_TA_BACKMERGE, 0);
+	blk_add_trace_bio(q, bio, BLK_TA_BACKMERGE, 0,
+			 blk_trace_bio_get_cgid(q, bio));
 }
 
 static void blk_add_trace_bio_frontmerge(void *ignore,
@@ -898,13 +859,15 @@ static void blk_add_trace_bio_frontmerge(void *ignore,
 					 struct request *rq,
 					 struct bio *bio)
 {
-	blk_add_trace_bio(q, bio, BLK_TA_FRONTMERGE, 0);
+	blk_add_trace_bio(q, bio, BLK_TA_FRONTMERGE, 0,
+			  blk_trace_bio_get_cgid(q, bio));
 }
 
 static void blk_add_trace_bio_queue(void *ignore,
 				    struct request_queue *q, struct bio *bio)
 {
-	blk_add_trace_bio(q, bio, BLK_TA_QUEUE, 0);
+	blk_add_trace_bio(q, bio, BLK_TA_QUEUE, 0,
+			  blk_trace_bio_get_cgid(q, bio));
 }
 
 static void blk_add_trace_getrq(void *ignore,
@@ -912,7 +875,8 @@ static void blk_add_trace_getrq(void *ignore,
 				struct bio *bio, int rw)
 {
 	if (bio)
-		blk_add_trace_bio(q, bio, BLK_TA_GETRQ, 0);
+		blk_add_trace_bio(q, bio, BLK_TA_GETRQ, 0,
+				  blk_trace_bio_get_cgid(q, bio));
 	else {
 		struct blk_trace *bt = q->blk_trace;
 
@@ -928,7 +892,8 @@ static void blk_add_trace_sleeprq(void *ignore,
 				  struct bio *bio, int rw)
 {
 	if (bio)
-		blk_add_trace_bio(q, bio, BLK_TA_SLEEPRQ, 0);
+		blk_add_trace_bio(q, bio, BLK_TA_SLEEPRQ, 0,
+				  blk_trace_bio_get_cgid(q, bio));
 	else {
 		struct blk_trace *bt = q->blk_trace;
 
@@ -1593,7 +1558,9 @@ static int blk_trace_remove_queue(struct request_queue *q)
 	if (bt == NULL)
 		return -EINVAL;
 
-	put_probe_ref();
+	if (atomic_dec_and_test(&blk_probes_ref))
+		blk_unregister_tracepoints();
+
 	blk_trace_free(bt);
 	return 0;
 }
@@ -1624,7 +1591,8 @@ static int blk_trace_setup_queue(struct request_queue *q,
 	if (cmpxchg(&q->blk_trace, NULL, bt))
 		goto free_bt;
 
-	get_probe_ref();
+	if (atomic_inc_return(&blk_probes_ref) == 1)
+		blk_register_tracepoints();
 	return 0;
 
 free_bt:
@@ -1829,10 +1797,6 @@ static ssize_t sysfs_blk_trace_attr_store(struct device *dev,
 	mutex_lock(&q->blk_trace_mutex);
 
 	if (attr == &dev_attr_enable) {
-		if (!!value == !!q->blk_trace) {
-			ret = 0;
-			goto out_unlock_bdev;
-		}
 		if (value)
 			ret = blk_trace_setup_queue(q, bdev);
 		else

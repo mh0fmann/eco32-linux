@@ -102,10 +102,10 @@ int tulip_refill_rx(struct net_device *dev)
 
 #ifdef CONFIG_TULIP_NAPI
 
-void oom_timer(struct timer_list *t)
+void oom_timer(unsigned long data)
 {
-	struct tulip_private *tp = from_timer(tp, t, oom_timer);
-
+        struct net_device *dev = (struct net_device *)data;
+	struct tulip_private *tp = netdev_priv(dev);
 	napi_schedule(&tp->napi);
 }
 

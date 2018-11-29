@@ -146,18 +146,29 @@ unsigned char IPA_PDU_HEADER[] = {
 };
 EXPORT_SYMBOL_GPL(IPA_PDU_HEADER);
 
-struct ipa_rc_msg {
-	enum qeth_ipa_return_codes rc;
-	const char *msg;
+unsigned char WRITE_CCW[] = {
+	0x01, CCW_FLAG_SLI, 0, 0,
+	0, 0, 0, 0
 };
 
-static const struct ipa_rc_msg qeth_ipa_rc_msg[] = {
+unsigned char READ_CCW[] = {
+	0x02, CCW_FLAG_SLI, 0, 0,
+	0, 0, 0, 0
+};
+
+
+struct ipa_rc_msg {
+	enum qeth_ipa_return_codes rc;
+	char *msg;
+};
+
+static struct ipa_rc_msg qeth_ipa_rc_msg[] = {
 	{IPA_RC_SUCCESS,		"success"},
 	{IPA_RC_NOTSUPP,		"Command not supported"},
 	{IPA_RC_IP_TABLE_FULL,		"Add Addr IP Table Full - ipv6"},
 	{IPA_RC_UNKNOWN_ERROR,		"IPA command failed - reason unknown"},
 	{IPA_RC_UNSUPPORTED_COMMAND,	"Command not supported"},
-	{IPA_RC_VNICC_OOSEQ,		"Command issued out of sequence"},
+	{IPA_RC_TRACE_ALREADY_ACTIVE,	"trace already active"},
 	{IPA_RC_INVALID_FORMAT,		"invalid format or length"},
 	{IPA_RC_DUP_IPV6_REMOTE, "ipv6 address already registered remote"},
 	{IPA_RC_SBP_IQD_NOT_CONFIGURED,	"Not configured for bridgeport"},
@@ -183,7 +194,6 @@ static const struct ipa_rc_msg qeth_ipa_rc_msg[] = {
 	{IPA_RC_L2_INVALID_VLAN_ID,	"L2 invalid vlan id"},
 	{IPA_RC_L2_DUP_VLAN_ID,		"L2 duplicate vlan id"},
 	{IPA_RC_L2_VLAN_ID_NOT_FOUND,	"L2 vlan id not found"},
-	{IPA_RC_VNICC_VNICBP,		"VNIC is BridgePort"},
 	{IPA_RC_SBP_OSA_NOT_CONFIGURED,	"Not configured for bridgeport"},
 	{IPA_RC_SBP_OSA_OS_MISMATCH,	"OS mismatch"},
 	{IPA_RC_SBP_OSA_ANO_DEV_PRIMARY, "Primary bridgeport exists already"},
@@ -219,23 +229,23 @@ static const struct ipa_rc_msg qeth_ipa_rc_msg[] = {
 
 
 
-const char *qeth_get_ipa_msg(enum qeth_ipa_return_codes rc)
+char *qeth_get_ipa_msg(enum qeth_ipa_return_codes rc)
 {
-	int x;
-
-	for (x = 0; x < ARRAY_SIZE(qeth_ipa_rc_msg) - 1; x++)
-		if (qeth_ipa_rc_msg[x].rc == rc)
-			return qeth_ipa_rc_msg[x].msg;
+	int x = 0;
+	qeth_ipa_rc_msg[sizeof(qeth_ipa_rc_msg) /
+			sizeof(struct ipa_rc_msg) - 1].rc = rc;
+	while (qeth_ipa_rc_msg[x].rc != rc)
+		x++;
 	return qeth_ipa_rc_msg[x].msg;
 }
 
 
 struct ipa_cmd_names {
 	enum qeth_ipa_cmds cmd;
-	const char *name;
+	char *name;
 };
 
-static const struct ipa_cmd_names qeth_ipa_cmd_names[] = {
+static struct ipa_cmd_names qeth_ipa_cmd_names[] = {
 	{IPA_CMD_STARTLAN,	"startlan"},
 	{IPA_CMD_STOPLAN,	"stoplan"},
 	{IPA_CMD_SETVMAC,	"setvmac"},
@@ -244,7 +254,6 @@ static const struct ipa_cmd_names qeth_ipa_cmd_names[] = {
 	{IPA_CMD_DELGMAC,	"delgmac"},
 	{IPA_CMD_SETVLAN,	"setvlan"},
 	{IPA_CMD_DELVLAN,	"delvlan"},
-	{IPA_CMD_VNICC,		"vnic_characteristics"},
 	{IPA_CMD_SETBRIDGEPORT_OSA,	"set_bridge_port(osa)"},
 	{IPA_CMD_SETCCID,	"setccid"},
 	{IPA_CMD_DELCCID,	"delccid"},
@@ -267,12 +276,13 @@ static const struct ipa_cmd_names qeth_ipa_cmd_names[] = {
 	{IPA_CMD_UNKNOWN,	"unknown"},
 };
 
-const char *qeth_get_ipa_cmd_name(enum qeth_ipa_cmds cmd)
+char *qeth_get_ipa_cmd_name(enum qeth_ipa_cmds cmd)
 {
-	int x;
-
-	for (x = 0; x < ARRAY_SIZE(qeth_ipa_cmd_names) - 1; x++)
-		if (qeth_ipa_cmd_names[x].cmd == cmd)
-			return qeth_ipa_cmd_names[x].name;
+	int x = 0;
+	qeth_ipa_cmd_names[
+		sizeof(qeth_ipa_cmd_names) /
+			sizeof(struct ipa_cmd_names)-1].cmd = cmd;
+	while (qeth_ipa_cmd_names[x].cmd != cmd)
+		x++;
 	return qeth_ipa_cmd_names[x].name;
 }

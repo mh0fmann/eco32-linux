@@ -32,7 +32,6 @@ static void thread_map__reset(struct thread_map *map, int start, int nr)
 	size_t size = (nr - start) * sizeof(map->map[0]);
 
 	memset(&map->map[start], 0, size);
-	map->err_thread = -1;
 }
 
 static struct thread_map *thread_map__realloc(struct thread_map *map, int nr)
@@ -93,7 +92,7 @@ struct thread_map *thread_map__new_by_tid(pid_t tid)
 	return threads;
 }
 
-static struct thread_map *__thread_map__new_all_cpus(uid_t uid)
+struct thread_map *thread_map__new_by_uid(uid_t uid)
 {
 	DIR *proc;
 	int max_threads = 32, items, i;
@@ -114,6 +113,7 @@ static struct thread_map *__thread_map__new_all_cpus(uid_t uid)
 	while ((dirent = readdir(proc)) != NULL) {
 		char *end;
 		bool grow = false;
+		struct stat st;
 		pid_t pid = strtol(dirent->d_name, &end, 10);
 
 		if (*end) /* only interested in proper numerical dirents */
@@ -121,12 +121,11 @@ static struct thread_map *__thread_map__new_all_cpus(uid_t uid)
 
 		snprintf(path, sizeof(path), "/proc/%s", dirent->d_name);
 
-		if (uid != UINT_MAX) {
-			struct stat st;
+		if (stat(path, &st) != 0)
+			continue;
 
-			if (stat(path, &st) != 0 || st.st_uid != uid)
-				continue;
-		}
+		if (st.st_uid != uid)
+			continue;
 
 		snprintf(path, sizeof(path), "/proc/%d/task", pid);
 		items = scandir(path, &namelist, filter, NULL);
@@ -177,16 +176,6 @@ out_free_namelist:
 out_free_closedir:
 	zfree(&threads);
 	goto out_closedir;
-}
-
-struct thread_map *thread_map__new_all_cpus(void)
-{
-	return __thread_map__new_all_cpus(UINT_MAX);
-}
-
-struct thread_map *thread_map__new_by_uid(uid_t uid)
-{
-	return __thread_map__new_all_cpus(uid);
 }
 
 struct thread_map *thread_map__new(pid_t pid, pid_t tid, uid_t uid)
@@ -324,16 +313,13 @@ out_free_threads:
 }
 
 struct thread_map *thread_map__new_str(const char *pid, const char *tid,
-				       uid_t uid, bool all_threads)
+				       uid_t uid)
 {
 	if (pid)
 		return thread_map__new_by_pid_str(pid);
 
 	if (!tid && uid != UINT_MAX)
 		return thread_map__new_by_uid(uid);
-
-	if (all_threads)
-		return thread_map__new_all_cpus();
 
 	return thread_map__new_by_tid_str(tid);
 }

@@ -34,7 +34,7 @@
 #include "iscsi_target_erl2.h"
 #include "iscsi_target.h"
 
-#define OFFLOAD_BUF_SIZE	32768U
+#define OFFLOAD_BUF_SIZE	32768
 
 /*
  *	Used to dump excess datain payload for certain error recovery
@@ -56,7 +56,7 @@ int iscsit_dump_data_payload(
 	if (conn->sess->sess_ops->RDMAExtensions)
 		return 0;
 
-	length = min(buf_len, OFFLOAD_BUF_SIZE);
+	length = (buf_len > OFFLOAD_BUF_SIZE) ? OFFLOAD_BUF_SIZE : buf_len;
 
 	buf = kzalloc(length, GFP_ATOMIC);
 	if (!buf) {
@@ -67,7 +67,8 @@ int iscsit_dump_data_payload(
 	memset(&iov, 0, sizeof(struct kvec));
 
 	while (offset < buf_len) {
-		size = min(buf_len - offset, length);
+		size = ((offset + length) > buf_len) ?
+			(buf_len - offset) : length;
 
 		iov.iov_len = size;
 		iov.iov_base = buf;
@@ -1147,11 +1148,11 @@ static int iscsit_set_dataout_timeout_values(
 /*
  *	NOTE: Called from interrupt (timer) context.
  */
-void iscsit_handle_dataout_timeout(struct timer_list *t)
+static void iscsit_handle_dataout_timeout(unsigned long data)
 {
 	u32 pdu_length = 0, pdu_offset = 0;
 	u32 r2t_length = 0, r2t_offset = 0;
-	struct iscsi_cmd *cmd = from_timer(cmd, t, dataout_timer);
+	struct iscsi_cmd *cmd = (struct iscsi_cmd *) data;
 	struct iscsi_conn *conn = cmd->conn;
 	struct iscsi_session *sess = NULL;
 	struct iscsi_node_attrib *na;
@@ -1169,21 +1170,15 @@ void iscsit_handle_dataout_timeout(struct timer_list *t)
 	na = iscsit_tpg_get_node_attrib(sess);
 
 	if (!sess->sess_ops->ErrorRecoveryLevel) {
-		pr_err("Unable to recover from DataOut timeout while"
-			" in ERL=0, closing iSCSI connection for I_T Nexus"
-			" %s,i,0x%6phN,%s,t,0x%02x\n",
-			sess->sess_ops->InitiatorName, sess->isid,
-			sess->tpg->tpg_tiqn->tiqn, (u32)sess->tpg->tpgt);
+		pr_debug("Unable to recover from DataOut timeout while"
+			" in ERL=0.\n");
 		goto failure;
 	}
 
 	if (++cmd->dataout_timeout_retries == na->dataout_timeout_retries) {
-		pr_err("Command ITT: 0x%08x exceeded max retries"
-			" for DataOUT timeout %u, closing iSCSI connection for"
-			" I_T Nexus %s,i,0x%6phN,%s,t,0x%02x\n",
-			cmd->init_task_tag, na->dataout_timeout_retries,
-			sess->sess_ops->InitiatorName, sess->isid,
-			sess->tpg->tpg_tiqn->tiqn, (u32)sess->tpg->tpgt);
+		pr_debug("Command ITT: 0x%08x exceeded max retries"
+			" for DataOUT timeout %u, closing iSCSI connection.\n",
+			cmd->init_task_tag, na->dataout_timeout_retries);
 		goto failure;
 	}
 
@@ -1230,7 +1225,6 @@ void iscsit_handle_dataout_timeout(struct timer_list *t)
 
 failure:
 	spin_unlock_bh(&cmd->dataout_timeout_lock);
-	iscsit_fill_cxn_timeout_err_stats(sess);
 	iscsit_cause_connection_reinstatement(conn, 0);
 	iscsit_dec_conn_usage_count(conn);
 }
@@ -1270,9 +1264,13 @@ void iscsit_start_dataout_timer(
 	pr_debug("Starting DataOUT timer for ITT: 0x%08x on"
 		" CID: %hu.\n", cmd->init_task_tag, conn->cid);
 
+	init_timer(&cmd->dataout_timer);
+	cmd->dataout_timer.expires = (get_jiffies_64() + na->dataout_timeout * HZ);
+	cmd->dataout_timer.data = (unsigned long)cmd;
+	cmd->dataout_timer.function = iscsit_handle_dataout_timeout;
 	cmd->dataout_timer_flags &= ~ISCSI_TF_STOP;
 	cmd->dataout_timer_flags |= ISCSI_TF_RUNNING;
-	mod_timer(&cmd->dataout_timer, jiffies + na->dataout_timeout * HZ);
+	add_timer(&cmd->dataout_timer);
 }
 
 void iscsit_stop_dataout_timer(struct iscsi_cmd *cmd)

@@ -8,12 +8,11 @@
  * under the terms of the GNU General Public License as published by the Free
  * Software Foundation, version 2.
  *
- * see Documentation/media/dvb-drivers/dvb-usb.rst for more information
+ * see Documentation/dvb/README.dvb-usb for more information
  */
 #include <linux/init.h>
 #include <linux/string.h>
 #include <linux/slab.h>
-#include <linux/kernel.h>
 
 #include "friio.h"
 
@@ -133,10 +132,10 @@ static int jdvbt90502_pll_set_freq(struct jdvbt90502_state *state, u32 freq)
 	u32 f;
 
 	deb_fe("%s: freq=%d, step=%d\n", __func__, freq,
-	       state->frontend.ops.info.frequency_stepsize_hz);
+	       state->frontend.ops.info.frequency_stepsize);
 	/* freq -> oscilator frequency conversion. */
 	/* freq: 473,000,000 + n*6,000,000 [+ 142857 (center freq. shift)] */
-	f = freq / state->frontend.ops.info.frequency_stepsize_hz;
+	f = freq / state->frontend.ops.info.frequency_stepsize;
 	/* add 399[1/7 MHZ] = 57MHz for the IF  */
 	f += 399;
 	/* add center frequency shift if necessary */
@@ -262,6 +261,28 @@ static int jdvbt90502_read_signal_strength(struct dvb_frontend *fe,
 	return 0;
 }
 
+
+/* filter out un-supported properties to notify users */
+static int jdvbt90502_set_property(struct dvb_frontend *fe,
+				   struct dtv_property *tvp)
+{
+	int r = 0;
+
+	switch (tvp->cmd) {
+	case DTV_DELIVERY_SYSTEM:
+		if (tvp->u.data != SYS_ISDBT)
+			r = -EINVAL;
+		break;
+	case DTV_CLEAR:
+	case DTV_TUNE:
+	case DTV_FREQUENCY:
+		break;
+	default:
+		r = -EINVAL;
+	}
+	return r;
+}
+
 static int jdvbt90502_set_frontend(struct dvb_frontend *fe)
 {
 	struct dtv_frontend_properties *p = &fe->dtv_property_cache;
@@ -298,7 +319,7 @@ static int jdvbt90502_set_frontend(struct dvb_frontend *fe)
 }
 
 
-/*
+/**
  * (reg, val) commad list to initialize this module.
  *  captured on a Windows box.
  */
@@ -341,6 +362,8 @@ static u8 init_code[][2] = {
 	{0x76, 0x0C},
 };
 
+static const int init_code_len = sizeof(init_code) / sizeof(u8[2]);
+
 static int jdvbt90502_init(struct dvb_frontend *fe)
 {
 	int i = -1;
@@ -354,7 +377,7 @@ static int jdvbt90502_init(struct dvb_frontend *fe)
 	msg.addr = state->config.demod_address;
 	msg.flags = 0;
 	msg.len = 2;
-	for (i = 0; i < ARRAY_SIZE(init_code); i++) {
+	for (i = 0; i < init_code_len; i++) {
 		msg.buf = init_code[i];
 		ret = i2c_transfer(state->i2c, &msg, 1);
 		if (ret != 1)
@@ -413,9 +436,10 @@ static const struct dvb_frontend_ops jdvbt90502_ops = {
 	.delsys = { SYS_ISDBT },
 	.info = {
 		.name			= "Comtech JDVBT90502 ISDB-T",
-		.frequency_min_hz	= 473000000, /* UHF 13ch, center */
-		.frequency_max_hz	= 767142857, /* UHF 62ch, center */
-		.frequency_stepsize_hz	= JDVBT90502_PLL_CLK / JDVBT90502_PLL_DIVIDER,
+		.frequency_min		= 473000000, /* UHF 13ch, center */
+		.frequency_max		= 767142857, /* UHF 62ch, center */
+		.frequency_stepsize	= JDVBT90502_PLL_CLK / JDVBT90502_PLL_DIVIDER,
+		.frequency_tolerance	= 0,
 
 		/* NOTE: this driver ignores all parameters but frequency. */
 		.caps = FE_CAN_INVERSION_AUTO |
@@ -432,6 +456,8 @@ static const struct dvb_frontend_ops jdvbt90502_ops = {
 
 	.init = jdvbt90502_init,
 	.write = _jdvbt90502_write,
+
+	.set_property = jdvbt90502_set_property,
 
 	.set_frontend = jdvbt90502_set_frontend,
 

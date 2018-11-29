@@ -2,10 +2,8 @@
 #ifndef __NVKM_SW_CHAN_H__
 #define __NVKM_SW_CHAN_H__
 #define nvkm_sw_chan(p) container_of((p), struct nvkm_sw_chan, object)
-#include <core/object.h>
-#include <core/event.h>
-
 #include "priv.h"
+#include <core/event.h>
 
 struct nvkm_sw_chan {
 	const struct nvkm_sw_chan_func *func;

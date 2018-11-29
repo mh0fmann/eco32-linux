@@ -274,14 +274,20 @@ static const struct rpc_authops generic_auth_ops = {
 
 static struct rpc_auth generic_auth = {
 	.au_ops = &generic_auth_ops,
-	.au_count = REFCOUNT_INIT(1),
+	.au_count = ATOMIC_INIT(0),
 };
 
 static bool generic_key_to_expire(struct rpc_cred *cred)
 {
 	struct auth_cred *acred = &container_of(cred, struct generic_cred,
 						gc_base)->acred;
-	return test_bit(RPC_CRED_KEY_EXPIRE_SOON, &acred->ac_flags);
+	bool ret;
+
+	get_rpccred(cred);
+	ret = test_bit(RPC_CRED_KEY_EXPIRE_SOON, &acred->ac_flags);
+	put_rpccred(cred);
+
+	return ret;
 }
 
 static const struct rpc_credops generic_credops = {

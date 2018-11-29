@@ -247,7 +247,8 @@ static struct shash_alg sha1_alg = {
 		.cra_name		=	"sha1",
 		.cra_driver_name	=	"sha1-padlock",
 		.cra_priority		=	PADLOCK_CRA_PRIORITY,
-		.cra_flags		=	CRYPTO_ALG_NEED_FALLBACK,
+		.cra_flags		=	CRYPTO_ALG_TYPE_SHASH |
+						CRYPTO_ALG_NEED_FALLBACK,
 		.cra_blocksize		=	SHA1_BLOCK_SIZE,
 		.cra_ctxsize		=	sizeof(struct padlock_sha_ctx),
 		.cra_module		=	THIS_MODULE,
@@ -270,7 +271,8 @@ static struct shash_alg sha256_alg = {
 		.cra_name		=	"sha256",
 		.cra_driver_name	=	"sha256-padlock",
 		.cra_priority		=	PADLOCK_CRA_PRIORITY,
-		.cra_flags		=	CRYPTO_ALG_NEED_FALLBACK,
+		.cra_flags		=	CRYPTO_ALG_TYPE_SHASH |
+						CRYPTO_ALG_NEED_FALLBACK,
 		.cra_blocksize		=	SHA256_BLOCK_SIZE,
 		.cra_ctxsize		=	sizeof(struct padlock_sha_ctx),
 		.cra_module		=	THIS_MODULE,
@@ -482,6 +484,7 @@ static struct shash_alg sha1_alg_nano = {
 		.cra_name		=	"sha1",
 		.cra_driver_name	=	"sha1-padlock-nano",
 		.cra_priority		=	PADLOCK_CRA_PRIORITY,
+		.cra_flags		=	CRYPTO_ALG_TYPE_SHASH,
 		.cra_blocksize		=	SHA1_BLOCK_SIZE,
 		.cra_module		=	THIS_MODULE,
 	}
@@ -500,12 +503,13 @@ static struct shash_alg sha256_alg_nano = {
 		.cra_name		=	"sha256",
 		.cra_driver_name	=	"sha256-padlock-nano",
 		.cra_priority		=	PADLOCK_CRA_PRIORITY,
+		.cra_flags		=	CRYPTO_ALG_TYPE_SHASH,
 		.cra_blocksize		=	SHA256_BLOCK_SIZE,
 		.cra_module		=	THIS_MODULE,
 	}
 };
 
-static const struct x86_cpu_id padlock_sha_ids[] = {
+static struct x86_cpu_id padlock_sha_ids[] = {
 	X86_FEATURE_MATCH(X86_FEATURE_PHE),
 	{}
 };

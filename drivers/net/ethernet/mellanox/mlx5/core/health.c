@@ -59,23 +59,20 @@ enum {
 };
 
 enum {
+	MLX5_NIC_IFC_FULL		= 0,
+	MLX5_NIC_IFC_DISABLED		= 1,
+	MLX5_NIC_IFC_NO_DRAM_NIC	= 2,
+	MLX5_NIC_IFC_INVALID		= 3
+};
+
+enum {
 	MLX5_DROP_NEW_HEALTH_WORK,
 	MLX5_DROP_NEW_RECOVERY_WORK,
 };
 
-u8 mlx5_get_nic_state(struct mlx5_core_dev *dev)
+static u8 get_nic_state(struct mlx5_core_dev *dev)
 {
 	return (ioread32be(&dev->iseg->cmdq_addr_l_sz) >> 8) & 3;
-}
-
-void mlx5_set_nic_state(struct mlx5_core_dev *dev, u8 state)
-{
-	u32 cur_cmdq_addr_l_sz;
-
-	cur_cmdq_addr_l_sz = ioread32be(&dev->iseg->cmdq_addr_l_sz);
-	iowrite32be((cur_cmdq_addr_l_sz & 0xFFFFF000) |
-		    state << MLX5_NIC_IFC_OFFSET,
-		    &dev->iseg->cmdq_addr_l_sz);
 }
 
 static void trigger_cmd_completions(struct mlx5_core_dev *dev)
@@ -106,7 +103,7 @@ static int in_fatal(struct mlx5_core_dev *dev)
 	struct mlx5_core_health *health = &dev->priv.health;
 	struct health_buffer __iomem *h = health->health;
 
-	if (mlx5_get_nic_state(dev) == MLX5_NIC_IFC_DISABLED)
+	if (get_nic_state(dev) == MLX5_NIC_IFC_DISABLED)
 		return 1;
 
 	if (ioread32be(&h->fw_ver) == 0xffffffff)
@@ -127,7 +124,7 @@ void mlx5_enter_error_state(struct mlx5_core_dev *dev, bool force)
 		trigger_cmd_completions(dev);
 	}
 
-	mlx5_core_event(dev, MLX5_DEV_EVENT_SYS_ERROR, 1);
+	mlx5_core_event(dev, MLX5_DEV_EVENT_SYS_ERROR, 0);
 	mlx5_core_err(dev, "end\n");
 
 unlock:
@@ -136,7 +133,7 @@ unlock:
 
 static void mlx5_handle_bad_state(struct mlx5_core_dev *dev)
 {
-	u8 nic_interface = mlx5_get_nic_state(dev);
+	u8 nic_interface = get_nic_state(dev);
 
 	switch (nic_interface) {
 	case MLX5_NIC_IFC_FULL:
@@ -171,7 +168,7 @@ static void health_recover(struct work_struct *work)
 	priv = container_of(health, struct mlx5_priv, health);
 	dev = container_of(priv, struct mlx5_core_dev, priv);
 
-	nic_state = mlx5_get_nic_state(dev);
+	nic_state = get_nic_state(dev);
 	if (nic_state == MLX5_NIC_IFC_INVALID) {
 		dev_err(&dev->pdev->dev, "health recovery flow aborted since the nic state is invalid\n");
 		return;
@@ -244,7 +241,7 @@ static void print_health_info(struct mlx5_core_dev *dev)
 	u32 fw;
 	int i;
 
-	/* If the syndrome is 0, the device is OK and no need to print buffer */
+	/* If the syndrom is 0, the device is OK and no need to print buffer */
 	if (!ioread8(&h->synd))
 		return;
 
@@ -288,9 +285,9 @@ void mlx5_trigger_health_work(struct mlx5_core_dev *dev)
 	spin_unlock_irqrestore(&health->wq_lock, flags);
 }
 
-static void poll_health(struct timer_list *t)
+static void poll_health(unsigned long data)
 {
-	struct mlx5_core_dev *dev = from_timer(dev, t, priv.health.timer);
+	struct mlx5_core_dev *dev = (struct mlx5_core_dev *)data;
 	struct mlx5_core_health *health = &dev->priv.health;
 	u32 count;
 
@@ -323,28 +320,22 @@ void mlx5_start_health_poll(struct mlx5_core_dev *dev)
 {
 	struct mlx5_core_health *health = &dev->priv.health;
 
-	timer_setup(&health->timer, poll_health, 0);
+	init_timer(&health->timer);
 	health->sick = 0;
 	clear_bit(MLX5_DROP_NEW_HEALTH_WORK, &health->flags);
 	clear_bit(MLX5_DROP_NEW_RECOVERY_WORK, &health->flags);
 	health->health = &dev->iseg->health;
 	health->health_counter = &dev->iseg->health_counter;
 
+	health->timer.data = (unsigned long)dev;
+	health->timer.function = poll_health;
 	health->timer.expires = round_jiffies(jiffies + MLX5_HEALTH_POLL_INTERVAL);
 	add_timer(&health->timer);
 }
 
-void mlx5_stop_health_poll(struct mlx5_core_dev *dev, bool disable_health)
+void mlx5_stop_health_poll(struct mlx5_core_dev *dev)
 {
 	struct mlx5_core_health *health = &dev->priv.health;
-	unsigned long flags;
-
-	if (disable_health) {
-		spin_lock_irqsave(&health->wq_lock, flags);
-		set_bit(MLX5_DROP_NEW_HEALTH_WORK, &health->flags);
-		set_bit(MLX5_DROP_NEW_RECOVERY_WORK, &health->flags);
-		spin_unlock_irqrestore(&health->wq_lock, flags);
-	}
 
 	del_timer_sync(&health->timer);
 }

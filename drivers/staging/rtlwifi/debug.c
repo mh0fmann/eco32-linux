@@ -1,7 +1,18 @@
-// SPDX-License-Identifier: GPL-2.0
 /******************************************************************************
  *
  * Copyright(c) 2009-2012  Realtek Corporation.
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms of version 2 of the GNU General Public License as
+ * published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
+ * more details.
+ *
+ * The full GNU General Public License is included in this distribution in the
+ * file called LICENSE.
  *
  * Contact Information:
  * wlanfae <wlanfae@realtek.com>
@@ -22,7 +33,7 @@ void _rtl_dbg_trace(struct rtl_priv *rtlpriv, u64 comp, int level,
 		    const char *fmt, ...)
 {
 	if (unlikely((comp & rtlpriv->cfg->mod_params->debug_mask) &&
-		     level <= rtlpriv->cfg->mod_params->debug_level)) {
+		     (level <= rtlpriv->cfg->mod_params->debug_level))) {
 		struct va_format vaf;
 		va_list args;
 
@@ -41,7 +52,7 @@ void _rtl_dbg_print(struct rtl_priv *rtlpriv, u64 comp, int level,
 		    const char *fmt, ...)
 {
 	if (unlikely((comp & rtlpriv->cfg->mod_params->debug_mask) &&
-		     level <= rtlpriv->cfg->mod_params->debug_level)) {
+		     (level <= rtlpriv->cfg->mod_params->debug_level))) {
 		struct va_format vaf;
 		va_list args;
 
@@ -95,7 +106,7 @@ static const struct file_operations file_ops_common = {
 	.open = dl_debug_open_common,
 	.read = seq_read,
 	.llseek = seq_lseek,
-	.release = single_release,
+	.release = seq_release,
 };
 
 static int rtl_debug_get_mac_page(struct seq_file *m, void *v)
@@ -116,10 +127,10 @@ static int rtl_debug_get_mac_page(struct seq_file *m, void *v)
 	return 0;
 }
 
-#define RTL_DEBUG_IMPL_MAC_SERIES(page, addr)			\
-static struct rtl_debugfs_priv rtl_debug_priv_mac_ ##page = {	\
-	.cb_read = rtl_debug_get_mac_page,			\
-	.cb_data = addr,					\
+#define RTL_DEBUG_IMPL_MAC_SERIES(page, addr)		\
+struct rtl_debugfs_priv rtl_debug_priv_mac_ ##page = {	\
+	.cb_read = rtl_debug_get_mac_page,		\
+	.cb_data = addr,				\
 }
 
 RTL_DEBUG_IMPL_MAC_SERIES(0, 0x0000);
@@ -158,10 +169,10 @@ static int rtl_debug_get_bb_page(struct seq_file *m, void *v)
 	return 0;
 }
 
-#define RTL_DEBUG_IMPL_BB_SERIES(page, addr)			\
-static struct rtl_debugfs_priv rtl_debug_priv_bb_ ##page = {	\
-	.cb_read = rtl_debug_get_bb_page,			\
-	.cb_data = addr,					\
+#define RTL_DEBUG_IMPL_BB_SERIES(page, addr)		\
+struct rtl_debugfs_priv rtl_debug_priv_bb_ ##page = {	\
+	.cb_read = rtl_debug_get_bb_page,		\
+	.cb_data = addr,				\
 }
 
 RTL_DEBUG_IMPL_BB_SERIES(8, 0x0800);
@@ -205,10 +216,10 @@ static int rtl_debug_get_reg_rf(struct seq_file *m, void *v)
 	return 0;
 }
 
-#define RTL_DEBUG_IMPL_RF_SERIES(page, addr)			\
-static struct rtl_debugfs_priv rtl_debug_priv_rf_ ##page = {	\
-	.cb_read = rtl_debug_get_reg_rf,			\
-	.cb_data = addr,					\
+#define RTL_DEBUG_IMPL_RF_SERIES(page, addr)		\
+struct rtl_debugfs_priv rtl_debug_priv_rf_ ##page = {	\
+	.cb_read = rtl_debug_get_reg_rf,		\
+	.cb_data = addr,				\
 }
 
 RTL_DEBUG_IMPL_RF_SERIES(a, RF90_PATH_A);
@@ -260,10 +271,10 @@ static int rtl_debug_get_cam_register(struct seq_file *m, void *v)
 	return 0;
 }
 
-#define RTL_DEBUG_IMPL_CAM_SERIES(page, addr)			\
-static struct rtl_debugfs_priv rtl_debug_priv_cam_ ##page = {	\
-	.cb_read = rtl_debug_get_cam_register,			\
-	.cb_data = addr,					\
+#define RTL_DEBUG_IMPL_CAM_SERIES(page, addr)		\
+struct rtl_debugfs_priv rtl_debug_priv_cam_ ##page = {	\
+	.cb_read = rtl_debug_get_cam_register,		\
+	.cb_data = addr,				\
 }
 
 RTL_DEBUG_IMPL_CAM_SERIES(1, 0);
@@ -485,20 +496,18 @@ static int rtl_debug_get_phydm_cmd(struct seq_file *m, void *v)
 
 static int rtl_debugfs_open_rw(struct inode *inode, struct file *filp)
 {
-	int ret = 0;
-
 	if (filp->f_mode & FMODE_READ)
-		ret = single_open(filp, rtl_debug_get_common, inode->i_private);
+		single_open(filp, rtl_debug_get_common, inode->i_private);
 	else
 		filp->private_data = inode->i_private;
 
-	return ret;
+	return 0;
 }
 
 static int rtl_debugfs_close_rw(struct inode *inode, struct file *filp)
 {
 	if (filp->f_mode == FMODE_READ)
-		single_release(inode, filp);
+		seq_release(inode, filp);
 
 	return 0;
 }
@@ -521,9 +530,12 @@ static const struct file_operations file_ops_common_rw = {
 #define RTL_DEBUGFS_ADD_CORE(name, mode, fopname)			   \
 	do {								   \
 		rtl_debug_priv_ ##name.rtlpriv = rtlpriv;		   \
-		debugfs_create_file(#name, mode, parent,		   \
-				    &rtl_debug_priv_ ##name,		   \
-				    &file_ops_ ##fopname);		   \
+		if (!debugfs_create_file(#name, mode,			   \
+					 parent, &rtl_debug_priv_ ##name,  \
+					 &file_ops_ ##fopname))		   \
+			pr_err("Unable to initialize debugfs:%s/%s\n",	   \
+			       rtlpriv->dbg.debugfs_name,		   \
+			       #name);					   \
 	} while (0)
 
 #define RTL_DEBUGFS_ADD(name)						   \

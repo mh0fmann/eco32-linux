@@ -19,7 +19,8 @@
 #include <linux/netdevice.h>
 
 struct aq_vec_s {
-	const struct aq_hw_ops *aq_hw_ops;
+	struct aq_obj_s header;
+	struct aq_hw_ops *aq_hw_ops;
 	struct aq_hw_s *aq_hw;
 	struct aq_nic_s *aq_nic;
 	unsigned int tx_rings;
@@ -35,12 +36,12 @@ struct aq_vec_s {
 static int aq_vec_poll(struct napi_struct *napi, int budget)
 {
 	struct aq_vec_s *self = container_of(napi, struct aq_vec_s, napi);
-	unsigned int sw_tail_old = 0U;
 	struct aq_ring_s *ring = NULL;
-	bool was_tx_cleaned = true;
-	unsigned int i = 0U;
 	int work_done = 0;
 	int err = 0;
+	unsigned int i = 0U;
+	unsigned int sw_tail_old = 0U;
+	bool was_tx_cleaned = false;
 
 	if (!self) {
 		err = -EINVAL;
@@ -57,8 +58,9 @@ static int aq_vec_poll(struct napi_struct *napi, int budget)
 
 			if (ring[AQ_VEC_TX_ID].sw_head !=
 			    ring[AQ_VEC_TX_ID].hw_head) {
-				was_tx_cleaned = aq_ring_tx_clean(&ring[AQ_VEC_TX_ID]);
+				aq_ring_tx_clean(&ring[AQ_VEC_TX_ID]);
 				aq_ring_update_queue_state(&ring[AQ_VEC_TX_ID]);
+				was_tx_cleaned = true;
 			}
 
 			err = self->aq_hw_ops->hw_ring_rx_receive(self->aq_hw,
@@ -89,7 +91,7 @@ static int aq_vec_poll(struct napi_struct *napi, int budget)
 			}
 		}
 
-		if (!was_tx_cleaned)
+		if (was_tx_cleaned)
 			work_done = budget;
 
 		if (work_done < budget) {
@@ -164,7 +166,7 @@ err_exit:
 	return self;
 }
 
-int aq_vec_init(struct aq_vec_s *self, const struct aq_hw_ops *aq_hw_ops,
+int aq_vec_init(struct aq_vec_s *self, struct aq_hw_ops *aq_hw_ops,
 		struct aq_hw_s *aq_hw)
 {
 	struct aq_ring_s *ring = NULL;

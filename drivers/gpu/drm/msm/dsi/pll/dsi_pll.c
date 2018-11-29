@@ -166,9 +166,6 @@ struct msm_dsi_pll *msm_dsi_pll_init(struct platform_device *pdev,
 	case MSM_DSI_PHY_14NM:
 		pll = msm_dsi_pll_14nm_init(pdev, id);
 		break;
-	case MSM_DSI_PHY_10NM:
-		pll = msm_dsi_pll_10nm_init(pdev, id);
-		break;
 	default:
 		pll = ERR_PTR(-ENXIO);
 		break;
@@ -176,7 +173,7 @@ struct msm_dsi_pll *msm_dsi_pll_init(struct platform_device *pdev,
 
 	if (IS_ERR(pll)) {
 		dev_err(dev, "%s: failed to init DSI PLL\n", __func__);
-		return pll;
+		return NULL;
 	}
 
 	pll->type = type;

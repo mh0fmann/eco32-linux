@@ -187,7 +187,7 @@ int phylink_gen_key(struct hci_conn *conn, u8 *data, u8 *len, u8 *type)
 
 	/* Legacy key */
 	if (conn->key_type < 3) {
-		bt_dev_err(hdev, "legacy key type %d", conn->key_type);
+		BT_ERR("Legacy key type %d", conn->key_type);
 		return -EACCES;
 	}
 
@@ -207,7 +207,7 @@ int phylink_gen_key(struct hci_conn *conn, u8 *data, u8 *len, u8 *type)
 	/* Derive Generic AMP Link Key (gamp) */
 	err = hmac_sha256(keybuf, HCI_AMP_LINK_KEY_SIZE, "gamp", 4, gamp_key);
 	if (err) {
-		bt_dev_err(hdev, "could not derive Generic AMP Key: err %d", err);
+		BT_ERR("Could not derive Generic AMP Key: err %d", err);
 		return err;
 	}
 

@@ -38,8 +38,7 @@ bool rtl92se_rx_query_desc(struct ieee80211_hw *hw, struct rtl_stats *stats,
 			   struct sk_buff *skb);
 void rtl92se_set_desc(struct ieee80211_hw *hw, u8 *pdesc, bool istx,
 		      u8 desc_name, u8 *val);
-u64 rtl92se_get_desc(struct ieee80211_hw *hw,
-		     u8 *desc, bool istx, u8 desc_name);
+u32 rtl92se_get_desc(u8 *pdesc, bool istx, u8 desc_name);
 void rtl92se_tx_polling(struct ieee80211_hw *hw, u8 hw_queue);
 
 #endif

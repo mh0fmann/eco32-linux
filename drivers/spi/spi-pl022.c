@@ -1490,8 +1490,10 @@ static void do_polling_transfer(struct pl022 *pl022)
 	struct spi_message *message = NULL;
 	struct spi_transfer *transfer = NULL;
 	struct spi_transfer *previous = NULL;
+	struct chip_data *chip;
 	unsigned long time, timeout;
 
+	chip = pl022->cur_chip;
 	message = pl022->cur_msg;
 
 	while (message->state != STATE_DONE) {
@@ -2133,7 +2135,7 @@ static int pl022_probe(struct amba_device *adev, const struct amba_id *id)
 	pl022->master_info = platform_info;
 	pl022->adev = adev;
 	pl022->vendor = id->data;
-	pl022->chipselects = devm_kcalloc(dev, num_cs, sizeof(int),
+	pl022->chipselects = devm_kzalloc(dev, num_cs * sizeof(int),
 					  GFP_KERNEL);
 	if (!pl022->chipselects) {
 		status = -ENOMEM;
@@ -2323,8 +2325,10 @@ static int pl022_suspend(struct device *dev)
 	int ret;
 
 	ret = spi_master_suspend(pl022->master);
-	if (ret)
+	if (ret) {
+		dev_warn(dev, "cannot suspend master\n");
 		return ret;
+	}
 
 	ret = pm_runtime_force_suspend(dev);
 	if (ret) {
@@ -2349,7 +2353,9 @@ static int pl022_resume(struct device *dev)
 
 	/* Start the queue running */
 	ret = spi_master_resume(pl022->master);
-	if (!ret)
+	if (ret)
+		dev_err(dev, "problem starting queue (%d)\n", ret);
+	else
 		dev_dbg(dev, "resumed\n");
 
 	return ret;

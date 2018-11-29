@@ -1,4 +1,3 @@
-// SPDX-License-Identifier: (GPL-2.0+ OR BSD-3-Clause)
 /*
  * hcd_ddma.c - DesignWare HS OTG Controller descriptor DMA routines
  *
@@ -185,19 +184,19 @@ static void dwc2_per_sched_enable(struct dwc2_hsotg *hsotg, u32 fr_list_en)
 
 	spin_lock_irqsave(&hsotg->lock, flags);
 
-	hcfg = dwc2_readl(hsotg, HCFG);
+	hcfg = dwc2_readl(hsotg->regs + HCFG);
 	if (hcfg & HCFG_PERSCHEDENA) {
 		/* already enabled */
 		spin_unlock_irqrestore(&hsotg->lock, flags);
 		return;
 	}
 
-	dwc2_writel(hsotg, hsotg->frame_list_dma, HFLBADDR);
+	dwc2_writel(hsotg->frame_list_dma, hsotg->regs + HFLBADDR);
 
 	hcfg &= ~HCFG_FRLISTEN_MASK;
 	hcfg |= fr_list_en | HCFG_PERSCHEDENA;
 	dev_vdbg(hsotg->dev, "Enabling Periodic schedule\n");
-	dwc2_writel(hsotg, hcfg, HCFG);
+	dwc2_writel(hcfg, hsotg->regs + HCFG);
 
 	spin_unlock_irqrestore(&hsotg->lock, flags);
 }
@@ -209,7 +208,7 @@ static void dwc2_per_sched_disable(struct dwc2_hsotg *hsotg)
 
 	spin_lock_irqsave(&hsotg->lock, flags);
 
-	hcfg = dwc2_readl(hsotg, HCFG);
+	hcfg = dwc2_readl(hsotg->regs + HCFG);
 	if (!(hcfg & HCFG_PERSCHEDENA)) {
 		/* already disabled */
 		spin_unlock_irqrestore(&hsotg->lock, flags);
@@ -218,7 +217,7 @@ static void dwc2_per_sched_disable(struct dwc2_hsotg *hsotg)
 
 	hcfg &= ~HCFG_PERSCHEDENA;
 	dev_vdbg(hsotg->dev, "Disabling Periodic schedule\n");
-	dwc2_writel(hsotg, hcfg, HCFG);
+	dwc2_writel(hcfg, hsotg->regs + HCFG);
 
 	spin_unlock_irqrestore(&hsotg->lock, flags);
 }
@@ -332,7 +331,6 @@ static void dwc2_release_channel_ddma(struct dwc2_hsotg *hsotg,
  *
  * @hsotg: The HCD state structure for the DWC OTG controller
  * @qh:    The QH to init
- * @mem_flags: Indicates the type of memory allocation
  *
  * Return: 0 if successful, negative error code otherwise
  *

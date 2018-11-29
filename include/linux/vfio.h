@@ -145,8 +145,7 @@ extern struct vfio_info_cap_header *vfio_info_cap_add(
 extern void vfio_info_cap_shift(struct vfio_info_cap *caps, size_t offset);
 
 extern int vfio_info_add_capability(struct vfio_info_cap *caps,
-				    struct vfio_info_cap_header *cap,
-				    size_t size);
+				    int cap_type_id, void *cap_type);
 
 extern int vfio_set_irqs_validate_and_prepare(struct vfio_irq_set *hdr,
 					      int num_irqs, int max_irq_type,

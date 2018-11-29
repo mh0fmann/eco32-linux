@@ -168,6 +168,9 @@ static void smsc_get_strings(struct phy_device *phydev, u8 *data)
 	}
 }
 
+#ifndef UINT64_MAX
+#define UINT64_MAX              (u64)(~((u64)0))
+#endif
 static u64 smsc_get_stat(struct phy_device *phydev, int i)
 {
 	struct smsc_hw_stat stat = smsc_hw_stats[i];
@@ -176,7 +179,7 @@ static u64 smsc_get_stat(struct phy_device *phydev, int i)
 
 	val = phy_read(phydev, stat.reg);
 	if (val < 0)
-		ret = U64_MAX;
+		ret = UINT64_MAX;
 	else
 		ret = val;
 
@@ -224,6 +227,8 @@ static struct phy_driver smsc_phy_driver[] = {
 	.probe		= smsc_phy_probe,
 
 	/* basic functions */
+	.config_aneg	= genphy_config_aneg,
+	.read_status	= genphy_read_status,
 	.config_init	= smsc_phy_config_init,
 	.soft_reset	= smsc_phy_reset,
 
@@ -244,6 +249,8 @@ static struct phy_driver smsc_phy_driver[] = {
 	.probe		= smsc_phy_probe,
 
 	/* basic functions */
+	.config_aneg	= genphy_config_aneg,
+	.read_status	= genphy_read_status,
 	.config_init	= smsc_phy_config_init,
 	.soft_reset	= smsc_phy_reset,
 
@@ -269,6 +276,7 @@ static struct phy_driver smsc_phy_driver[] = {
 	.probe		= smsc_phy_probe,
 
 	/* basic functions */
+	.config_aneg	= genphy_config_aneg,
 	.read_status	= lan87xx_read_status,
 	.config_init	= smsc_phy_config_init,
 	.soft_reset	= smsc_phy_reset,
@@ -295,6 +303,8 @@ static struct phy_driver smsc_phy_driver[] = {
 	.probe		= smsc_phy_probe,
 
 	/* basic functions */
+	.config_aneg	= genphy_config_aneg,
+	.read_status	= genphy_read_status,
 	.config_init	= lan911x_config_init,
 
 	/* IRQ related */
@@ -309,11 +319,12 @@ static struct phy_driver smsc_phy_driver[] = {
 	.name		= "SMSC LAN8710/LAN8720",
 
 	.features	= PHY_BASIC_FEATURES,
-	.flags		= PHY_HAS_INTERRUPT | PHY_RST_AFTER_CLK_EN,
+	.flags		= PHY_HAS_INTERRUPT,
 
 	.probe		= smsc_phy_probe,
 
 	/* basic functions */
+	.config_aneg	= genphy_config_aneg,
 	.read_status	= lan87xx_read_status,
 	.config_init	= smsc_phy_config_init,
 	.soft_reset	= smsc_phy_reset,
@@ -340,6 +351,7 @@ static struct phy_driver smsc_phy_driver[] = {
 	.probe		= smsc_phy_probe,
 
 	/* basic functions */
+	.config_aneg	= genphy_config_aneg,
 	.read_status	= lan87xx_read_status,
 	.config_init	= smsc_phy_config_init,
 	.soft_reset	= smsc_phy_reset,

@@ -799,9 +799,11 @@ static void _rtl8723e_hw_configure(struct ieee80211_hw *hw)
 	struct rtl_pci *rtlpci = rtl_pcidev(rtl_pcipriv(hw));
 	struct rtl_priv *rtlpriv = rtl_priv(hw);
 	u8 reg_bw_opmode;
-	u32 reg_prsr;
+	u32 reg_ratr, reg_prsr;
 
 	reg_bw_opmode = BW_OPMODE_20MHZ;
+	reg_ratr = RATE_ALL_CCK | RATE_ALL_OFDM_AG |
+	    RATE_ALL_OFDM_1SS | RATE_ALL_OFDM_2SS;
 	reg_prsr = RATE_ALL_CCK | RATE_ALL_OFDM_AG;
 
 	rtl_write_byte(rtlpriv, REG_INIRTS_RATE_SEL, 0x8);
@@ -1338,13 +1340,13 @@ void rtl8723e_card_disable(struct ieee80211_hw *hw)
 }
 
 void rtl8723e_interrupt_recognized(struct ieee80211_hw *hw,
-				   struct rtl_int *intvec)
+				   u32 *p_inta, u32 *p_intb)
 {
 	struct rtl_priv *rtlpriv = rtl_priv(hw);
 	struct rtl_pci *rtlpci = rtl_pcidev(rtl_pcipriv(hw));
 
-	intvec->inta = rtl_read_dword(rtlpriv, 0x3a0) & rtlpci->irq_mask[0];
-	rtl_write_dword(rtlpriv, 0x3a0, intvec->inta);
+	*p_inta = rtl_read_dword(rtlpriv, 0x3a0) & rtlpci->irq_mask[0];
+	rtl_write_dword(rtlpriv, 0x3a0, *p_inta);
 }
 
 void rtl8723e_set_beacon_related_registers(struct ieee80211_hw *hw)
@@ -1941,7 +1943,7 @@ static void rtl8723e_update_hal_rate_table(struct ieee80211_hw *hw,
 
 static void rtl8723e_update_hal_rate_mask(struct ieee80211_hw *hw,
 					  struct ieee80211_sta *sta,
-					  u8 rssi_level, bool update_bw)
+					  u8 rssi_level)
 {
 	struct rtl_priv *rtlpriv = rtl_priv(hw);
 	struct rtl_phy *rtlphy = &(rtlpriv->phy);
@@ -2072,13 +2074,12 @@ static void rtl8723e_update_hal_rate_mask(struct ieee80211_hw *hw,
 }
 
 void rtl8723e_update_hal_rate_tbl(struct ieee80211_hw *hw,
-				  struct ieee80211_sta *sta, u8 rssi_level,
-				  bool update_bw)
+				  struct ieee80211_sta *sta, u8 rssi_level)
 {
 	struct rtl_priv *rtlpriv = rtl_priv(hw);
 
 	if (rtlpriv->dm.useramask)
-		rtl8723e_update_hal_rate_mask(hw, sta, rssi_level, update_bw);
+		rtl8723e_update_hal_rate_mask(hw, sta, rssi_level);
 	else
 		rtl8723e_update_hal_rate_table(hw, sta);
 }
@@ -2102,7 +2103,7 @@ bool rtl8723e_gpio_radio_on_off_checking(struct ieee80211_hw *hw, u8 *valid)
 	struct rtl_priv *rtlpriv = rtl_priv(hw);
 	struct rtl_ps_ctl *ppsc = rtl_psc(rtl_priv(hw));
 	struct rtl_phy *rtlphy = &(rtlpriv->phy);
-	enum rf_pwrstate e_rfpowerstate_toset;
+	enum rf_pwrstate e_rfpowerstate_toset, cur_rfstate;
 	u8 u1tmp;
 	bool b_actuallyset = false;
 
@@ -2120,6 +2121,8 @@ bool rtl8723e_gpio_radio_on_off_checking(struct ieee80211_hw *hw, u8 *valid)
 		ppsc->rfchange_inprogress = true;
 		spin_unlock(&rtlpriv->locks.rf_ps_lock);
 	}
+
+	cur_rfstate = ppsc->rfpwr_state;
 
 	rtl_write_byte(rtlpriv, REG_GPIO_IO_SEL_2,
 		       rtl_read_byte(rtlpriv, REG_GPIO_IO_SEL_2)&~(BIT(1)));

@@ -1,4 +1,3 @@
-// SPDX-License-Identifier: GPL-2.0
 /* sunhv.c: Serial driver for SUN4V hypervisor console.
  *
  * Copyright (C) 2006, 2007 David S. Miller (davem@davemloft.net)

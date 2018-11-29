@@ -163,7 +163,7 @@ arc_unwind_core(struct task_struct *tsk, struct pt_regs *regs,
  */
 static int __print_sym(unsigned int address, void *unused)
 {
-	printk("  %pS\n", (void *)address);
+	__print_symbol("  %s\n", address);
 	return 0;
 }
 

@@ -17,7 +17,6 @@
 #define _LINUX_UUID_H_
 
 #include <uapi/linux/uuid.h>
-#include <linux/string.h>
 
 #define UUID_SIZE 16
 

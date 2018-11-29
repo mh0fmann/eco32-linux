@@ -388,10 +388,7 @@ void flush_tlb_range(struct vm_area_struct *vma, unsigned long start,
 		     unsigned long end)
 
 {
-	if (end - start == PAGE_SIZE && !(start & ~PAGE_MASK))
-		flush_tlb_page(vma, start);
-	else
-		flush_tlb_mm(vma->vm_mm);
+	flush_tlb_mm(vma->vm_mm);
 }
 EXPORT_SYMBOL(flush_tlb_range);
 
@@ -502,9 +499,6 @@ static void setup_page_sizes(void)
 
 		for (psize = 0; psize < MMU_PAGE_COUNT; ++psize) {
 			struct mmu_psize_def *def = &mmu_psize_defs[psize];
-
-			if (!def->shift)
-				continue;
 
 			if (tlb1ps & (1U << (def->shift - 10))) {
 				def->flags |= MMU_PAGE_SIZE_DIRECT;

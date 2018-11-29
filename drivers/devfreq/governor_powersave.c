@@ -20,7 +20,7 @@ static int devfreq_powersave_func(struct devfreq *df,
 	 * target callback should be able to get ceiling value as
 	 * said in devfreq.h
 	 */
-	*freq = DEVFREQ_MIN_FREQ;
+	*freq = df->min_freq;
 	return 0;
 }
 
@@ -39,7 +39,7 @@ static int devfreq_powersave_handler(struct devfreq *devfreq,
 }
 
 static struct devfreq_governor devfreq_powersave = {
-	.name = DEVFREQ_GOV_POWERSAVE,
+	.name = "powersave",
 	.get_target_freq = devfreq_powersave_func,
 	.event_handler = devfreq_powersave_handler,
 };

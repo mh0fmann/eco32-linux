@@ -336,17 +336,23 @@ static ssize_t uwb_rc_mac_addr_store(struct device *dev,
 	struct uwb_mac_addr addr;
 	ssize_t result;
 
-	if (!mac_pton(buf, addr.data))
-		return -EINVAL;
+	result = sscanf(buf, "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx\n",
+			&addr.data[0], &addr.data[1], &addr.data[2],
+			&addr.data[3], &addr.data[4], &addr.data[5]);
+	if (result != 6) {
+		result = -EINVAL;
+		goto out;
+	}
 	if (is_multicast_ether_addr(addr.data)) {
 		dev_err(&rc->uwb_dev.dev, "refusing to set multicast "
 			"MAC address %s\n", buf);
-		return -EINVAL;
+		result = -EINVAL;
+		goto out;
 	}
 	result = uwb_rc_mac_addr_set(rc, &addr);
 	if (result == 0)
 		rc->uwb_dev.mac_addr = addr;
-
+out:
 	return result < 0 ? result : size;
 }
 DEVICE_ATTR(mac_address, S_IRUGO | S_IWUSR, uwb_rc_mac_addr_show, uwb_rc_mac_addr_store);

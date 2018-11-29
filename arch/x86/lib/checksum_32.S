@@ -29,8 +29,7 @@
 #include <asm/errno.h>
 #include <asm/asm.h>
 #include <asm/export.h>
-#include <asm/nospec-branch.h>
-
+				
 /*
  * computes a partial checksum, e.g. for TCP/UDP fragments
  */
@@ -157,7 +156,7 @@ ENTRY(csum_partial)
 	negl %ebx
 	lea 45f(%ebx,%ebx,2), %ebx
 	testl %esi, %esi
-	JMP_NOSPEC %ebx
+	jmp *%ebx
 
 	# Handle 2-byte-aligned regions
 20:	addw (%esi), %ax
@@ -273,11 +272,11 @@ unsigned int csum_partial_copy_generic (const char *src, char *dst,
 
 #define SRC(y...)			\
 	9999: y;			\
-	_ASM_EXTABLE_UA(9999b, 6001f)
+	_ASM_EXTABLE(9999b, 6001f)
 
 #define DST(y...)			\
 	9999: y;			\
-	_ASM_EXTABLE_UA(9999b, 6002f)
+	_ASM_EXTABLE(9999b, 6002f)
 
 #ifndef CONFIG_X86_USE_PPRO_CHECKSUM
 
@@ -440,7 +439,7 @@ ENTRY(csum_partial_copy_generic)
 	andl $-32,%edx
 	lea 3f(%ebx,%ebx), %ebx
 	testl %esi, %esi 
-	JMP_NOSPEC %ebx
+	jmp *%ebx
 1:	addl $64,%esi
 	addl $64,%edi 
 	SRC(movb -32(%edx),%bl)	; SRC(movb (%edx),%bl)

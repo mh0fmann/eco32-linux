@@ -61,30 +61,20 @@ static int intel_fw_table_check(const struct intel_forcewake_range *ranges,
 
 static int intel_shadow_table_check(void)
 {
-	struct {
-		const i915_reg_t *regs;
-		unsigned int size;
-	} reg_lists[] = {
-		{ gen8_shadowed_regs, ARRAY_SIZE(gen8_shadowed_regs) },
-		{ gen11_shadowed_regs, ARRAY_SIZE(gen11_shadowed_regs) },
-	};
-	const i915_reg_t *reg;
-	unsigned int i, j;
+	const i915_reg_t *reg = gen8_shadowed_regs;
+	unsigned int i;
 	s32 prev;
 
-	for (j = 0; j < ARRAY_SIZE(reg_lists); ++j) {
-		reg = reg_lists[j].regs;
-		for (i = 0, prev = -1; i < reg_lists[j].size; i++, reg++) {
-			u32 offset = i915_mmio_reg_offset(*reg);
+	for (i = 0, prev = -1; i < ARRAY_SIZE(gen8_shadowed_regs); i++, reg++) {
+		u32 offset = i915_mmio_reg_offset(*reg);
 
-			if (prev >= (s32)offset) {
-				pr_err("%s: entry[%d]:(%x) is before previous (%x)\n",
-				       __func__, i, offset, prev);
-				return -EINVAL;
-			}
-
-			prev = offset;
+		if (prev >= (s32)offset) {
+			pr_err("%s: entry[%d]:(%x) is before previous (%x)\n",
+			       __func__, i, offset, prev);
+			return -EINVAL;
 		}
+
+		prev = offset;
 	}
 
 	return 0;
@@ -100,7 +90,6 @@ int intel_uncore_mock_selftests(void)
 		{ __vlv_fw_ranges, ARRAY_SIZE(__vlv_fw_ranges), false },
 		{ __chv_fw_ranges, ARRAY_SIZE(__chv_fw_ranges), false },
 		{ __gen9_fw_ranges, ARRAY_SIZE(__gen9_fw_ranges), true },
-		{ __gen11_fw_ranges, ARRAY_SIZE(__gen11_fw_ranges), true },
 	};
 	int err, i;
 
@@ -131,13 +120,13 @@ static int intel_uncore_check_forcewake_domains(struct drm_i915_private *dev_pri
 	    !IS_CHERRYVIEW(dev_priv))
 		return 0;
 
-	/*
-	 * This test may lockup the machine or cause GPU hangs afterwards.
-	 */
-	if (!IS_ENABLED(CONFIG_DRM_I915_SELFTEST_BROKEN))
+	if (IS_VALLEYVIEW(dev_priv)) /* XXX system lockup! */
 		return 0;
 
-	valid = kcalloc(BITS_TO_LONGS(FW_RANGE), sizeof(*valid),
+	if (IS_BROADWELL(dev_priv)) /* XXX random GPU hang afterwards! */
+		return 0;
+
+	valid = kzalloc(BITS_TO_LONGS(FW_RANGE) * sizeof(*valid),
 			GFP_KERNEL);
 	if (!valid)
 		return -ENOMEM;
@@ -159,10 +148,7 @@ static int intel_uncore_check_forcewake_domains(struct drm_i915_private *dev_pri
 	for_each_set_bit(offset, valid, FW_RANGE) {
 		i915_reg_t reg = { offset };
 
-		iosf_mbi_punit_acquire();
-		intel_uncore_forcewake_reset(dev_priv);
-		iosf_mbi_punit_release();
-
+		intel_uncore_forcewake_reset(dev_priv, false);
 		check_for_unclaimed_mmio(dev_priv);
 
 		(void)I915_READ(reg);

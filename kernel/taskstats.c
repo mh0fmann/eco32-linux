@@ -194,7 +194,11 @@ static int fill_stats_for_pid(pid_t pid, struct taskstats *stats)
 {
 	struct task_struct *tsk;
 
-	tsk = find_get_task_by_vpid(pid);
+	rcu_read_lock();
+	tsk = find_task_by_vpid(pid);
+	if (tsk)
+		get_task_struct(tsk);
+	rcu_read_unlock();
 	if (!tsk)
 		return -ESRCH;
 	fill_stats(current_user_ns(), task_active_pid_ns(current), tsk, stats);

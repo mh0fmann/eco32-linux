@@ -66,7 +66,7 @@ struct imx_media_fim {
 	int               icap_flags;
 
 	int               counter;
-	ktime_t		  last_ts;
+	struct timespec   last_ts;
 	unsigned long     sum;       /* usec */
 	unsigned long     nominal;   /* usec */
 
@@ -147,26 +147,22 @@ static void send_fim_event(struct imx_media_fim *fim, unsigned long error)
  * (presumably random) interrupt latency.
  */
 static void frame_interval_monitor(struct imx_media_fim *fim,
-				   ktime_t timestamp)
+				   struct timespec *ts)
 {
-	long long interval, error;
-	unsigned long error_avg;
+	unsigned long interval, error, error_avg;
 	bool send_event = false;
+	struct timespec diff;
 
 	if (!fim->enabled || ++fim->counter <= 0)
 		goto out_update_ts;
 
-	/* max error is less than l00µs, so use 32-bit division or fail */
-	interval = ktime_to_ns(ktime_sub(timestamp, fim->last_ts));
-	error = abs(interval - NSEC_PER_USEC * (u64)fim->nominal);
-	if (error > U32_MAX)
-		error = U32_MAX;
-	else
-		error = abs((u32)error / NSEC_PER_USEC);
+	diff = timespec_sub(*ts, fim->last_ts);
+	interval = diff.tv_sec * 1000 * 1000 + diff.tv_nsec / 1000;
+	error = abs(interval - fim->nominal);
 
 	if (fim->tolerance_max && error >= fim->tolerance_max) {
 		dev_dbg(fim->sd->dev,
-			"FIM: %llu ignored, out of tolerance bounds\n",
+			"FIM: %lu ignored, out of tolerance bounds\n",
 			error);
 		fim->counter--;
 		goto out_update_ts;
@@ -188,7 +184,7 @@ static void frame_interval_monitor(struct imx_media_fim *fim,
 	}
 
 out_update_ts:
-	fim->last_ts = timestamp;
+	fim->last_ts = *ts;
 	if (send_event)
 		send_fim_event(fim, error_avg);
 }
@@ -199,14 +195,14 @@ out_update_ts:
  * to interrupt latency.
  */
 static void fim_input_capture_handler(int channel, void *dev_id,
-				      ktime_t timestamp)
+				      struct timespec *ts)
 {
 	struct imx_media_fim *fim = dev_id;
 	unsigned long flags;
 
 	spin_lock_irqsave(&fim->lock, flags);
 
-	frame_interval_monitor(fim, timestamp);
+	frame_interval_monitor(fim, ts);
 
 	if (!completion_done(&fim->icap_first_event))
 		complete(&fim->icap_first_event);
@@ -409,14 +405,14 @@ err_free:
  * the frame_interval_monitor() is called by the input capture event
  * callback handler in that case.
  */
-void imx_media_fim_eof_monitor(struct imx_media_fim *fim, ktime_t timestamp)
+void imx_media_fim_eof_monitor(struct imx_media_fim *fim, struct timespec *ts)
 {
 	unsigned long flags;
 
 	spin_lock_irqsave(&fim->lock, flags);
 
 	if (!icap_enabled(fim))
-		frame_interval_monitor(fim, timestamp);
+		frame_interval_monitor(fim, ts);
 
 	spin_unlock_irqrestore(&fim->lock, flags);
 }
@@ -463,7 +459,7 @@ int imx_media_fim_add_controls(struct imx_media_fim *fim)
 {
 	/* add the FIM controls to the calling subdev ctrl handler */
 	return v4l2_ctrl_add_handler(fim->sd->ctrl_handler,
-				     &fim->ctrl_handler, NULL, false);
+				     &fim->ctrl_handler, NULL);
 }
 EXPORT_SYMBOL_GPL(imx_media_fim_add_controls);
 

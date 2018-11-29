@@ -35,7 +35,6 @@
 #include <sys/mman.h>
 #include <syscall.h> /* for gettid() */
 #include <err.h>
-#include <linux/kernel.h>
 
 #include "jvmti_agent.h"
 #include "../util/jitdump.h"
@@ -125,7 +124,7 @@ perf_get_timestamp(void)
 }
 
 static int
-create_jit_cache_dir(void)
+debug_cache_init(void)
 {
 	char str[32];
 	char *base, *p;
@@ -144,13 +143,8 @@ create_jit_cache_dir(void)
 
 	strftime(str, sizeof(str), JIT_LANG"-jit-%Y%m%d", &tm);
 
-	ret = snprintf(jit_path, PATH_MAX, "%s/.debug/", base);
-	if (ret >= PATH_MAX) {
-		warnx("jvmti: cannot generate jit cache dir because %s/.debug/"
-			" is too long, please check the cwd, JITDUMPDIR, and"
-			" HOME variables", base);
-		return -1;
-	}
+	snprintf(jit_path, PATH_MAX - 1, "%s/.debug/", base);
+
 	ret = mkdir(jit_path, 0755);
 	if (ret == -1) {
 		if (errno != EEXIST) {
@@ -159,32 +153,20 @@ create_jit_cache_dir(void)
 		}
 	}
 
-	ret = snprintf(jit_path, PATH_MAX, "%s/.debug/jit", base);
-	if (ret >= PATH_MAX) {
-		warnx("jvmti: cannot generate jit cache dir because"
-			" %s/.debug/jit is too long, please check the cwd,"
-			" JITDUMPDIR, and HOME variables", base);
-		return -1;
-	}
+	snprintf(jit_path, PATH_MAX - 1, "%s/.debug/jit", base);
 	ret = mkdir(jit_path, 0755);
 	if (ret == -1) {
 		if (errno != EEXIST) {
-			warn("jvmti: cannot create jit cache dir %s", jit_path);
+			warn("cannot create jit cache dir %s", jit_path);
 			return -1;
 		}
 	}
 
-	ret = snprintf(jit_path, PATH_MAX, "%s/.debug/jit/%s.XXXXXXXX", base, str);
-	if (ret >= PATH_MAX) {
-		warnx("jvmti: cannot generate jit cache dir because"
-			" %s/.debug/jit/%s.XXXXXXXX is too long, please check"
-			" the cwd, JITDUMPDIR, and HOME variables",
-			base, str);
-		return -1;
-	}
+	snprintf(jit_path, PATH_MAX - 1, "%s/.debug/jit/%s.XXXXXXXX", base, str);
+
 	p = mkdtemp(jit_path);
 	if (p != jit_path) {
-		warn("jvmti: cannot create jit cache dir %s", jit_path);
+		warn("cannot create jit cache dir %s", jit_path);
 		return -1;
 	}
 
@@ -245,7 +227,7 @@ void *jvmti_open(void)
 {
 	char dump_path[PATH_MAX];
 	struct jitheader header;
-	int fd, ret;
+	int fd;
 	FILE *fp;
 
 	init_arch_timestamp();
@@ -262,22 +244,12 @@ void *jvmti_open(void)
 
 	memset(&header, 0, sizeof(header));
 
-	/*
-	 * jitdump file dir
-	 */
-	if (create_jit_cache_dir() < 0)
-		return NULL;
+	debug_cache_init();
 
 	/*
 	 * jitdump file name
 	 */
-	ret = snprintf(dump_path, PATH_MAX, "%s/jit-%i.dump", jit_path, getpid());
-	if (ret >= PATH_MAX) {
-		warnx("jvmti: cannot generate jitdump file full path because"
-			" %s/jit-%i.dump is too long, please check the cwd,"
-			" JITDUMPDIR, and HOME variables", jit_path, getpid());
-		return NULL;
-	}
+	snprintf(dump_path, PATH_MAX, "%s/jit-%i.dump", jit_path, getpid());
 
 	fd = open(dump_path, O_CREAT|O_TRUNC|O_RDWR, 0666);
 	if (fd == -1)
@@ -412,13 +384,13 @@ jvmti_write_code(void *agent, char const *sym,
 }
 
 int
-jvmti_write_debug_info(void *agent, uint64_t code,
-    int nr_lines, jvmti_line_info_t *li,
-    const char * const * file_names)
+jvmti_write_debug_info(void *agent, uint64_t code, const char *file,
+		       jvmti_line_info_t *li, int nr_lines)
 {
 	struct jr_code_debug_info rec;
-	size_t sret, len, size, flen = 0;
+	size_t sret, len, size, flen;
 	uint64_t addr;
+	const char *fn = file;
 	FILE *fp = agent;
 	int i;
 
@@ -433,9 +405,7 @@ jvmti_write_debug_info(void *agent, uint64_t code,
 		return -1;
 	}
 
-	for (i = 0; i < nr_lines; ++i) {
-	    flen += strlen(file_names[i]) + 1;
-	}
+	flen = strlen(file) + 1;
 
 	rec.p.id        = JIT_CODE_DEBUG_INFO;
 	size            = sizeof(rec);
@@ -451,7 +421,7 @@ jvmti_write_debug_info(void *agent, uint64_t code,
 	 * file[]   : source file name
 	 */
 	size += nr_lines * sizeof(struct debug_entry);
-	size += flen;
+	size += flen * nr_lines;
 	rec.p.total_size = size;
 
 	/*
@@ -482,7 +452,7 @@ jvmti_write_debug_info(void *agent, uint64_t code,
 		if (sret != 1)
 			goto error;
 
-		sret = fwrite_unlocked(file_names[i], strlen(file_names[i]) + 1, 1, fp);
+		sret = fwrite_unlocked(fn, flen, 1, fp);
 		if (sret != 1)
 			goto error;
 	}

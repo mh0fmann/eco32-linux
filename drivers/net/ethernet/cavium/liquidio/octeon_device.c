@@ -541,7 +541,6 @@ static char oct_dev_app_str[CVM_DRV_APP_COUNT + 1][32] = {
 
 static struct octeon_device *octeon_device[MAX_OCTEON_DEVICES];
 static atomic_t adapter_refcounts[MAX_OCTEON_DEVICES];
-static atomic_t adapter_fw_states[MAX_OCTEON_DEVICES];
 
 static u32 octeon_device_count;
 /* locks device array (i.e. octeon_device[]) */
@@ -702,9 +701,11 @@ static struct octeon_device *octeon_allocate_device_mem(u32 pci_id,
 	size = octdevsize + priv_size + configsize +
 		(sizeof(struct octeon_dispatch) * DISPATCH_LIST_SIZE);
 
-	buf = vzalloc(size);
+	buf = vmalloc(size);
 	if (!buf)
 		return NULL;
+
+	memset(buf, 0, size);
 
 	oct = (struct octeon_device *)buf;
 	oct->priv = (void *)(buf + octdevsize);
@@ -769,10 +770,6 @@ int octeon_register_device(struct octeon_device *oct,
 	oct->adapter_refcount = &adapter_refcounts[oct->octeon_id];
 	atomic_set(oct->adapter_refcount, 0);
 
-	/* Like the reference count, the f/w state is shared 'per-adapter' */
-	oct->adapter_fw_state = &adapter_fw_states[oct->octeon_id];
-	atomic_set(oct->adapter_fw_state, FW_NEEDS_TO_BE_LOADED);
-
 	spin_lock(&octeon_devices_lock);
 	for (idx = (int)oct->octeon_id - 1; idx >= 0; idx--) {
 		if (!octeon_device[idx]) {
@@ -783,15 +780,11 @@ int octeon_register_device(struct octeon_device *oct,
 			atomic_inc(oct->adapter_refcount);
 			return 1; /* here, refcount is guaranteed to be 1 */
 		}
-		/* If another device is at same bus/dev, use its refcounter
-		 * (and f/w state variable).
-		 */
+		/* if another device is at same bus/dev, use its refcounter */
 		if ((octeon_device[idx]->loc.bus == bus) &&
 		    (octeon_device[idx]->loc.dev == dev)) {
 			oct->adapter_refcount =
 				octeon_device[idx]->adapter_refcount;
-			oct->adapter_fw_state =
-				octeon_device[idx]->adapter_fw_state;
 			break;
 		}
 	}
@@ -824,18 +817,24 @@ int octeon_deregister_device(struct octeon_device *oct)
 }
 
 int
-octeon_allocate_ioq_vector(struct octeon_device *oct, u32 num_ioqs)
+octeon_allocate_ioq_vector(struct octeon_device  *oct)
 {
+	int i, num_ioqs = 0;
 	struct octeon_ioq_vector *ioq_vector;
 	int cpu_num;
 	int size;
-	int i;
+
+	if (OCTEON_CN23XX_PF(oct))
+		num_ioqs = oct->sriov_info.num_pf_rings;
+	else if (OCTEON_CN23XX_VF(oct))
+		num_ioqs = oct->sriov_info.rings_per_vf;
 
 	size = sizeof(struct octeon_ioq_vector) * num_ioqs;
 
-	oct->ioq_vector = vzalloc(size);
+	oct->ioq_vector = vmalloc(size);
 	if (!oct->ioq_vector)
-		return -1;
+		return 1;
+	memset(oct->ioq_vector, 0, size);
 	for (i = 0; i < num_ioqs; i++) {
 		ioq_vector		= &oct->ioq_vector[i];
 		ioq_vector->oct_dev	= oct;
@@ -851,7 +850,6 @@ octeon_allocate_ioq_vector(struct octeon_device *oct, u32 num_ioqs)
 		else
 			ioq_vector->ioq_num	= i;
 	}
-
 	return 0;
 }
 
@@ -1044,7 +1042,8 @@ void octeon_delete_dispatch_list(struct octeon_device *oct)
 		dispatch = &oct->dispatch.dlist[i].list;
 		while (dispatch->next != dispatch) {
 			temp = dispatch->next;
-			list_move_tail(temp, &freelist);
+			list_del(temp);
+			list_add_tail(temp, &freelist);
 		}
 
 		oct->dispatch.dlist[i].opcode = 0;
@@ -1172,10 +1171,6 @@ octeon_register_dispatch_fn(struct octeon_device *oct,
 		spin_unlock_bh(&oct->dispatch.lock);
 
 	} else {
-		if (pfn == fn &&
-		    octeon_get_dispatch_arg(oct, opcode, subcode) == fn_arg)
-			return 0;
-
 		dev_err(&oct->pci_dev->dev,
 			"Found previously registered dispatch fn for opcode/subcode: %x/%x\n",
 			opcode, subcode);
@@ -1439,15 +1434,18 @@ void lio_enable_irq(struct octeon_droq *droq, struct octeon_instr_queue *iq)
 	/* the whole thing needs to be atomic, ideally */
 	if (droq) {
 		pkts_pend = (u32)atomic_read(&droq->pkts_pending);
+		spin_lock_bh(&droq->lock);
 		writel(droq->pkt_count - pkts_pend, droq->pkts_sent_reg);
 		droq->pkt_count = pkts_pend;
+		/* this write needs to be flushed before we release the lock */
+		mmiowb();
+		spin_unlock_bh(&droq->lock);
 		oct = droq->oct_dev;
 	}
 	if (iq) {
 		spin_lock_bh(&iq->lock);
-		writel(iq->pkts_processed, iq->inst_cnt_reg);
-		iq->pkt_in_done -= iq->pkts_processed;
-		iq->pkts_processed = 0;
+		writel(iq->pkt_in_done, iq->inst_cnt_reg);
+		iq->pkt_in_done = 0;
 		/* this write needs to be flushed before we release the lock */
 		mmiowb();
 		spin_unlock_bh(&iq->lock);

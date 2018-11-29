@@ -64,7 +64,6 @@
 		compatible = "usb-nop-xceiv";
 		reset-gpios = <&gpio5 19 GPIO_ACTIVE_LOW>;	/* gpio_147 */
 		vcc-supply = <&hsusb2_power>;
-		#phy-cells = <0>;
 	};
 
 	sound {
@@ -147,11 +146,10 @@
 
 		clocks = <&emu_src_ck>;
 		clock-names = "apb_pclk";
-		in-ports {
-			port {
-				etb_in: endpoint {
-					remote-endpoint = <&etm_out>;
-				};
+		port {
+			etb_in: endpoint {
+				slave-mode;
+				remote-endpoint = <&etm_out>;
 			};
 		};
 	};
@@ -162,11 +160,9 @@
 
 		clocks = <&emu_src_ck>;
 		clock-names = "apb_pclk";
-		out-ports {
-			port {
-				etm_out: endpoint {
-					remote-endpoint = <&etb_in>;
-				};
+		port {
+			etm_out: endpoint {
+				remote-endpoint = <&etb_in>;
 			};
 		};
 	};

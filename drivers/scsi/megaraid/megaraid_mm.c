@@ -35,7 +35,7 @@ static int kioc_to_mimd(uioc_t *, mimd_t __user *);
 static int handle_drvrcmd(void __user *, uint8_t, int *);
 static int lld_ioctl(mraid_mmadp_t *, uioc_t *);
 static void ioctl_done(uioc_t *);
-static void lld_timedout(struct timer_list *);
+static void lld_timedout(unsigned long);
 static void hinfo_to_cinfo(mraid_hba_info_t *, mcontroller_t *);
 static mraid_mmadp_t *mraid_mm_get_adapter(mimd_t __user *, int *);
 static uioc_t *mraid_mm_alloc_kioc(mraid_mmadp_t *);
@@ -686,7 +686,8 @@ static int
 lld_ioctl(mraid_mmadp_t *adp, uioc_t *kioc)
 {
 	int			rval;
-	struct uioc_timeout	timeout = { };
+	struct timer_list	timer;
+	struct timer_list	*tp = NULL;
 
 	kioc->status	= -ENODATA;
 	rval		= adp->issue_uioc(adp->drvr_data, kioc, IOCTL_ISSUE);
@@ -697,12 +698,14 @@ lld_ioctl(mraid_mmadp_t *adp, uioc_t *kioc)
 	 * Start the timer
 	 */
 	if (adp->timeout > 0) {
-		timeout.uioc = kioc;
-		timer_setup_on_stack(&timeout.timer, lld_timedout, 0);
+		tp		= &timer;
+		init_timer(tp);
 
-		timeout.timer.expires	= jiffies + adp->timeout * HZ;
+		tp->function	= lld_timedout;
+		tp->data	= (unsigned long)kioc;
+		tp->expires	= jiffies + adp->timeout * HZ;
 
-		add_timer(&timeout.timer);
+		add_timer(tp);
 	}
 
 	/*
@@ -710,9 +713,8 @@ lld_ioctl(mraid_mmadp_t *adp, uioc_t *kioc)
 	 * call, the ioctl either completed successfully or timedout.
 	 */
 	wait_event(wait_q, (kioc->status != -ENODATA));
-	if (timeout.timer.function) {
-		del_timer_sync(&timeout.timer);
-		destroy_timer_on_stack(&timeout.timer);
+	if (tp) {
+		del_timer_sync(tp);
 	}
 
 	/*
@@ -781,13 +783,12 @@ ioctl_done(uioc_t *kioc)
 
 /**
  * lld_timedout	- callback from the expired timer
- * @t		: timer that timed out
+ * @ptr		: ioctl packet that timed out
  */
 static void
-lld_timedout(struct timer_list *t)
+lld_timedout(unsigned long ptr)
 {
-	struct uioc_timeout *timeout = from_timer(timeout, t, timer);
-	uioc_t *kioc	= timeout->uioc;
+	uioc_t *kioc	= (uioc_t *)ptr;
 
 	kioc->status 	= -ETIME;
 	kioc->timedout	= 1;
@@ -935,12 +936,10 @@ mraid_mm_register_adp(mraid_mmadp_t *lld_adp)
 	 * Allocate single blocks of memory for all required kiocs,
 	 * mailboxes and passthru structures.
 	 */
-	adapter->kioc_list	= kmalloc_array(lld_adp->max_kioc,
-						  sizeof(uioc_t),
-						  GFP_KERNEL);
-	adapter->mbox_list	= kmalloc_array(lld_adp->max_kioc,
-						  sizeof(mbox64_t),
-						  GFP_KERNEL);
+	adapter->kioc_list	= kmalloc(sizeof(uioc_t) * lld_adp->max_kioc,
+						GFP_KERNEL);
+	adapter->mbox_list	= kmalloc(sizeof(mbox64_t) * lld_adp->max_kioc,
+						GFP_KERNEL);
 	adapter->pthru_dma_pool = dma_pool_create("megaraid mm pthru pool",
 						&adapter->pdev->dev,
 						sizeof(mraid_passthru_t),

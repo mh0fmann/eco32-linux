@@ -139,7 +139,7 @@ static int pas_cpufreq_cpu_init(struct cpufreq_policy *policy)
 	struct cpufreq_frequency_table *pos;
 	const u32 *max_freqp;
 	u32 max_freq;
-	int cur_astate, idx;
+	int cur_astate;
 	struct resource res;
 	struct device_node *cpu, *dn;
 	int err = -ENODEV;
@@ -198,9 +198,9 @@ static int pas_cpufreq_cpu_init(struct cpufreq_policy *policy)
 	pr_debug("initializing frequency table\n");
 
 	/* initialize frequency table */
-	cpufreq_for_each_entry_idx(pos, pas_freqs, idx) {
+	cpufreq_for_each_entry(pos, pas_freqs) {
 		pos->frequency = get_astate_freq(pos->driver_data) * 100000;
-		pr_debug("%d: %d\n", idx, pos->frequency);
+		pr_debug("%d: %d\n", (int)(pos - pas_freqs), pos->frequency);
 	}
 
 	cur_astate = get_cur_astate(policy->cpu);

@@ -24,7 +24,6 @@
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/etherdevice.h>
-#include <linux/pm_runtime.h>
 #include <linux/spinlock.h>
 
 #include "wlcore.h"
@@ -265,6 +264,7 @@ static void wl1271_tx_fill_hdr(struct wl1271 *wl, struct wl12xx_vif *wlvif,
 			       struct sk_buff *skb, u32 extra,
 			       struct ieee80211_tx_info *control, u8 hlid)
 {
+	struct timespec ts;
 	struct wl1271_tx_hw_descr *desc;
 	int ac, rate_idx;
 	s64 hosttime;
@@ -287,7 +287,8 @@ static void wl1271_tx_fill_hdr(struct wl1271 *wl, struct wl12xx_vif *wlvif,
 	}
 
 	/* configure packet life time */
-	hosttime = (ktime_get_boot_ns() >> 10);
+	getnstimeofday(&ts);
+	hosttime = (timespec_to_ns(&ts) >> 10);
 	desc->start_time = cpu_to_le32(hosttime - wl->time_offset);
 
 	is_dummy = wl12xx_is_dummy_packet(wl, skb);
@@ -869,11 +870,9 @@ void wl1271_tx_work(struct work_struct *work)
 	int ret;
 
 	mutex_lock(&wl->mutex);
-	ret = pm_runtime_get_sync(wl->dev);
-	if (ret < 0) {
-		pm_runtime_put_noidle(wl->dev);
+	ret = wl1271_ps_elp_wakeup(wl);
+	if (ret < 0)
 		goto out;
-	}
 
 	ret = wlcore_tx_work_locked(wl);
 	if (ret < 0) {
@@ -881,8 +880,7 @@ void wl1271_tx_work(struct work_struct *work)
 		goto out;
 	}
 
-	pm_runtime_mark_last_busy(wl->dev);
-	pm_runtime_put_autosuspend(wl->dev);
+	wl1271_ps_elp_sleep(wl);
 out:
 	mutex_unlock(&wl->mutex);
 }

@@ -47,6 +47,16 @@ int wm9713_irq;
 int lcd_id;
 int lcd_orientation;
 
+struct platform_device pxa_device_wm9713_audio = {
+	.name		= "wm9713-codec",
+	.id		= -1,
+};
+
+static void __init zylonite_init_wm9713_audio(void)
+{
+	platform_device_register(&pxa_device_wm9713_audio);
+}
+
 static struct resource smc91x_resources[] = {
 	[0] = {
 		.start	= ZYLONITE_ETH_PHYS + 0x300,
@@ -328,7 +338,7 @@ static void __init zylonite_init_keypad(void)
 static inline void zylonite_init_keypad(void) {}
 #endif
 
-#if IS_ENABLED(CONFIG_MTD_NAND_MARVELL)
+#if defined(CONFIG_MTD_NAND_PXA3xx) || defined(CONFIG_MTD_NAND_PXA3xx_MODULE)
 static struct mtd_partition zylonite_nand_partitions[] = {
 	[0] = {
 		.name        = "Bootloader",
@@ -366,8 +376,10 @@ static struct mtd_partition zylonite_nand_partitions[] = {
 };
 
 static struct pxa3xx_nand_platform_data zylonite_nand_info = {
-	.parts		= zylonite_nand_partitions,
-	.nr_parts	= ARRAY_SIZE(zylonite_nand_partitions),
+	.enable_arbiter	= 1,
+	.num_cs		= 1,
+	.parts[0]	= zylonite_nand_partitions,
+	.nr_parts[0]	= ARRAY_SIZE(zylonite_nand_partitions),
 };
 
 static void __init zylonite_init_nand(void)
@@ -376,7 +388,7 @@ static void __init zylonite_init_nand(void)
 }
 #else
 static inline void zylonite_init_nand(void) {}
-#endif /* IS_ENABLED(CONFIG_MTD_NAND_MARVELL) */
+#endif /* CONFIG_MTD_NAND_PXA3xx || CONFIG_MTD_NAND_PXA3xx_MODULE */
 
 #if defined(CONFIG_USB_OHCI_HCD) || defined(CONFIG_USB_OHCI_HCD_MODULE)
 static struct pxaohci_platform_data zylonite_ohci_info = {
@@ -418,6 +430,7 @@ static void __init zylonite_init(void)
 	zylonite_init_nand();
 	zylonite_init_leds();
 	zylonite_init_ohci();
+	zylonite_init_wm9713_audio();
 }
 
 MACHINE_START(ZYLONITE, "PXA3xx Platform Development Kit (aka Zylonite)")

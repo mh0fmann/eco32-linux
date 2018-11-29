@@ -28,7 +28,7 @@
 #include <linux/leds.h>
 #include <linux/mfd/da903x.h>
 #include <linux/platform_data/max732x.h>
-#include <linux/platform_data/i2c-pxa.h>
+#include <linux/i2c/pxa-i2c.h>
 
 #include <asm/types.h>
 #include <asm/setup.h>
@@ -42,7 +42,6 @@
 #include <asm/mach/irq.h>
 
 #include "pxa300.h"
-#include "devices.h"
 #include <linux/platform_data/video-pxafb.h>
 #include <linux/platform_data/mmc-pxamci.h>
 #include <linux/platform_data/keypad-pxa27x.h>
@@ -291,7 +290,7 @@ static void __init littleton_init_mmc(void)
 static inline void littleton_init_mmc(void) {}
 #endif
 
-#if IS_ENABLED(CONFIG_MTD_NAND_MARVELL)
+#if defined(CONFIG_MTD_NAND_PXA3xx) || defined(CONFIG_MTD_NAND_PXA3xx_MODULE)
 static struct mtd_partition littleton_nand_partitions[] = {
 	[0] = {
 		.name        = "Bootloader",
@@ -329,8 +328,10 @@ static struct mtd_partition littleton_nand_partitions[] = {
 };
 
 static struct pxa3xx_nand_platform_data littleton_nand_info = {
-	.parts		= littleton_nand_partitions,
-	.nr_parts	= ARRAY_SIZE(littleton_nand_partitions),
+	.enable_arbiter	= 1,
+	.num_cs		= 1,
+	.parts[0]	= littleton_nand_partitions,
+	.nr_parts[0]	= ARRAY_SIZE(littleton_nand_partitions),
 };
 
 static void __init littleton_init_nand(void)
@@ -339,7 +340,7 @@ static void __init littleton_init_nand(void)
 }
 #else
 static inline void littleton_init_nand(void) {}
-#endif /* IS_ENABLED(CONFIG_MTD_NAND_MARVELL) */
+#endif /* CONFIG_MTD_NAND_PXA3xx || CONFIG_MTD_NAND_PXA3xx_MODULE */
 
 #if defined(CONFIG_I2C_PXA) || defined(CONFIG_I2C_PXA_MODULE)
 static struct led_info littleton_da9034_leds[] = {

@@ -365,13 +365,15 @@ static struct hsr_port *get_late_port(struct hsr_priv *hsr,
 /* Remove stale sequence_nr records. Called by timer every
  * HSR_LIFE_CHECK_INTERVAL (two seconds or so).
  */
-void hsr_prune_nodes(struct timer_list *t)
+void hsr_prune_nodes(unsigned long data)
 {
-	struct hsr_priv *hsr = from_timer(hsr, t, prune_timer);
+	struct hsr_priv *hsr;
 	struct hsr_node *node;
 	struct hsr_port *port;
 	unsigned long timestamp;
 	unsigned long time_a, time_b;
+
+	hsr = (struct hsr_priv *) data;
 
 	rcu_read_lock();
 	list_for_each_entry_rcu(node, &hsr->node_db, mac_list) {

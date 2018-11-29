@@ -49,6 +49,7 @@ statement S;
 @@
 
 *  to = \(kmalloc@p\|kzalloc@p\)(size,flag);
+   to = kmemdup(from,size,flag);
    if (to==NULL || ...) S
 *  memcpy(to, from, size);
 
@@ -56,10 +57,10 @@ statement S;
 p << r.p;
 @@
 
-coccilib.org.print_todo(p[0], "WARNING opportunity for kmemdup")
+coccilib.org.print_todo(p[0], "WARNING opportunity for kmemdep")
 
 @script:python depends on report@
 p << r.p;
 @@
 
-coccilib.report.print_report(p[0], "WARNING opportunity for kmemdup")
+coccilib.report.print_report(p[0], "WARNING opportunity for kmemdep")

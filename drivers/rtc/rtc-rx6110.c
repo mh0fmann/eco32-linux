@@ -252,7 +252,7 @@ static int rx6110_get_time(struct device *dev, struct rtc_time *tm)
 		tm->tm_sec, tm->tm_min, tm->tm_hour,
 		tm->tm_mday, tm->tm_mon, tm->tm_year);
 
-	return 0;
+	return rtc_valid_tm(tm);
 }
 
 static const struct reg_sequence rx6110_default_regs[] = {

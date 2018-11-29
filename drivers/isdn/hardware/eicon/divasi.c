@@ -74,11 +74,11 @@ static ssize_t um_idi_read(struct file *file, char __user *buf, size_t count,
 			   loff_t *offset);
 static ssize_t um_idi_write(struct file *file, const char __user *buf,
 			    size_t count, loff_t *offset);
-static __poll_t um_idi_poll(struct file *file, poll_table *wait);
+static unsigned int um_idi_poll(struct file *file, poll_table *wait);
 static int um_idi_open(struct inode *inode, struct file *file);
 static int um_idi_release(struct inode *inode, struct file *file);
 static int remove_entity(void *entity);
-static void diva_um_timer_function(struct timer_list *t);
+static void diva_um_timer_function(unsigned long data);
 
 /*
  * proc entry
@@ -101,10 +101,23 @@ static int um_idi_proc_show(struct seq_file *m, void *v)
 	return 0;
 }
 
+static int um_idi_proc_open(struct inode *inode, struct file *file)
+{
+	return single_open(file, um_idi_proc_show, NULL);
+}
+
+static const struct file_operations um_idi_proc_fops = {
+	.owner		= THIS_MODULE,
+	.open		= um_idi_proc_open,
+	.read		= seq_read,
+	.llseek		= seq_lseek,
+	.release	= single_release,
+};
+
 static int __init create_um_idi_proc(void)
 {
-	um_idi_proc_entry = proc_create_single(DRIVERLNAME, S_IRUGO,
-			proc_net_eicon, um_idi_proc_show);
+	um_idi_proc_entry = proc_create(DRIVERLNAME, S_IRUGO, proc_net_eicon,
+					&um_idi_proc_fops);
 	if (!um_idi_proc_entry)
 		return (0);
 	return (1);
@@ -287,7 +300,8 @@ static int um_idi_open_adapter(struct file *file, int adapter_nr)
 	p_os = (diva_um_idi_os_context_t *) diva_um_id_get_os_context(e);
 	init_waitqueue_head(&p_os->read_wait);
 	init_waitqueue_head(&p_os->close_wait);
-	timer_setup(&p_os->diva_timer_id, diva_um_timer_function, 0);
+	setup_timer(&p_os->diva_timer_id, (void *)diva_um_timer_function,
+		    (unsigned long)p_os);
 	p_os->aborted = 0;
 	p_os->adapter_nr = adapter_nr;
 	return (1);
@@ -352,36 +366,36 @@ um_idi_write(struct file *file, const char __user *buf, size_t count,
 	return (ret);
 }
 
-static __poll_t um_idi_poll(struct file *file, poll_table *wait)
+static unsigned int um_idi_poll(struct file *file, poll_table *wait)
 {
 	diva_um_idi_os_context_t *p_os;
 
 	if (!file->private_data) {
-		return (EPOLLERR);
+		return (POLLERR);
 	}
 
 	if ((!(p_os =
 	       (diva_um_idi_os_context_t *)
 	       diva_um_id_get_os_context(file->private_data)))
 	    || p_os->aborted) {
-		return (EPOLLERR);
+		return (POLLERR);
 	}
 
 	poll_wait(file, &p_os->read_wait, wait);
 
 	if (p_os->aborted) {
-		return (EPOLLERR);
+		return (POLLERR);
 	}
 
 	switch (diva_user_mode_idi_ind_ready(file->private_data, file)) {
 	case (-1):
-		return (EPOLLERR);
+		return (POLLERR);
 
 	case 0:
 		return (0);
 	}
 
-	return (EPOLLIN | EPOLLRDNORM);
+	return (POLLIN | POLLRDNORM);
 }
 
 static int um_idi_open(struct inode *inode, struct file *file)
@@ -443,9 +457,9 @@ void diva_os_wakeup_close(void *os_context)
 }
 
 static
-void diva_um_timer_function(struct timer_list *t)
+void diva_um_timer_function(unsigned long data)
 {
-	diva_um_idi_os_context_t *p_os = from_timer(p_os, t, diva_timer_id);
+	diva_um_idi_os_context_t *p_os = (diva_um_idi_os_context_t *) data;
 
 	p_os->aborted = 1;
 	wake_up_interruptible(&p_os->read_wait);

@@ -188,6 +188,7 @@ struct apds990x_chip {
 #define APDS_LUX_DEFAULT_RATE		200
 
 static const u8 again[]	= {1, 8, 16, 120}; /* ALS gain steps */
+static const u8 ir_currents[]	= {100, 50, 25, 12}; /* IRled currents in mA */
 
 /* Following two tables must match i.e 10Hz rate means 1 as persistence value */
 static const u16 arates_hz[] = {10, 5, 2, 1};
@@ -714,7 +715,6 @@ static ssize_t apds990x_rate_avail(struct device *dev,
 {
 	int i;
 	int pos = 0;
-
 	for (i = 0; i < ARRAY_SIZE(arates_hz); i++)
 		pos += sprintf(buf + pos, "%d ", arates_hz[i]);
 	sprintf(buf + pos - 1, "\n");
@@ -725,7 +725,6 @@ static ssize_t apds990x_rate_show(struct device *dev,
 				   struct device_attribute *attr, char *buf)
 {
 	struct apds990x_chip *chip =  dev_get_drvdata(dev);
-
 	return sprintf(buf, "%d\n", chip->arate);
 }
 
@@ -785,7 +784,6 @@ static ssize_t apds990x_prox_show(struct device *dev,
 {
 	ssize_t ret;
 	struct apds990x_chip *chip =  dev_get_drvdata(dev);
-
 	if (pm_runtime_suspended(dev) || !chip->prox_en)
 		return -EIO;
 
@@ -809,7 +807,6 @@ static ssize_t apds990x_prox_enable_show(struct device *dev,
 				   struct device_attribute *attr, char *buf)
 {
 	struct apds990x_chip *chip =  dev_get_drvdata(dev);
-
 	return sprintf(buf, "%d\n", chip->prox_en);
 }
 
@@ -850,7 +847,6 @@ static ssize_t apds990x_prox_reporting_mode_show(struct device *dev,
 				   struct device_attribute *attr, char *buf)
 {
 	struct apds990x_chip *chip =  dev_get_drvdata(dev);
-
 	return sprintf(buf, "%s\n",
 		reporting_modes[!!chip->prox_continuous_mode]);
 }
@@ -888,7 +884,6 @@ static ssize_t apds990x_lux_thresh_above_show(struct device *dev,
 				   struct device_attribute *attr, char *buf)
 {
 	struct apds990x_chip *chip =  dev_get_drvdata(dev);
-
 	return sprintf(buf, "%d\n", chip->lux_thres_hi);
 }
 
@@ -896,7 +891,6 @@ static ssize_t apds990x_lux_thresh_below_show(struct device *dev,
 				   struct device_attribute *attr, char *buf)
 {
 	struct apds990x_chip *chip =  dev_get_drvdata(dev);
-
 	return sprintf(buf, "%d\n", chip->lux_thres_lo);
 }
 
@@ -932,7 +926,6 @@ static ssize_t apds990x_lux_thresh_above_store(struct device *dev,
 {
 	struct apds990x_chip *chip =  dev_get_drvdata(dev);
 	int ret = apds990x_set_lux_thresh(chip, &chip->lux_thres_hi, buf);
-
 	if (ret < 0)
 		return ret;
 	return len;
@@ -944,7 +937,6 @@ static ssize_t apds990x_lux_thresh_below_store(struct device *dev,
 {
 	struct apds990x_chip *chip =  dev_get_drvdata(dev);
 	int ret = apds990x_set_lux_thresh(chip, &chip->lux_thres_lo, buf);
-
 	if (ret < 0)
 		return ret;
 	return len;
@@ -962,7 +954,6 @@ static ssize_t apds990x_prox_threshold_show(struct device *dev,
 				   struct device_attribute *attr, char *buf)
 {
 	struct apds990x_chip *chip =  dev_get_drvdata(dev);
-
 	return sprintf(buf, "%d\n", chip->prox_thres);
 }
 
@@ -1035,7 +1026,6 @@ static ssize_t apds990x_chip_id_show(struct device *dev,
 				   struct device_attribute *attr, char *buf)
 {
 	struct apds990x_chip *chip =  dev_get_drvdata(dev);
-
 	return sprintf(buf, "%s %d\n", chip->chipname, chip->revision);
 }
 

@@ -1,9 +1,10 @@
-// SPDX-License-Identifier: GPL-2.0
 /*
  * Greybus "Core"
  *
  * Copyright 2014-2015 Google Inc.
  * Copyright 2014-2015 Linaro Ltd.
+ *
+ * Released under the GPLv2 only.
  */
 
 #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt

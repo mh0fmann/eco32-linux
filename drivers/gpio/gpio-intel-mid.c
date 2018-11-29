@@ -295,7 +295,7 @@ static void intel_mid_irq_handler(struct irq_desc *desc)
 			mask = BIT(gpio);
 			/* Clear before handling so we can't lose an edge */
 			writel(mask, gedr);
-			generic_handle_irq(irq_find_mapping(gc->irq.domain,
+			generic_handle_irq(irq_find_mapping(gc->irqdomain,
 							    base + gpio));
 		}
 	}
@@ -361,8 +361,10 @@ static int intel_gpio_probe(struct pci_dev *pdev,
 	pcim_iounmap_regions(pdev, 1 << 1);
 
 	priv = devm_kzalloc(&pdev->dev, sizeof(*priv), GFP_KERNEL);
-	if (!priv)
+	if (!priv) {
+		dev_err(&pdev->dev, "can't allocate chip data\n");
 		return -ENOMEM;
+	}
 
 	priv->reg_base = pcim_iomap_table(pdev)[0];
 	priv->chip.label = dev_name(&pdev->dev);

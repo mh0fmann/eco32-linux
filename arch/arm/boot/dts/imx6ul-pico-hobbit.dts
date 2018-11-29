@@ -51,9 +51,8 @@
 	model = "Technexion Pico i.MX6UL Board";
 	compatible = "technexion,imx6ul-pico-hobbit", "fsl,imx6ul";
 
-	/* Will be filled by the bootloader */
-	memory@80000000 {
-		reg = <0x80000000 0>;
+	memory {
+		reg = <0x80000000 0x10000000>;
 	};
 
 	chosen {
@@ -176,7 +175,7 @@
 			reg = <1>;
 			max-speed = <100>;
 			interrupt-parent = <&gpio5>;
-			interrupts = <6 IRQ_TYPE_LEVEL_LOW>;
+			interrupts = <6 IRQ_TYPE_LEVEL_LOW 0>;
 		};
 	};
 };
@@ -187,7 +186,7 @@
 	pinctrl-0 = <&pinctrl_i2c1>;
 	status = "okay";
 
-	pmic: pfuze3000@8 {
+	pmic: pfuze3000@08 {
 		compatible = "fsl,pfuze3000";
 		reg = <0x08>;
 
@@ -224,7 +223,7 @@
 	pinctrl-0 = <&pinctrl_i2c2>;
 	status = "okay";
 
-	codec: sgtl5000@a {
+	codec: sgtl5000@0a {
 		reg = <0x0a>;
 		compatible = "fsl,sgtl5000";
 		clocks = <&sys_mclk>;

@@ -68,14 +68,6 @@ struct quirk_entry {
 
 static struct quirk_entry *quirks;
 
-
-static struct quirk_entry quirk_inspiron5675 = {
-	.num_zones = 2,
-	.hdmi_mux = 0,
-	.amplifier = 0,
-	.deepslp = 0,
-};
-
 static struct quirk_entry quirk_unknown = {
 	.num_zones = 2,
 	.hdmi_mux = 0,
@@ -178,15 +170,6 @@ static const struct dmi_system_id alienware_quirks[] __initconst = {
 		     DMI_MATCH(DMI_PRODUCT_NAME, "ASM201"),
 		     },
 	 .driver_data = &quirk_asm201,
-	 },
-	 {
-	 .callback = dmi_matched,
-	 .ident = "Dell Inc. Inspiron 5675",
-	 .matches = {
-		     DMI_MATCH(DMI_SYS_VENDOR, "Dell Inc."),
-		     DMI_MATCH(DMI_PRODUCT_NAME, "Inspiron 5675"),
-		     },
-	 .driver_data = &quirk_inspiron5675,
 	 },
 	{}
 };
@@ -458,19 +441,19 @@ static int alienware_zone_init(struct platform_device *dev)
 	 *      - zone_data num_zones is for the distinct zones
 	 */
 	zone_dev_attrs =
-	    kcalloc(quirks->num_zones + 1, sizeof(struct device_attribute),
+	    kzalloc(sizeof(struct device_attribute) * (quirks->num_zones + 1),
 		    GFP_KERNEL);
 	if (!zone_dev_attrs)
 		return -ENOMEM;
 
 	zone_attrs =
-	    kcalloc(quirks->num_zones + 2, sizeof(struct attribute *),
+	    kzalloc(sizeof(struct attribute *) * (quirks->num_zones + 2),
 		    GFP_KERNEL);
 	if (!zone_attrs)
 		return -ENOMEM;
 
 	zone_data =
-	    kcalloc(quirks->num_zones, sizeof(struct platform_zone),
+	    kzalloc(sizeof(struct platform_zone) * (quirks->num_zones),
 		    GFP_KERNEL);
 	if (!zone_data)
 		return -ENOMEM;
@@ -536,7 +519,6 @@ static acpi_status alienware_wmax_command(struct wmax_basic_args *in_args,
 		if (obj && obj->type == ACPI_TYPE_INTEGER)
 			*out_data = (u32) obj->integer.value;
 	}
-	kfree(output.pointer);
 	return status;
 
 }

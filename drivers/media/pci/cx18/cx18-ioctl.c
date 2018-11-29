@@ -397,8 +397,8 @@ static int cx18_querycap(struct file *file, void *fh,
 	struct cx18_stream *s = video_drvdata(file);
 	struct cx18 *cx = id->cx;
 
-	strscpy(vcap->driver, CX18_DRIVER_NAME, sizeof(vcap->driver));
-	strscpy(vcap->card, cx->card_name, sizeof(vcap->card));
+	strlcpy(vcap->driver, CX18_DRIVER_NAME, sizeof(vcap->driver));
+	strlcpy(vcap->card, cx->card_name, sizeof(vcap->card));
 	snprintf(vcap->bus_info, sizeof(vcap->bus_info),
 		 "PCI:%s", pci_name(cx->pci_dev));
 	vcap->capabilities = cx->v4l2_cap;	/* capabilities */
@@ -632,9 +632,9 @@ static int cx18_g_tuner(struct file *file, void *fh, struct v4l2_tuner *vt)
 	cx18_call_all(cx, tuner, g_tuner, vt);
 
 	if (vt->type == V4L2_TUNER_RADIO)
-		strscpy(vt->name, "cx18 Radio Tuner", sizeof(vt->name));
+		strlcpy(vt->name, "cx18 Radio Tuner", sizeof(vt->name));
 	else
-		strscpy(vt->name, "cx18 TV Tuner", sizeof(vt->name));
+		strlcpy(vt->name, "cx18 TV Tuner", sizeof(vt->name));
 	return 0;
 }
 

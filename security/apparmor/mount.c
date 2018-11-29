@@ -18,7 +18,7 @@
 
 #include "include/apparmor.h"
 #include "include/audit.h"
-#include "include/cred.h"
+#include "include/context.h"
 #include "include/domain.h"
 #include "include/file.h"
 #include "include/match.h"
@@ -121,7 +121,7 @@ static void audit_cb(struct audit_buffer *ab, void *va)
  * @src_name: src_name of object being mediated (MAYBE_NULL)
  * @type: type of filesystem (MAYBE_NULL)
  * @trans: name of trans (MAYBE NULL)
- * @flags: filesystem independent mount flags
+ * @flags: filesystem idependent mount flags
  * @data: filesystem mount flags
  * @request: permissions requested
  * @perms: the permissions computed for the request (NOT NULL)
@@ -216,12 +216,13 @@ static unsigned int match_mnt_flags(struct aa_dfa *dfa, unsigned int state,
 static struct aa_perms compute_mnt_perms(struct aa_dfa *dfa,
 					   unsigned int state)
 {
-	struct aa_perms perms = {
-		.allow = dfa_user_allow(dfa, state),
-		.audit = dfa_user_audit(dfa, state),
-		.quiet = dfa_user_quiet(dfa, state),
-		.xindex = dfa_user_xindex(dfa, state),
-	};
+	struct aa_perms perms;
+
+	perms.kill = 0;
+	perms.allow = dfa_user_allow(dfa, state);
+	perms.audit = dfa_user_audit(dfa, state);
+	perms.quiet = dfa_user_quiet(dfa, state);
+	perms.xindex = dfa_user_xindex(dfa, state);
 
 	return perms;
 }
@@ -329,9 +330,6 @@ static int match_mnt_path_str(struct aa_profile *profile,
 	AA_BUG(!mntpath);
 	AA_BUG(!buffer);
 
-	if (!PROFILE_MEDIATES(profile, AA_CLASS_MOUNT))
-		return 0;
-
 	error = aa_path_name(mntpath, path_flags(profile, mntpath), buffer,
 			     &mntpnt, &info, profile->disconnected);
 	if (error)
@@ -382,9 +380,6 @@ static int match_mnt(struct aa_profile *profile, const struct path *path,
 
 	AA_BUG(!profile);
 	AA_BUG(devpath && !devbuffer);
-
-	if (!PROFILE_MEDIATES(profile, AA_CLASS_MOUNT))
-		return 0;
 
 	if (devpath) {
 		error = aa_path_name(devpath, path_flags(profile, devpath),
@@ -564,9 +559,6 @@ static int profile_umount(struct aa_profile *profile, struct path *path,
 	AA_BUG(!profile);
 	AA_BUG(!path);
 
-	if (!PROFILE_MEDIATES(profile, AA_CLASS_MOUNT))
-		return 0;
-
 	error = aa_path_name(path, path_flags(profile, path), buffer, &name,
 			     &info, profile->disconnected);
 	if (error)
@@ -622,8 +614,7 @@ static struct aa_label *build_pivotroot(struct aa_profile *profile,
 	AA_BUG(!new_path);
 	AA_BUG(!old_path);
 
-	if (profile_unconfined(profile) ||
-	    !PROFILE_MEDIATES(profile, AA_CLASS_MOUNT))
+	if (profile_unconfined(profile))
 		return aa_get_newest_label(&profile->label);
 
 	error = aa_path_name(old_path, path_flags(profile, old_path),

@@ -29,8 +29,8 @@ static struct aq_ring_s *aq_ring_alloc(struct aq_ring_s *self,
 		goto err_exit;
 	}
 	self->dx_ring = dma_alloc_coherent(aq_nic_get_dev(aq_nic),
-					   self->size * self->dx_size,
-					   &self->dx_ring_pa, GFP_KERNEL);
+						self->size * self->dx_size,
+						&self->dx_ring_pa, GFP_KERNEL);
 	if (!self->dx_ring) {
 		err = -ENOMEM;
 		goto err_exit;
@@ -136,12 +136,11 @@ void aq_ring_queue_stop(struct aq_ring_s *ring)
 		netif_stop_subqueue(ndev, ring->idx);
 }
 
-bool aq_ring_tx_clean(struct aq_ring_s *self)
+void aq_ring_tx_clean(struct aq_ring_s *self)
 {
 	struct device *dev = aq_nic_get_dev(self->aq_nic);
-	unsigned int budget = AQ_CFG_TX_CLEAN_BUDGET;
 
-	for (; self->sw_head != self->hw_head && budget--;
+	for (; self->sw_head != self->hw_head;
 		self->sw_head = aq_ring_next_dx(self, self->sw_head)) {
 		struct aq_ring_buff_s *buff = &self->buff_ring[self->sw_head];
 
@@ -167,29 +166,6 @@ bool aq_ring_tx_clean(struct aq_ring_s *self)
 
 		buff->pa = 0U;
 		buff->eop_index = 0xffffU;
-	}
-
-	return !!budget;
-}
-
-static void aq_rx_checksum(struct aq_ring_s *self,
-			   struct aq_ring_buff_s *buff,
-			   struct sk_buff *skb)
-{
-	if (!(self->aq_nic->ndev->features & NETIF_F_RXCSUM))
-		return;
-
-	if (unlikely(buff->is_cso_err)) {
-		++self->stats.rx.errors;
-		skb->ip_summed = CHECKSUM_NONE;
-		return;
-	}
-	if (buff->is_ip_cso) {
-		__skb_incr_checksum_unnecessary(skb);
-		if (buff->is_udp_cso || buff->is_tcp_cso)
-			__skb_incr_checksum_unnecessary(skb);
-	} else {
-		skb->ip_summed = CHECKSUM_NONE;
 	}
 }
 
@@ -246,10 +222,9 @@ int aq_ring_rx_clean(struct aq_ring_s *self,
 		}
 
 		/* for single fragment packets use build_skb() */
-		if (buff->is_eop &&
-		    buff->len <= AQ_CFG_RX_FRAME_MAX - AQ_SKB_ALIGN) {
+		if (buff->is_eop) {
 			skb = build_skb(page_address(buff->page),
-					AQ_CFG_RX_FRAME_MAX);
+					buff->len + AQ_SKB_ALIGN);
 			if (unlikely(!skb)) {
 				err = -ENOMEM;
 				goto err_exit;
@@ -269,27 +244,34 @@ int aq_ring_rx_clean(struct aq_ring_s *self,
 					buff->len - ETH_HLEN,
 					SKB_TRUESIZE(buff->len - ETH_HLEN));
 
-			if (!buff->is_eop) {
-				for (i = 1U, next_ = buff->next,
-				     buff_ = &self->buff_ring[next_];
-				     true; next_ = buff_->next,
-				     buff_ = &self->buff_ring[next_], ++i) {
-					skb_add_rx_frag(skb, i,
-							buff_->page, 0,
-							buff_->len,
-							SKB_TRUESIZE(buff->len -
-							ETH_HLEN));
-					buff_->is_cleaned = 1;
+			for (i = 1U, next_ = buff->next,
+			     buff_ = &self->buff_ring[next_]; true;
+			     next_ = buff_->next,
+			     buff_ = &self->buff_ring[next_], ++i) {
+				skb_add_rx_frag(skb, i, buff_->page, 0,
+						buff_->len,
+						SKB_TRUESIZE(buff->len -
+						ETH_HLEN));
+				buff_->is_cleaned = 1;
 
-					if (buff_->is_eop)
-						break;
-				}
+				if (buff_->is_eop)
+					break;
 			}
 		}
 
 		skb->protocol = eth_type_trans(skb, ndev);
-
-		aq_rx_checksum(self, buff, skb);
+		if (unlikely(buff->is_cso_err)) {
+			++self->stats.rx.errors;
+			skb->ip_summed = CHECKSUM_NONE;
+		} else {
+			if (buff->is_ip_cso) {
+				__skb_incr_checksum_unnecessary(skb);
+				if (buff->is_udp_cso || buff->is_tcp_cso)
+					__skb_incr_checksum_unnecessary(skb);
+			} else {
+				skb->ip_summed = CHECKSUM_NONE;
+			}
+		}
 
 		skb_set_hash(skb, buff->rss_hash,
 			     buff->is_hash_l4 ? PKT_HASH_TYPE_L4 :
@@ -297,10 +279,10 @@ int aq_ring_rx_clean(struct aq_ring_s *self,
 
 		skb_record_rx_queue(skb, self->idx);
 
+		napi_gro_receive(napi, skb);
+
 		++self->stats.rx.packets;
 		self->stats.rx.bytes += skb->len;
-
-		napi_gro_receive(napi, skb);
 	}
 
 err_exit:
@@ -322,7 +304,8 @@ int aq_ring_rx_fill(struct aq_ring_s *self)
 		buff->flags = 0U;
 		buff->len = AQ_CFG_RX_FRAME_MAX;
 
-		buff->page = alloc_pages(GFP_ATOMIC | __GFP_COMP, pages_order);
+		buff->page = alloc_pages(GFP_ATOMIC | __GFP_COLD |
+					 __GFP_COMP, pages_order);
 		if (!buff->page) {
 			err = -ENOMEM;
 			goto err_exit;

@@ -89,8 +89,6 @@ enum chain_value {
 	CCVAL_COUNT,
 };
 
-extern bool dwarf_callchain_users;
-
 struct callchain_param {
 	bool			enabled;
 	enum perf_call_graph_mode record_mode;
@@ -124,7 +122,7 @@ struct callchain_list {
 	u64			iter_count;
 	u64			iter_cycles;
 	struct branch_type_stat brtype_stat;
-	const char		*srcline;
+	char		       *srcline;
 	struct list_head	list;
 };
 
@@ -138,7 +136,6 @@ struct callchain_cursor_node {
 	u64				ip;
 	struct map			*map;
 	struct symbol			*sym;
-	const char			*srcline;
 	bool				branch;
 	struct branch_flags		branch_flags;
 	u64				branch_from;
@@ -205,8 +202,7 @@ static inline void callchain_cursor_reset(struct callchain_cursor *cursor)
 int callchain_cursor_append(struct callchain_cursor *cursor, u64 ip,
 			    struct map *map, struct symbol *sym,
 			    bool branch, struct branch_flags *flags,
-			    int nr_loop_iter, u64 iter_cycles, u64 branch_from,
-			    const char *srcline);
+			    int nr_loop_iter, u64 iter_cycles, u64 branch_from);
 
 /* Close a cursor writing session. Initialize for the reader */
 static inline void callchain_cursor_commit(struct callchain_cursor *cursor)

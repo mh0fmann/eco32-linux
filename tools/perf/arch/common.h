@@ -4,6 +4,9 @@
 
 #include "../util/env.h"
 
-int perf_env__lookup_objdump(struct perf_env *env, const char **path);
+extern const char *objdump_path;
+
+int perf_env__lookup_objdump(struct perf_env *env);
+const char *normalize_arch(char *arch);
 
 #endif /* ARCH_PERF_COMMON_H */

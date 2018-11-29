@@ -586,9 +586,9 @@ static void mrp_join_timer_arm(struct mrp_applicant *app)
 	mod_timer(&app->join_timer, jiffies + delay);
 }
 
-static void mrp_join_timer(struct timer_list *t)
+static void mrp_join_timer(unsigned long data)
 {
-	struct mrp_applicant *app = from_timer(app, t, join_timer);
+	struct mrp_applicant *app = (struct mrp_applicant *)data;
 
 	spin_lock(&app->lock);
 	mrp_mad_event(app, MRP_EVENT_TX);
@@ -605,9 +605,9 @@ static void mrp_periodic_timer_arm(struct mrp_applicant *app)
 		  jiffies + msecs_to_jiffies(mrp_periodic_time));
 }
 
-static void mrp_periodic_timer(struct timer_list *t)
+static void mrp_periodic_timer(unsigned long data)
 {
-	struct mrp_applicant *app = from_timer(app, t, periodic_timer);
+	struct mrp_applicant *app = (struct mrp_applicant *)data;
 
 	spin_lock(&app->lock);
 	mrp_mad_event(app, MRP_EVENT_PERIODIC);
@@ -865,9 +865,10 @@ int mrp_init_applicant(struct net_device *dev, struct mrp_application *appl)
 	spin_lock_init(&app->lock);
 	skb_queue_head_init(&app->queue);
 	rcu_assign_pointer(dev->mrp_port->applicants[appl->type], app);
-	timer_setup(&app->join_timer, mrp_join_timer, 0);
+	setup_timer(&app->join_timer, mrp_join_timer, (unsigned long)app);
 	mrp_join_timer_arm(app);
-	timer_setup(&app->periodic_timer, mrp_periodic_timer, 0);
+	setup_timer(&app->periodic_timer, mrp_periodic_timer,
+		    (unsigned long)app);
 	mrp_periodic_timer_arm(app);
 	return 0;
 

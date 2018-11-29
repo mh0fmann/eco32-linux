@@ -72,13 +72,13 @@ position p;
  (sizeof(E)@p /sizeof(T))
 )
 
-@script:python depends on org@
+@script:python depends on i&&org@
 p << r.p;
 @@
 
 coccilib.org.print_todo(p[0], "WARNING should use ARRAY_SIZE")
 
-@script:python depends on report@
+@script:python depends on i&&report@
 p << r.p;
 @@
 

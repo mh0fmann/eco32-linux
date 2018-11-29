@@ -55,6 +55,16 @@ struct hugetlbfs_config {
 	umode_t			mode;
 };
 
+struct hugetlbfs_inode_info {
+	struct shared_policy policy;
+	struct inode vfs_inode;
+};
+
+static inline struct hugetlbfs_inode_info *HUGETLBFS_I(struct inode *inode)
+{
+	return container_of(inode, struct hugetlbfs_inode_info, vfs_inode);
+}
+
 int sysctl_hugetlb_shm_group;
 
 enum {
@@ -108,16 +118,6 @@ static void huge_pagevec_release(struct pagevec *pvec)
 	pagevec_reinit(pvec);
 }
 
-/*
- * Mask used when checking the page offset value passed in via system
- * calls.  This value will be converted to a loff_t which is signed.
- * Therefore, we want to check the upper PAGE_SHIFT + 1 bits of the
- * value.  The extra bit (- 1 in the shift value) is to take the sign
- * bit into account.
- */
-#define PGOFF_LOFFT_MAX \
-	(((1UL << (PAGE_SHIFT + 1)) - 1) <<  (BITS_PER_LONG - (PAGE_SHIFT + 1)))
-
 static int hugetlbfs_file_mmap(struct file *file, struct vm_area_struct *vma)
 {
 	struct inode *inode = file_inode(file);
@@ -137,17 +137,12 @@ static int hugetlbfs_file_mmap(struct file *file, struct vm_area_struct *vma)
 	vma->vm_ops = &hugetlb_vm_ops;
 
 	/*
-	 * page based offset in vm_pgoff could be sufficiently large to
-	 * overflow a loff_t when converted to byte offset.  This can
-	 * only happen on architectures where sizeof(loff_t) ==
-	 * sizeof(unsigned long).  So, only check in those instances.
+	 * Offset passed to mmap (before page shift) could have been
+	 * negative when represented as a (l)off_t.
 	 */
-	if (sizeof(unsigned long) == sizeof(loff_t)) {
-		if (vma->vm_pgoff & PGOFF_LOFFT_MAX)
-			return -EINVAL;
-	}
+	if (((loff_t)vma->vm_pgoff << PAGE_SHIFT) < 0)
+		return -EINVAL;
 
-	/* must be huge page aligned */
 	if (vma->vm_pgoff & (~huge_page_mask(h) >> PAGE_SHIFT))
 		return -EINVAL;
 
@@ -410,9 +405,9 @@ static void remove_inode_hugepages(struct inode *inode, loff_t lstart,
 	int i, freed = 0;
 	bool truncate_op = (lend == LLONG_MAX);
 
-	vma_init(&pseudo_vma, current->mm);
+	memset(&pseudo_vma, 0, sizeof(struct vm_area_struct));
 	pseudo_vma.vm_flags = (VM_HUGETLB | VM_MAYSHARE | VM_SHARED);
-	pagevec_init(&pvec);
+	pagevec_init(&pvec, 0);
 	next = start;
 	while (next < end) {
 		/*
@@ -525,16 +520,8 @@ static long hugetlbfs_punch_hole(struct inode *inode, loff_t offset, loff_t len)
 
 	if (hole_end > hole_start) {
 		struct address_space *mapping = inode->i_mapping;
-		struct hugetlbfs_inode_info *info = HUGETLBFS_I(inode);
 
 		inode_lock(inode);
-
-		/* protected by i_mutex */
-		if (info->seals & F_SEAL_WRITE) {
-			inode_unlock(inode);
-			return -EPERM;
-		}
-
 		i_mmap_lock_write(mapping);
 		if (!RB_EMPTY_ROOT(&mapping->i_mmap.rb_root))
 			hugetlb_vmdelete_list(&mapping->i_mmap,
@@ -552,7 +539,6 @@ static long hugetlbfs_fallocate(struct file *file, int mode, loff_t offset,
 				loff_t len)
 {
 	struct inode *inode = file_inode(file);
-	struct hugetlbfs_inode_info *info = HUGETLBFS_I(inode);
 	struct address_space *mapping = inode->i_mapping;
 	struct hstate *h = hstate_inode(inode);
 	struct vm_area_struct pseudo_vma;
@@ -584,17 +570,12 @@ static long hugetlbfs_fallocate(struct file *file, int mode, loff_t offset,
 	if (error)
 		goto out;
 
-	if ((info->seals & F_SEAL_GROW) && offset + len > inode->i_size) {
-		error = -EPERM;
-		goto out;
-	}
-
 	/*
 	 * Initialize a pseudo vma as this is required by the huge page
 	 * allocation routines.  If NUMA is configured, use page index
 	 * as input to create an allocation policy.
 	 */
-	vma_init(&pseudo_vma, mm);
+	memset(&pseudo_vma, 0, sizeof(struct vm_area_struct));
 	pseudo_vma.vm_flags = (VM_HUGETLB | VM_MAYSHARE | VM_SHARED);
 	pseudo_vma.vm_file = file;
 
@@ -658,11 +639,11 @@ static long hugetlbfs_fallocate(struct file *file, int mode, loff_t offset,
 		mutex_unlock(&hugetlb_fault_mutex_table[hash]);
 
 		/*
-		 * unlock_page because locked by add_to_page_cache()
 		 * page_put due to reference from alloc_huge_page()
+		 * unlock_page because locked by add_to_page_cache()
 		 */
-		unlock_page(page);
 		put_page(page);
+		unlock_page(page);
 	}
 
 	if (!(mode & FALLOC_FL_KEEP_SIZE) && offset + len > inode->i_size)
@@ -679,7 +660,6 @@ static int hugetlbfs_setattr(struct dentry *dentry, struct iattr *attr)
 	struct hstate *h = hstate_inode(inode);
 	int error;
 	unsigned int ia_valid = attr->ia_valid;
-	struct hugetlbfs_inode_info *info = HUGETLBFS_I(inode);
 
 	BUG_ON(!inode);
 
@@ -688,16 +668,10 @@ static int hugetlbfs_setattr(struct dentry *dentry, struct iattr *attr)
 		return error;
 
 	if (ia_valid & ATTR_SIZE) {
-		loff_t oldsize = inode->i_size;
-		loff_t newsize = attr->ia_size;
-
-		if (newsize & ~huge_page_mask(h))
+		error = -EINVAL;
+		if (attr->ia_size & ~huge_page_mask(h))
 			return -EINVAL;
-		/* protected by i_mutex */
-		if ((newsize < oldsize && (info->seals & F_SEAL_SHRINK)) ||
-		    (newsize > oldsize && (info->seals & F_SEAL_GROW)))
-			return -EPERM;
-		error = hugetlb_vmtruncate(inode, newsize);
+		error = hugetlb_vmtruncate(inode, attr->ia_size);
 		if (error)
 			return error;
 	}
@@ -749,8 +723,6 @@ static struct inode *hugetlbfs_get_inode(struct super_block *sb,
 
 	inode = new_inode(sb);
 	if (inode) {
-		struct hugetlbfs_inode_info *info = HUGETLBFS_I(inode);
-
 		inode->i_ino = get_next_ino();
 		inode_init_owner(inode, dir, mode);
 		lockdep_set_class(&inode->i_mapping->i_mmap_rwsem,
@@ -758,7 +730,6 @@ static struct inode *hugetlbfs_get_inode(struct super_block *sb,
 		inode->i_mapping->a_ops = &hugetlbfs_aops;
 		inode->i_atime = inode->i_mtime = inode->i_ctime = current_time(inode);
 		inode->i_mapping->private_data = resv_map;
-		info->seals = F_SEAL_SEAL;
 		switch (mode & S_IFMT) {
 		default:
 			init_special_inode(inode, mode, dev);
@@ -1308,6 +1279,10 @@ static int get_hstate_idx(int page_size_log)
 	return h - hstates;
 }
 
+static const struct dentry_operations anon_ops = {
+	.d_dname = simple_dname
+};
+
 /*
  * Note that size should be aligned to proper hugepage size in caller side,
  * otherwise hugetlb_reserve_pages reserves one less hugepages than intended.
@@ -1316,18 +1291,19 @@ struct file *hugetlb_file_setup(const char *name, size_t size,
 				vm_flags_t acctflag, struct user_struct **user,
 				int creat_flags, int page_size_log)
 {
+	struct file *file = ERR_PTR(-ENOMEM);
 	struct inode *inode;
-	struct vfsmount *mnt;
+	struct path path;
+	struct super_block *sb;
+	struct qstr quick_string;
 	int hstate_idx;
-	struct file *file;
 
 	hstate_idx = get_hstate_idx(page_size_log);
 	if (hstate_idx < 0)
 		return ERR_PTR(-ENODEV);
 
 	*user = NULL;
-	mnt = hugetlbfs_vfsmount[hstate_idx];
-	if (!mnt)
+	if (!hugetlbfs_vfsmount[hstate_idx])
 		return ERR_PTR(-ENOENT);
 
 	if (creat_flags == HUGETLB_SHMFS_INODE && !can_do_hugetlb_shm()) {
@@ -1343,28 +1319,45 @@ struct file *hugetlb_file_setup(const char *name, size_t size,
 		}
 	}
 
+	sb = hugetlbfs_vfsmount[hstate_idx]->mnt_sb;
+	quick_string.name = name;
+	quick_string.len = strlen(quick_string.name);
+	quick_string.hash = 0;
+	path.dentry = d_alloc_pseudo(sb, &quick_string);
+	if (!path.dentry)
+		goto out_shm_unlock;
+
+	d_set_d_op(path.dentry, &anon_ops);
+	path.mnt = mntget(hugetlbfs_vfsmount[hstate_idx]);
 	file = ERR_PTR(-ENOSPC);
-	inode = hugetlbfs_get_inode(mnt->mnt_sb, NULL, S_IFREG | S_IRWXUGO, 0);
+	inode = hugetlbfs_get_inode(sb, NULL, S_IFREG | S_IRWXUGO, 0);
 	if (!inode)
-		goto out;
+		goto out_dentry;
 	if (creat_flags == HUGETLB_SHMFS_INODE)
 		inode->i_flags |= S_PRIVATE;
 
-	inode->i_size = size;
-	clear_nlink(inode);
-
+	file = ERR_PTR(-ENOMEM);
 	if (hugetlb_reserve_pages(inode, 0,
 			size >> huge_page_shift(hstate_inode(inode)), NULL,
 			acctflag))
-		file = ERR_PTR(-ENOMEM);
-	else
-		file = alloc_file_pseudo(inode, mnt, name, O_RDWR,
-					&hugetlbfs_file_operations);
-	if (!IS_ERR(file))
-		return file;
+		goto out_inode;
 
+	d_instantiate(path.dentry, inode);
+	inode->i_size = size;
+	clear_nlink(inode);
+
+	file = alloc_file(&path, FMODE_WRITE | FMODE_READ,
+			&hugetlbfs_file_operations);
+	if (IS_ERR(file))
+		goto out_dentry; /* inode is already attached */
+
+	return file;
+
+out_inode:
 	iput(inode);
-out:
+out_dentry:
+	path_put(&path);
+out_shm_unlock:
 	if (*user) {
 		user_shm_unlock(size, *user);
 		*user = NULL;

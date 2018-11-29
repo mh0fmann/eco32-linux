@@ -123,7 +123,7 @@ static void validate_or_set_position_hints(struct vbox_private *vbox)
  */
 static void vbox_update_mode_hints(struct vbox_private *vbox)
 {
-	struct drm_device *dev = &vbox->ddev;
+	struct drm_device *dev = vbox->dev;
 	struct drm_connector *connector;
 	struct vbox_connector *vbox_conn;
 	struct vbva_modehint *hints;
@@ -150,8 +150,8 @@ static void vbox_update_mode_hints(struct vbox_private *vbox)
 
 		disconnected = !(hints->enabled);
 		crtc_id = vbox_conn->vbox_crtc->crtc_id;
-		vbox_conn->mode_hint.width = hints->cx;
-		vbox_conn->mode_hint.height = hints->cy;
+		vbox_conn->mode_hint.width = hints->cx & 0x8fff;
+		vbox_conn->mode_hint.height = hints->cy & 0x8fff;
 		vbox_conn->vbox_crtc->x_hint = hints->dx;
 		vbox_conn->vbox_crtc->y_hint = hints->dy;
 		vbox_conn->mode_hint.disconnected = disconnected;
@@ -179,7 +179,7 @@ static void vbox_hotplug_worker(struct work_struct *work)
 						 hotplug_work);
 
 	vbox_update_mode_hints(vbox);
-	drm_kms_helper_hotplug_event(&vbox->ddev);
+	drm_kms_helper_hotplug_event(vbox->dev);
 }
 
 int vbox_irq_init(struct vbox_private *vbox)
@@ -187,11 +187,11 @@ int vbox_irq_init(struct vbox_private *vbox)
 	INIT_WORK(&vbox->hotplug_work, vbox_hotplug_worker);
 	vbox_update_mode_hints(vbox);
 
-	return drm_irq_install(&vbox->ddev, vbox->ddev.pdev->irq);
+	return drm_irq_install(vbox->dev, vbox->dev->pdev->irq);
 }
 
 void vbox_irq_fini(struct vbox_private *vbox)
 {
-	drm_irq_uninstall(&vbox->ddev);
+	drm_irq_uninstall(vbox->dev);
 	flush_work(&vbox->hotplug_work);
 }

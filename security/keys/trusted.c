@@ -30,7 +30,7 @@
 #include <linux/tpm.h>
 #include <linux/tpm_command.h>
 
-#include <keys/trusted.h>
+#include "trusted.h"
 
 static const char hmac_alg[] = "hmac(sha1)";
 static const char hash_alg[] = "sha1";
@@ -121,7 +121,7 @@ out:
 /*
  * calculate authorization info fields to send to TPM
  */
-int TSS_authhmac(unsigned char *digest, const unsigned char *key,
+static int TSS_authhmac(unsigned char *digest, const unsigned char *key,
 			unsigned int keylen, unsigned char *h1,
 			unsigned char *h2, unsigned char h3, ...)
 {
@@ -168,12 +168,11 @@ out:
 	kzfree(sdesc);
 	return ret;
 }
-EXPORT_SYMBOL_GPL(TSS_authhmac);
 
 /*
  * verify the AUTH1_COMMAND (Seal) result from TPM
  */
-int TSS_checkhmac1(unsigned char *buffer,
+static int TSS_checkhmac1(unsigned char *buffer,
 			  const uint32_t command,
 			  const unsigned char *ononce,
 			  const unsigned char *key,
@@ -250,7 +249,6 @@ out:
 	kzfree(sdesc);
 	return ret;
 }
-EXPORT_SYMBOL_GPL(TSS_checkhmac1);
 
 /*
  * verify the AUTH2_COMMAND (unseal) result from TPM
@@ -357,19 +355,19 @@ out:
  * For key specific tpm requests, we will generate and send our
  * own TPM command packets using the drivers send function.
  */
-int trusted_tpm_send(unsigned char *cmd, size_t buflen)
+static int trusted_tpm_send(const u32 chip_num, unsigned char *cmd,
+			    size_t buflen)
 {
 	int rc;
 
 	dump_tpm_buf(cmd);
-	rc = tpm_send(NULL, cmd, buflen);
+	rc = tpm_send(chip_num, cmd, buflen);
 	dump_tpm_buf(cmd);
 	if (rc > 0)
 		/* Can't return positive return codes values to keyctl */
 		rc = -EPERM;
 	return rc;
 }
-EXPORT_SYMBOL_GPL(trusted_tpm_send);
 
 /*
  * Lock a trusted key, by extending a selected PCR.
@@ -384,10 +382,10 @@ static int pcrlock(const int pcrnum)
 
 	if (!capable(CAP_SYS_ADMIN))
 		return -EPERM;
-	ret = tpm_get_random(NULL, hash, SHA1_DIGEST_SIZE);
+	ret = tpm_get_random(TPM_ANY_NUM, hash, SHA1_DIGEST_SIZE);
 	if (ret != SHA1_DIGEST_SIZE)
 		return ret;
-	return tpm_pcr_extend(NULL, pcrnum, hash) ? -EINVAL : 0;
+	return tpm_pcr_extend(TPM_ANY_NUM, pcrnum, hash) ? -EINVAL : 0;
 }
 
 /*
@@ -400,7 +398,7 @@ static int osap(struct tpm_buf *tb, struct osapsess *s,
 	unsigned char ononce[TPM_NONCE_SIZE];
 	int ret;
 
-	ret = tpm_get_random(NULL, ononce, TPM_NONCE_SIZE);
+	ret = tpm_get_random(TPM_ANY_NUM, ononce, TPM_NONCE_SIZE);
 	if (ret != TPM_NONCE_SIZE)
 		return ret;
 
@@ -412,7 +410,7 @@ static int osap(struct tpm_buf *tb, struct osapsess *s,
 	store32(tb, handle);
 	storebytes(tb, ononce, TPM_NONCE_SIZE);
 
-	ret = trusted_tpm_send(tb->data, MAX_BUF_SIZE);
+	ret = trusted_tpm_send(TPM_ANY_NUM, tb->data, MAX_BUF_SIZE);
 	if (ret < 0)
 		return ret;
 
@@ -428,7 +426,7 @@ static int osap(struct tpm_buf *tb, struct osapsess *s,
 /*
  * Create an object independent authorisation protocol (oiap) session
  */
-int oiap(struct tpm_buf *tb, uint32_t *handle, unsigned char *nonce)
+static int oiap(struct tpm_buf *tb, uint32_t *handle, unsigned char *nonce)
 {
 	int ret;
 
@@ -436,7 +434,7 @@ int oiap(struct tpm_buf *tb, uint32_t *handle, unsigned char *nonce)
 	store16(tb, TPM_TAG_RQU_COMMAND);
 	store32(tb, TPM_OIAP_SIZE);
 	store32(tb, TPM_ORD_OIAP);
-	ret = trusted_tpm_send(tb->data, MAX_BUF_SIZE);
+	ret = trusted_tpm_send(TPM_ANY_NUM, tb->data, MAX_BUF_SIZE);
 	if (ret < 0)
 		return ret;
 
@@ -445,7 +443,6 @@ int oiap(struct tpm_buf *tb, uint32_t *handle, unsigned char *nonce)
 	       TPM_NONCE_SIZE);
 	return 0;
 }
-EXPORT_SYMBOL_GPL(oiap);
 
 struct tpm_digests {
 	unsigned char encauth[SHA1_DIGEST_SIZE];
@@ -496,7 +493,7 @@ static int tpm_seal(struct tpm_buf *tb, uint16_t keytype,
 	if (ret < 0)
 		goto out;
 
-	ret = tpm_get_random(NULL, td->nonceodd, TPM_NONCE_SIZE);
+	ret = tpm_get_random(TPM_ANY_NUM, td->nonceodd, TPM_NONCE_SIZE);
 	if (ret != TPM_NONCE_SIZE)
 		goto out;
 	ordinal = htonl(TPM_ORD_SEAL);
@@ -545,7 +542,7 @@ static int tpm_seal(struct tpm_buf *tb, uint16_t keytype,
 	store8(tb, cont);
 	storebytes(tb, td->pubauth, SHA1_DIGEST_SIZE);
 
-	ret = trusted_tpm_send(tb->data, MAX_BUF_SIZE);
+	ret = trusted_tpm_send(TPM_ANY_NUM, tb->data, MAX_BUF_SIZE);
 	if (ret < 0)
 		goto out;
 
@@ -606,7 +603,7 @@ static int tpm_unseal(struct tpm_buf *tb,
 
 	ordinal = htonl(TPM_ORD_UNSEAL);
 	keyhndl = htonl(SRKHANDLE);
-	ret = tpm_get_random(NULL, nonceodd, TPM_NONCE_SIZE);
+	ret = tpm_get_random(TPM_ANY_NUM, nonceodd, TPM_NONCE_SIZE);
 	if (ret != TPM_NONCE_SIZE) {
 		pr_info("trusted_key: tpm_get_random failed (%d)\n", ret);
 		return ret;
@@ -638,7 +635,7 @@ static int tpm_unseal(struct tpm_buf *tb,
 	store8(tb, cont);
 	storebytes(tb, authdata2, SHA1_DIGEST_SIZE);
 
-	ret = trusted_tpm_send(tb->data, MAX_BUF_SIZE);
+	ret = trusted_tpm_send(TPM_ANY_NUM, tb->data, MAX_BUF_SIZE);
 	if (ret < 0) {
 		pr_info("trusted_key: authhmac failed (%d)\n", ret);
 		return ret;
@@ -751,7 +748,7 @@ static int getoptions(char *c, struct trusted_key_payload *pay,
 	int i;
 	int tpm2;
 
-	tpm2 = tpm_is_tpm2(NULL);
+	tpm2 = tpm_is_tpm2(TPM_ANY_NUM);
 	if (tpm2 < 0)
 		return tpm2;
 
@@ -920,7 +917,7 @@ static struct trusted_key_options *trusted_options_alloc(void)
 	struct trusted_key_options *options;
 	int tpm2;
 
-	tpm2 = tpm_is_tpm2(NULL);
+	tpm2 = tpm_is_tpm2(TPM_ANY_NUM);
 	if (tpm2 < 0)
 		return NULL;
 
@@ -970,7 +967,7 @@ static int trusted_instantiate(struct key *key,
 	size_t key_len;
 	int tpm2;
 
-	tpm2 = tpm_is_tpm2(NULL);
+	tpm2 = tpm_is_tpm2(TPM_ANY_NUM);
 	if (tpm2 < 0)
 		return tpm2;
 
@@ -1011,7 +1008,7 @@ static int trusted_instantiate(struct key *key,
 	switch (key_cmd) {
 	case Opt_load:
 		if (tpm2)
-			ret = tpm_unseal_trusted(NULL, payload, options);
+			ret = tpm_unseal_trusted(TPM_ANY_NUM, payload, options);
 		else
 			ret = key_unseal(payload, options);
 		dump_payload(payload);
@@ -1021,13 +1018,13 @@ static int trusted_instantiate(struct key *key,
 		break;
 	case Opt_new:
 		key_len = payload->key_len;
-		ret = tpm_get_random(NULL, payload->key, key_len);
+		ret = tpm_get_random(TPM_ANY_NUM, payload->key, key_len);
 		if (ret != key_len) {
 			pr_info("trusted_key: key_create failed (%d)\n", ret);
 			goto out;
 		}
 		if (tpm2)
-			ret = tpm_seal_trusted(NULL, payload, options);
+			ret = tpm_seal_trusted(TPM_ANY_NUM, payload, options);
 		else
 			ret = key_seal(payload, options);
 		if (ret < 0)
@@ -1152,7 +1149,7 @@ static long trusted_read(const struct key *key, char __user *buffer,
 		return -EINVAL;
 
 	if (buffer && buflen >= 2 * p->blob_len) {
-		ascii_buf = kmalloc_array(2, p->blob_len, GFP_KERNEL);
+		ascii_buf = kmalloc(2 * p->blob_len, GFP_KERNEL);
 		if (!ascii_buf)
 			return -ENOMEM;
 

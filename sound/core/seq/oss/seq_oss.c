@@ -59,7 +59,7 @@ static int odev_release(struct inode *inode, struct file *file);
 static ssize_t odev_read(struct file *file, char __user *buf, size_t count, loff_t *offset);
 static ssize_t odev_write(struct file *file, const char __user *buf, size_t count, loff_t *offset);
 static long odev_ioctl(struct file *file, unsigned int cmd, unsigned long arg);
-static __poll_t odev_poll(struct file *file, poll_table * wait);
+static unsigned int odev_poll(struct file *file, poll_table * wait);
 
 
 /*
@@ -197,13 +197,13 @@ static long odev_ioctl_compat(struct file *file, unsigned int cmd,
 #define odev_ioctl_compat	NULL
 #endif
 
-static __poll_t
+static unsigned int
 odev_poll(struct file *file, poll_table * wait)
 {
 	struct seq_oss_devinfo *dp;
 	dp = file->private_data;
 	if (snd_BUG_ON(!dp))
-		return EPOLLERR;
+		return -ENXIO;
 	return snd_seq_oss_poll(dp, file, wait);
 }
 

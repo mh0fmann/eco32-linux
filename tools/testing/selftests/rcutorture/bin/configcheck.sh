@@ -19,7 +19,7 @@
 #
 # Authors: Paul E. McKenney <paulmck@linux.vnet.ibm.com>
 
-T=${TMPDIR-/tmp}/abat-chk-config.sh.$$
+T=/tmp/abat-chk-config.sh.$$
 trap 'rm -rf $T' 0
 mkdir $T
 

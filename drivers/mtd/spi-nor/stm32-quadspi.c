@@ -1,22 +1,9 @@
 /*
- * Driver for stm32 quadspi controller
+ * stm32_quadspi.c
  *
- * Copyright (C) 2017, STMicroelectronics - All Rights Reserved
- * Author(s): Ludovic Barre author <ludovic.barre@st.com>.
+ * Copyright (C) 2017, Ludovic Barre
  *
- * License terms: GPL V2.0.
- *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU General Public License version 2 as published by
- * the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful, but
- * WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more
- * details.
- *
- * You should have received a copy of the GNU General Public License along with
- * This program. If not, see <http://www.gnu.org/licenses/>.
+ * License terms: GNU General Public License (GPL), version 2
  */
 #include <linux/clk.h>
 #include <linux/errno.h>
@@ -126,7 +113,6 @@
 #define STM32_MAX_MMAP_SZ	SZ_256M
 #define STM32_MAX_NORCHIP	2
 
-#define STM32_QSPI_FIFO_SZ	32
 #define STM32_QSPI_FIFO_TIMEOUT_US 30000
 #define STM32_QSPI_BUSY_TIMEOUT_US 100000
 
@@ -138,7 +124,6 @@ struct stm32_qspi_flash {
 	u32 presc;
 	u32 read_mode;
 	bool registered;
-	u32 prefetch_limit;
 };
 
 struct stm32_qspi {
@@ -255,12 +240,12 @@ static int stm32_qspi_tx_poll(struct stm32_qspi *qspi,
 						 STM32_QSPI_FIFO_TIMEOUT_US);
 		if (ret) {
 			dev_err(qspi->dev, "fifo timeout (stat:%#x)\n", sr);
-			return ret;
+			break;
 		}
 		tx_fifo(buf++, qspi->io_base + QUADSPI_DR);
 	}
 
-	return 0;
+	return ret;
 }
 
 static int stm32_qspi_tx_mm(struct stm32_qspi *qspi,
@@ -287,7 +272,6 @@ static int stm32_qspi_send(struct stm32_qspi_flash *flash,
 {
 	struct stm32_qspi *qspi = flash->qspi;
 	u32 ccr, dcr, cr;
-	u32 last_byte;
 	int err;
 
 	err = stm32_qspi_wait_nobusy(qspi);
@@ -330,10 +314,6 @@ static int stm32_qspi_send(struct stm32_qspi_flash *flash,
 		if (err)
 			goto abort;
 		writel_relaxed(FCR_CTCF, qspi->io_base + QUADSPI_FCR);
-	} else {
-		last_byte = cmd->addr + cmd->len;
-		if (last_byte > flash->prefetch_limit)
-			goto abort;
 	}
 
 	return err;
@@ -342,9 +322,7 @@ abort:
 	cr = readl_relaxed(qspi->io_base + QUADSPI_CR) | CR_ABORT;
 	writel_relaxed(cr, qspi->io_base + QUADSPI_CR);
 
-	if (err)
-		dev_err(qspi->dev, "%s abort err:%d\n", __func__, err);
-
+	dev_err(qspi->dev, "%s abort err:%d\n", __func__, err);
 	return err;
 }
 
@@ -355,7 +333,7 @@ static int stm32_qspi_read_reg(struct spi_nor *nor,
 	struct device *dev = flash->qspi->dev;
 	struct stm32_qspi_cmd cmd;
 
-	dev_dbg(dev, "read_reg: cmd:%#.2x buf:%pK len:%#x\n", opcode, buf, len);
+	dev_dbg(dev, "read_reg: cmd:%#.2x buf:%p len:%#x\n", opcode, buf, len);
 
 	memset(&cmd, 0, sizeof(cmd));
 	cmd.opcode = opcode;
@@ -376,7 +354,7 @@ static int stm32_qspi_write_reg(struct spi_nor *nor, u8 opcode,
 	struct device *dev = flash->qspi->dev;
 	struct stm32_qspi_cmd cmd;
 
-	dev_dbg(dev, "write_reg: cmd:%#.2x buf:%pK len:%#x\n", opcode, buf, len);
+	dev_dbg(dev, "write_reg: cmd:%#.2x buf:%p len:%#x\n", opcode, buf, len);
 
 	memset(&cmd, 0, sizeof(cmd));
 	cmd.opcode = opcode;
@@ -398,7 +376,7 @@ static ssize_t stm32_qspi_read(struct spi_nor *nor, loff_t from, size_t len,
 	struct stm32_qspi_cmd cmd;
 	int err;
 
-	dev_dbg(qspi->dev, "read(%#.2x): buf:%pK from:%#.8x len:%#zx\n",
+	dev_dbg(qspi->dev, "read(%#.2x): buf:%p from:%#.8x len:%#zx\n",
 		nor->read_opcode, buf, (u32)from, len);
 
 	memset(&cmd, 0, sizeof(cmd));
@@ -572,7 +550,6 @@ static int stm32_qspi_flash_setup(struct stm32_qspi *qspi,
 	}
 
 	flash->fsize = FSIZE_VAL(mtd->size);
-	flash->prefetch_limit = mtd->size - STM32_QSPI_FIFO_SZ;
 
 	flash->read_mode = CCR_FMODE_MM;
 	if (mtd->size > qspi->mm_size)
@@ -656,7 +633,7 @@ static int stm32_qspi_probe(struct platform_device *pdev)
 		return ret;
 	}
 
-	rstc = devm_reset_control_get_exclusive(dev, NULL);
+	rstc = devm_reset_control_get(dev, NULL);
 	if (!IS_ERR(rstc)) {
 		reset_control_assert(rstc);
 		udelay(2);

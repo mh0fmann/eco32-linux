@@ -982,14 +982,25 @@ static int r128_cce_dispatch_write_pixels(struct drm_device *dev,
 
 	xbuf_size = count * sizeof(*x);
 	ybuf_size = count * sizeof(*y);
-	x = memdup_user(depth->x, xbuf_size);
-	if (IS_ERR(x))
-		return PTR_ERR(x);
-	y = memdup_user(depth->y, ybuf_size);
-	if (IS_ERR(y)) {
+	x = kmalloc(xbuf_size, GFP_KERNEL);
+	if (x == NULL)
+		return -ENOMEM;
+	y = kmalloc(ybuf_size, GFP_KERNEL);
+	if (y == NULL) {
 		kfree(x);
-		return PTR_ERR(y);
+		return -ENOMEM;
 	}
+	if (copy_from_user(x, depth->x, xbuf_size)) {
+		kfree(x);
+		kfree(y);
+		return -EFAULT;
+	}
+	if (copy_from_user(y, depth->y, xbuf_size)) {
+		kfree(x);
+		kfree(y);
+		return -EFAULT;
+	}
+
 	buffer_size = depth->n * sizeof(u32);
 	buffer = memdup_user(depth->buffer, buffer_size);
 	if (IS_ERR(buffer)) {
@@ -1449,7 +1460,7 @@ static int r128_cce_blit(struct drm_device *dev, void *data, struct drm_file *fi
 	return ret;
 }
 
-int r128_cce_depth(struct drm_device *dev, void *data, struct drm_file *file_priv)
+static int r128_cce_depth(struct drm_device *dev, void *data, struct drm_file *file_priv)
 {
 	drm_r128_private_t *dev_priv = dev->dev_private;
 	drm_r128_depth_t *depth = data;
@@ -1481,7 +1492,7 @@ int r128_cce_depth(struct drm_device *dev, void *data, struct drm_file *file_pri
 	return ret;
 }
 
-int r128_cce_stipple(struct drm_device *dev, void *data, struct drm_file *file_priv)
+static int r128_cce_stipple(struct drm_device *dev, void *data, struct drm_file *file_priv)
 {
 	drm_r128_private_t *dev_priv = dev->dev_private;
 	drm_r128_stipple_t *stipple = data;
@@ -1571,7 +1582,7 @@ static int r128_cce_indirect(struct drm_device *dev, void *data, struct drm_file
 	return 0;
 }
 
-int r128_getparam(struct drm_device *dev, void *data, struct drm_file *file_priv)
+static int r128_getparam(struct drm_device *dev, void *data, struct drm_file *file_priv)
 {
 	drm_r128_private_t *dev_priv = dev->dev_private;
 	drm_r128_getparam_t *param = data;

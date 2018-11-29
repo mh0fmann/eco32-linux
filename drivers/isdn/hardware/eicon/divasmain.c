@@ -591,22 +591,19 @@ static int divas_release(struct inode *inode, struct file *file)
 static ssize_t divas_write(struct file *file, const char __user *buf,
 			   size_t count, loff_t *ppos)
 {
-	diva_xdi_um_cfg_cmd_t msg;
 	int ret = -EINVAL;
 
 	if (!file->private_data) {
 		file->private_data = diva_xdi_open_adapter(file, buf,
-							   count, &msg,
+							   count,
 							   xdi_copy_from_user);
-		if (!file->private_data)
-			return (-ENODEV);
-		ret = diva_xdi_write(file->private_data, file,
-				     buf, count, &msg, xdi_copy_from_user);
-	} else {
-		ret = diva_xdi_write(file->private_data, file,
-				     buf, count, NULL, xdi_copy_from_user);
+	}
+	if (!file->private_data) {
+		return (-ENODEV);
 	}
 
+	ret = diva_xdi_write(file->private_data, file,
+			     buf, count, xdi_copy_from_user);
 	switch (ret) {
 	case -1:		/* Message should be removed from rx mailbox first */
 		ret = -EBUSY;
@@ -625,12 +622,11 @@ static ssize_t divas_write(struct file *file, const char __user *buf,
 static ssize_t divas_read(struct file *file, char __user *buf,
 			  size_t count, loff_t *ppos)
 {
-	diva_xdi_um_cfg_cmd_t msg;
 	int ret = -EINVAL;
 
 	if (!file->private_data) {
 		file->private_data = diva_xdi_open_adapter(file, buf,
-							   count, &msg,
+							   count,
 							   xdi_copy_from_user);
 	}
 	if (!file->private_data) {
@@ -654,12 +650,12 @@ static ssize_t divas_read(struct file *file, char __user *buf,
 	return (ret);
 }
 
-static __poll_t divas_poll(struct file *file, poll_table *wait)
+static unsigned int divas_poll(struct file *file, poll_table *wait)
 {
 	if (!file->private_data) {
-		return (EPOLLERR);
+		return (POLLERR);
 	}
-	return (EPOLLIN | EPOLLRDNORM);
+	return (POLLIN | POLLRDNORM);
 }
 
 static const struct file_operations divas_fops = {

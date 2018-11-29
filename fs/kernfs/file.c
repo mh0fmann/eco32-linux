@@ -275,7 +275,7 @@ static ssize_t kernfs_fop_write(struct file *file, const char __user *user_buf,
 {
 	struct kernfs_open_file *of = kernfs_of(file);
 	const struct kernfs_ops *ops;
-	ssize_t len;
+	size_t len;
 	char *buf;
 
 	if (of->atomic_write_len) {
@@ -348,11 +348,11 @@ static void kernfs_vma_open(struct vm_area_struct *vma)
 	kernfs_put_active(of->kn);
 }
 
-static vm_fault_t kernfs_vma_fault(struct vm_fault *vmf)
+static int kernfs_vma_fault(struct vm_fault *vmf)
 {
 	struct file *file = vmf->vma->vm_file;
 	struct kernfs_open_file *of = kernfs_of(file);
-	vm_fault_t ret;
+	int ret;
 
 	if (!of->vm_ops)
 		return VM_FAULT_SIGBUS;
@@ -368,11 +368,11 @@ static vm_fault_t kernfs_vma_fault(struct vm_fault *vmf)
 	return ret;
 }
 
-static vm_fault_t kernfs_vma_page_mkwrite(struct vm_fault *vmf)
+static int kernfs_vma_page_mkwrite(struct vm_fault *vmf)
 {
 	struct file *file = vmf->vma->vm_file;
 	struct kernfs_open_file *of = kernfs_of(file);
-	vm_fault_t ret;
+	int ret;
 
 	if (!of->vm_ops)
 		return VM_FAULT_SIGBUS;
@@ -823,7 +823,7 @@ void kernfs_drain_open_files(struct kernfs_node *kn)
  * the content and then you use 'poll' or 'select' to wait for
  * the content to change.  When the content changes (assuming the
  * manager for the kobject supports notification), poll will
- * return EPOLLERR|EPOLLPRI, and select will return the fd whether
+ * return POLLERR|POLLPRI, and select will return the fd whether
  * it is waiting for read, write, or exceptions.
  * Once poll/select indicates that the value has changed, you
  * need to close and re-open the file, or seek to 0 and read again.
@@ -832,7 +832,7 @@ void kernfs_drain_open_files(struct kernfs_node *kn)
  * to see if it supports poll (Neither 'poll' nor 'select' return
  * an appropriate error code).  When in doubt, set a suitable timeout value.
  */
-static __poll_t kernfs_fop_poll(struct file *filp, poll_table *wait)
+static unsigned int kernfs_fop_poll(struct file *filp, poll_table *wait)
 {
 	struct kernfs_open_file *of = kernfs_of(filp);
 	struct kernfs_node *kn = kernfs_dentry_node(filp->f_path.dentry);
@@ -851,7 +851,7 @@ static __poll_t kernfs_fop_poll(struct file *filp, poll_table *wait)
 	return DEFAULT_POLLMASK;
 
  trigger:
-	return DEFAULT_POLLMASK|EPOLLERR|EPOLLPRI;
+	return DEFAULT_POLLMASK|POLLERR|POLLPRI;
 }
 
 static void kernfs_notify_workfn(struct work_struct *work)
@@ -965,8 +965,6 @@ const struct file_operations kernfs_file_fops = {
  * @parent: directory to create the file in
  * @name: name of the file
  * @mode: mode of the file
- * @uid: uid of the file
- * @gid: gid of the file
  * @size: size of the file
  * @ops: kernfs operations for the file
  * @priv: private data for the file
@@ -977,8 +975,7 @@ const struct file_operations kernfs_file_fops = {
  */
 struct kernfs_node *__kernfs_create_file(struct kernfs_node *parent,
 					 const char *name,
-					 umode_t mode, kuid_t uid, kgid_t gid,
-					 loff_t size,
+					 umode_t mode, loff_t size,
 					 const struct kernfs_ops *ops,
 					 void *priv, const void *ns,
 					 struct lock_class_key *key)
@@ -989,8 +986,7 @@ struct kernfs_node *__kernfs_create_file(struct kernfs_node *parent,
 
 	flags = KERNFS_FILE;
 
-	kn = kernfs_new_node(parent, name, (mode & S_IALLUGO) | S_IFREG,
-			     uid, gid, flags);
+	kn = kernfs_new_node(parent, name, (mode & S_IALLUGO) | S_IFREG, flags);
 	if (!kn)
 		return ERR_PTR(-ENOMEM);
 

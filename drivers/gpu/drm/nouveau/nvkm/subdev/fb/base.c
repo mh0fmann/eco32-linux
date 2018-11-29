@@ -31,6 +31,12 @@
 #include <engine/gr.h>
 #include <engine/mpeg.h>
 
+bool
+nvkm_fb_memtype_valid(struct nvkm_fb *fb, u32 memtype)
+{
+	return fb->func->memtype_valid(fb, memtype);
+}
+
 void
 nvkm_fb_tile_fini(struct nvkm_fb *fb, int region, struct nvkm_fb_tile *tile)
 {
@@ -94,7 +100,6 @@ static int
 nvkm_fb_oneinit(struct nvkm_subdev *subdev)
 {
 	struct nvkm_fb *fb = nvkm_fb(subdev);
-	u32 tags = 0;
 
 	if (fb->func->ram_new) {
 		int ret = fb->func->ram_new(fb, &fb->ram);
@@ -110,16 +115,7 @@ nvkm_fb_oneinit(struct nvkm_subdev *subdev)
 			return ret;
 	}
 
-	/* Initialise compression tag allocator.
-	 *
-	 * LTC oneinit() will override this on Fermi and newer.
-	 */
-	if (fb->func->tags) {
-		tags = fb->func->tags(fb);
-		nvkm_debug(subdev, "%d comptags\n", tags);
-	}
-
-	return nvkm_mm_init(&fb->tags, 0, 0, tags, 1);
+	return 0;
 }
 
 static int
@@ -139,16 +135,8 @@ nvkm_fb_init(struct nvkm_subdev *subdev)
 
 	if (fb->func->init)
 		fb->func->init(fb);
-
-	if (fb->func->init_remapper)
-		fb->func->init_remapper(fb);
-
-	if (fb->func->init_page) {
-		ret = fb->func->init_page(fb);
-		if (WARN_ON(ret))
-			return ret;
-	}
-
+	if (fb->func->init_page)
+		fb->func->init_page(fb);
 	if (fb->func->init_unkn)
 		fb->func->init_unkn(fb);
 	return 0;
@@ -160,13 +148,12 @@ nvkm_fb_dtor(struct nvkm_subdev *subdev)
 	struct nvkm_fb *fb = nvkm_fb(subdev);
 	int i;
 
-	nvkm_memory_unref(&fb->mmu_wr);
-	nvkm_memory_unref(&fb->mmu_rd);
+	nvkm_memory_del(&fb->mmu_wr);
+	nvkm_memory_del(&fb->mmu_rd);
 
 	for (i = 0; i < fb->tile.regions; i++)
 		fb->func->tile.fini(fb, i, &fb->tile.region[i]);
 
-	nvkm_mm_fini(&fb->tags);
 	nvkm_ram_del(&fb->ram);
 
 	if (fb->func->dtor)
@@ -189,8 +176,7 @@ nvkm_fb_ctor(const struct nvkm_fb_func *func, struct nvkm_device *device,
 	nvkm_subdev_ctor(&nvkm_fb, device, index, &fb->subdev);
 	fb->func = func;
 	fb->tile.regions = fb->func->tile.regions;
-	fb->page = nvkm_longopt(device->cfgopt, "NvFbBigPage",
-				fb->func->default_bigpage);
+	fb->page = nvkm_longopt(device->cfgopt, "NvFbBigPage", 0);
 }
 
 int

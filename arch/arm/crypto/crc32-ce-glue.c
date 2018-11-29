@@ -188,7 +188,6 @@ static struct shash_alg crc32_pmull_algs[] = { {
 	.base.cra_name		= "crc32",
 	.base.cra_driver_name	= "crc32-arm-ce",
 	.base.cra_priority	= 200,
-	.base.cra_flags		= CRYPTO_ALG_OPTIONAL_KEY,
 	.base.cra_blocksize	= 1,
 	.base.cra_module	= THIS_MODULE,
 }, {
@@ -204,7 +203,6 @@ static struct shash_alg crc32_pmull_algs[] = { {
 	.base.cra_name		= "crc32c",
 	.base.cra_driver_name	= "crc32c-arm-ce",
 	.base.cra_priority	= 200,
-	.base.cra_flags		= CRYPTO_ALG_OPTIONAL_KEY,
 	.base.cra_blocksize	= 1,
 	.base.cra_module	= THIS_MODULE,
 } };
@@ -236,7 +234,7 @@ static void __exit crc32_pmull_mod_exit(void)
 				  ARRAY_SIZE(crc32_pmull_algs));
 }
 
-static const struct cpu_feature __maybe_unused crc32_cpu_feature[] = {
+static const struct cpu_feature crc32_cpu_feature[] = {
 	{ cpu_feature(CRC32) }, { cpu_feature(PMULL) }, { }
 };
 MODULE_DEVICE_TABLE(cpu, crc32_cpu_feature);

@@ -1279,9 +1279,9 @@ static int greth_mdio_probe(struct net_device *dev)
 	}
 
 	if (greth->gbit_mac)
-		phy_set_max_speed(phy, SPEED_1000);
+		phy->supported &= PHY_GBIT_FEATURES;
 	else
-		phy_set_max_speed(phy, SPEED_100);
+		phy->supported &= PHY_BASIC_FEATURES;
 
 	phy->advertising = phy->supported;
 

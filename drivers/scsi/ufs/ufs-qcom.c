@@ -16,6 +16,7 @@
 #include <linux/of.h>
 #include <linux/platform_device.h>
 #include <linux/phy/phy.h>
+#include <linux/phy/phy-qcom-ufs.h>
 
 #include "ufshcd.h"
 #include "ufshcd-pltfrm.h"
@@ -49,10 +50,19 @@ static void ufs_qcom_get_default_testbus_cfg(struct ufs_qcom_host *host);
 static int ufs_qcom_set_dme_vs_core_clk_ctrl_clear_div(struct ufs_hba *hba,
 						       u32 clk_cycles);
 
-static void ufs_qcom_dump_regs_wrapper(struct ufs_hba *hba, int offset, int len,
-				       const char *prefix, void *priv)
+static void ufs_qcom_dump_regs(struct ufs_hba *hba, int offset, int len,
+		char *prefix)
 {
-	ufshcd_dump_regs(hba, offset, len * 4, prefix);
+	print_hex_dump(KERN_ERR, prefix,
+			len > 4 ? DUMP_PREFIX_OFFSET : DUMP_PREFIX_NONE,
+			16, 4, (void __force *)hba->mmio_base + offset,
+			len * 4, false);
+}
+
+static void ufs_qcom_dump_regs_wrapper(struct ufs_hba *hba, int offset, int len,
+		char *prefix, void *priv)
+{
+	ufs_qcom_dump_regs(hba, offset, len, prefix);
 }
 
 static int ufs_qcom_get_connected_tx_lanes(struct ufs_hba *hba, u32 *tx_lanes)
@@ -69,26 +79,19 @@ static int ufs_qcom_get_connected_tx_lanes(struct ufs_hba *hba, u32 *tx_lanes)
 }
 
 static int ufs_qcom_host_clk_get(struct device *dev,
-		const char *name, struct clk **clk_out, bool optional)
+		const char *name, struct clk **clk_out)
 {
 	struct clk *clk;
 	int err = 0;
 
 	clk = devm_clk_get(dev, name);
-	if (!IS_ERR(clk)) {
+	if (IS_ERR(clk)) {
+		err = PTR_ERR(clk);
+		dev_err(dev, "%s: failed to get %s err %d",
+				__func__, name, err);
+	} else {
 		*clk_out = clk;
-		return 0;
 	}
-
-	err = PTR_ERR(clk);
-
-	if (optional && err == -ENOENT) {
-		*clk_out = NULL;
-		return 0;
-	}
-
-	if (err != -EPROBE_DEFER)
-		dev_err(dev, "failed to get %s err %d\n", name, err);
 
 	return err;
 }
@@ -110,9 +113,11 @@ static void ufs_qcom_disable_lane_clks(struct ufs_qcom_host *host)
 	if (!host->is_lane_clks_enabled)
 		return;
 
-	clk_disable_unprepare(host->tx_l1_sync_clk);
+	if (host->hba->lanes_per_direction > 1)
+		clk_disable_unprepare(host->tx_l1_sync_clk);
 	clk_disable_unprepare(host->tx_l0_sync_clk);
-	clk_disable_unprepare(host->rx_l1_sync_clk);
+	if (host->hba->lanes_per_direction > 1)
+		clk_disable_unprepare(host->rx_l1_sync_clk);
 	clk_disable_unprepare(host->rx_l0_sync_clk);
 
 	host->is_lane_clks_enabled = false;
@@ -136,21 +141,24 @@ static int ufs_qcom_enable_lane_clks(struct ufs_qcom_host *host)
 	if (err)
 		goto disable_rx_l0;
 
-	err = ufs_qcom_host_clk_enable(dev, "rx_lane1_sync_clk",
+	if (host->hba->lanes_per_direction > 1) {
+		err = ufs_qcom_host_clk_enable(dev, "rx_lane1_sync_clk",
 			host->rx_l1_sync_clk);
-	if (err)
-		goto disable_tx_l0;
+		if (err)
+			goto disable_tx_l0;
 
-	err = ufs_qcom_host_clk_enable(dev, "tx_lane1_sync_clk",
+		err = ufs_qcom_host_clk_enable(dev, "tx_lane1_sync_clk",
 			host->tx_l1_sync_clk);
-	if (err)
-		goto disable_rx_l1;
+		if (err)
+			goto disable_rx_l1;
+	}
 
 	host->is_lane_clks_enabled = true;
 	goto out;
 
 disable_rx_l1:
-	clk_disable_unprepare(host->rx_l1_sync_clk);
+	if (host->hba->lanes_per_direction > 1)
+		clk_disable_unprepare(host->rx_l1_sync_clk);
 disable_tx_l0:
 	clk_disable_unprepare(host->tx_l0_sync_clk);
 disable_rx_l0:
@@ -164,25 +172,25 @@ static int ufs_qcom_init_lane_clks(struct ufs_qcom_host *host)
 	int err = 0;
 	struct device *dev = host->hba->dev;
 
-	err = ufs_qcom_host_clk_get(dev, "rx_lane0_sync_clk",
-					&host->rx_l0_sync_clk, false);
+	err = ufs_qcom_host_clk_get(dev,
+			"rx_lane0_sync_clk", &host->rx_l0_sync_clk);
 	if (err)
 		goto out;
 
-	err = ufs_qcom_host_clk_get(dev, "tx_lane0_sync_clk",
-					&host->tx_l0_sync_clk, false);
+	err = ufs_qcom_host_clk_get(dev,
+			"tx_lane0_sync_clk", &host->tx_l0_sync_clk);
 	if (err)
 		goto out;
 
 	/* In case of single lane per direction, don't read lane1 clocks */
 	if (host->hba->lanes_per_direction > 1) {
 		err = ufs_qcom_host_clk_get(dev, "rx_lane1_sync_clk",
-			&host->rx_l1_sync_clk, false);
+			&host->rx_l1_sync_clk);
 		if (err)
 			goto out;
 
 		err = ufs_qcom_host_clk_get(dev, "tx_lane1_sync_clk",
-			&host->tx_l1_sync_clk, true);
+			&host->tx_l1_sync_clk);
 	}
 out:
 	return err;
@@ -190,9 +198,22 @@ out:
 
 static int ufs_qcom_link_startup_post_change(struct ufs_hba *hba)
 {
+	struct ufs_qcom_host *host = ufshcd_get_variant(hba);
+	struct phy *phy = host->generic_phy;
 	u32 tx_lanes;
+	int err = 0;
 
-	return ufs_qcom_get_connected_tx_lanes(hba, &tx_lanes);
+	err = ufs_qcom_get_connected_tx_lanes(hba, &tx_lanes);
+	if (err)
+		goto out;
+
+	err = ufs_qcom_phy_set_tx_lane_enable(phy, tx_lanes);
+	if (err)
+		dev_err(hba->dev, "%s: ufs_qcom_phy_set_tx_lane_enable failed\n",
+			__func__);
+
+out:
+	return err;
 }
 
 static int ufs_qcom_check_hibern8(struct ufs_hba *hba)
@@ -252,18 +273,15 @@ static int ufs_qcom_power_up_sequence(struct ufs_hba *hba)
 	bool is_rate_B = (UFS_QCOM_LIMIT_HS_RATE == PA_HS_MODE_B)
 							? true : false;
 
-	if (is_rate_B)
-		phy_set_mode(phy, PHY_MODE_UFS_HS_B);
-
 	/* Assert PHY reset and apply PHY calibration values */
 	ufs_qcom_assert_reset(hba);
 	/* provide 1ms delay to let the reset pulse propagate */
 	usleep_range(1000, 1100);
 
-	/* phy initialization - calibrate the phy */
-	ret = phy_init(phy);
+	ret = ufs_qcom_phy_calibrate_phy(phy, is_rate_B);
+
 	if (ret) {
-		dev_err(hba->dev, "%s: phy init failed, ret = %d\n",
+		dev_err(hba->dev, "%s: ufs_qcom_phy_calibrate_phy() failed, ret = %d\n",
 			__func__, ret);
 		goto out;
 	}
@@ -276,22 +294,21 @@ static int ufs_qcom_power_up_sequence(struct ufs_hba *hba)
 	 * voltage, current to settle down before starting serdes.
 	 */
 	usleep_range(1000, 1100);
-
-	/* power on phy - start serdes and phy's power and clocks */
-	ret = phy_power_on(phy);
+	ret = ufs_qcom_phy_start_serdes(phy);
 	if (ret) {
-		dev_err(hba->dev, "%s: phy power on failed, ret = %d\n",
+		dev_err(hba->dev, "%s: ufs_qcom_phy_start_serdes() failed, ret = %d\n",
 			__func__, ret);
-		goto out_disable_phy;
+		goto out;
 	}
+
+	ret = ufs_qcom_phy_is_pcs_ready(phy);
+	if (ret)
+		dev_err(hba->dev,
+			"%s: is_physical_coding_sublayer_ready() failed, ret = %d\n",
+			__func__, ret);
 
 	ufs_qcom_select_unipro_mode(host);
 
-	return 0;
-
-out_disable_phy:
-	ufs_qcom_assert_reset(hba);
-	phy_exit(phy);
 out:
 	return ret;
 }
@@ -920,8 +937,10 @@ static int ufs_qcom_pwr_change_notify(struct ufs_hba *hba,
 {
 	u32 val;
 	struct ufs_qcom_host *host = ufshcd_get_variant(hba);
+	struct phy *phy = host->generic_phy;
 	struct ufs_qcom_dev_params ufs_qcom_cap;
 	int ret = 0;
+	int res = 0;
 
 	if (!dev_req_params) {
 		pr_err("%s: incoming dev_req_params is NULL\n", __func__);
@@ -988,6 +1007,12 @@ static int ufs_qcom_pwr_change_notify(struct ufs_hba *hba,
 		}
 
 		val = ~(MAX_U32 << dev_req_params->lane_tx);
+		res = ufs_qcom_phy_set_tx_lane_enable(phy, val);
+		if (res) {
+			dev_err(hba->dev, "%s: ufs_qcom_phy_set_tx_lane_enable() failed res = %d\n",
+				__func__, res);
+			ret = res;
+		}
 
 		/* cache the power mode parameters to use internally */
 		memcpy(&host->dev_req_params,
@@ -1069,7 +1094,7 @@ static void ufs_qcom_advertise_quirks(struct ufs_hba *hba)
 		hba->quirks |= UFSHCD_QUIRK_BROKEN_LCC;
 	}
 
-	if (host->hw_ver.major == 0x2) {
+	if (host->hw_ver.major >= 0x2) {
 		hba->quirks |= UFSHCD_QUIRK_BROKEN_UFS_HCI_VERSION;
 
 		if (!ufs_qcom_cap_qunipro(host))
@@ -1244,9 +1269,18 @@ static int ufs_qcom_init(struct ufs_hba *hba)
 		}
 	}
 
+	/* update phy revision information before calling phy_init() */
+	ufs_qcom_phy_save_controller_version(host->generic_phy,
+		host->hw_ver.major, host->hw_ver.minor, host->hw_ver.step);
+
+	phy_init(host->generic_phy);
+	err = phy_power_on(host->generic_phy);
+	if (err)
+		goto out_unregister_bus;
+
 	err = ufs_qcom_init_lane_clks(host);
 	if (err)
-		goto out_variant_clear;
+		goto out_disable_phy;
 
 	ufs_qcom_set_caps(hba);
 	ufs_qcom_advertise_quirks(hba);
@@ -1267,6 +1301,10 @@ static int ufs_qcom_init(struct ufs_hba *hba)
 
 	goto out;
 
+out_disable_phy:
+	phy_power_off(host->generic_phy);
+out_unregister_bus:
+	phy_exit(host->generic_phy);
 out_variant_clear:
 	ufshcd_set_variant(hba, NULL);
 out:
@@ -1398,7 +1436,7 @@ out:
 
 static void ufs_qcom_print_hw_debug_reg_all(struct ufs_hba *hba,
 		void *priv, void (*print_fn)(struct ufs_hba *hba,
-		int offset, int num_regs, const char *str, void *priv))
+		int offset, int num_regs, char *str, void *priv))
 {
 	u32 reg;
 	struct ufs_qcom_host *host;
@@ -1420,7 +1458,7 @@ static void ufs_qcom_print_hw_debug_reg_all(struct ufs_hba *hba,
 	print_fn(hba, reg, 44, "UFS_UFS_DBG_RD_REG_OCSC ", priv);
 
 	reg = ufshcd_readl(hba, REG_UFS_CFG1);
-	reg |= UTP_DBG_RAMS_EN;
+	reg |= UFS_BIT(17);
 	ufshcd_writel(hba, reg, REG_UFS_CFG1);
 
 	reg = ufs_qcom_get_debug_reg_offset(host, UFS_UFS_DBG_RD_EDTL_RAM);
@@ -1433,7 +1471,7 @@ static void ufs_qcom_print_hw_debug_reg_all(struct ufs_hba *hba,
 	print_fn(hba, reg, 64, "UFS_UFS_DBG_RD_PRDT_RAM ", priv);
 
 	/* clear bit 17 - UTP_DBG_RAMS_EN */
-	ufshcd_rmwl(hba, UTP_DBG_RAMS_EN, 0, REG_UFS_CFG1);
+	ufshcd_rmwl(hba, UFS_BIT(17), 0, REG_UFS_CFG1);
 
 	reg = ufs_qcom_get_debug_reg_offset(host, UFS_DBG_RD_REG_UAWM);
 	print_fn(hba, reg, 4, "UFS_DBG_RD_REG_UAWM ", priv);
@@ -1580,7 +1618,7 @@ int ufs_qcom_testbus_config(struct ufs_qcom_host *host)
 
 static void ufs_qcom_testbus_read(struct ufs_hba *hba)
 {
-	ufshcd_dump_regs(hba, UFS_TEST_BUS, 4, "UFS_TEST_BUS ");
+	ufs_qcom_dump_regs(hba, UFS_TEST_BUS, 1, "UFS_TEST_BUS ");
 }
 
 static void ufs_qcom_print_unipro_testbus(struct ufs_hba *hba)
@@ -1606,8 +1644,8 @@ static void ufs_qcom_print_unipro_testbus(struct ufs_hba *hba)
 
 static void ufs_qcom_dump_dbg_regs(struct ufs_hba *hba)
 {
-	ufshcd_dump_regs(hba, REG_UFS_SYS1CLK_1US, 16 * 4,
-			 "HCI Vendor Specific Registers ");
+	ufs_qcom_dump_regs(hba, REG_UFS_SYS1CLK_1US, 16,
+			"HCI Vendor Specific Registers ");
 
 	/* sleep a bit intermittently as we are dumping too much data */
 	ufs_qcom_print_hw_debug_reg_all(hba, NULL, ufs_qcom_dump_regs_wrapper);

@@ -27,7 +27,7 @@
 #include <linux/pm_runtime.h>
 #include <linux/property.h>
 #include <linux/regulator/consumer.h>
-#include <linux/extcon-provider.h>
+#include <linux/extcon.h>
 
 #include <sound/soc.h>
 

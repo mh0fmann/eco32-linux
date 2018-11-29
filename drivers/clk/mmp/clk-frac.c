@@ -149,7 +149,7 @@ static void clk_factor_init(struct clk_hw *hw)
 		spin_unlock_irqrestore(factor->lock, flags);
 }
 
-static const struct clk_ops clk_factor_ops = {
+static struct clk_ops clk_factor_ops = {
 	.recalc_rate = clk_factor_recalc_rate,
 	.round_rate = clk_factor_round_rate,
 	.set_rate = clk_factor_set_rate,
@@ -172,8 +172,10 @@ struct clk *mmp_clk_register_factor(const char *name, const char *parent_name,
 	}
 
 	factor = kzalloc(sizeof(*factor), GFP_KERNEL);
-	if (!factor)
+	if (!factor) {
+		pr_err("%s: could not allocate factor  clk\n", __func__);
 		return ERR_PTR(-ENOMEM);
+	}
 
 	/* struct clk_aux assignments */
 	factor->base = base;

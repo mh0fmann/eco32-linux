@@ -16,6 +16,7 @@
 #include <linux/kernel.h>
 #include <linux/platform_device.h>
 #include <linux/of_platform.h>
+#include <linux/fb.h>
 #include <linux/leds.h>
 #include <linux/err.h>
 #include <linux/pwm.h>
@@ -100,9 +101,8 @@ static int led_pwm_add(struct device *dev, struct led_pwm_priv *priv,
 		led_data->pwm = devm_pwm_get(dev, led->name);
 	if (IS_ERR(led_data->pwm)) {
 		ret = PTR_ERR(led_data->pwm);
-		if (ret != -EPROBE_DEFER)
-			dev_err(dev, "unable to request PWM for %s: %d\n",
-				led->name, ret);
+		dev_err(dev, "unable to request PWM for %s: %d\n",
+			led->name, ret);
 		return ret;
 	}
 

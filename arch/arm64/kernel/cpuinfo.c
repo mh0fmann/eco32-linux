@@ -19,7 +19,6 @@
 #include <asm/cpu.h>
 #include <asm/cputype.h>
 #include <asm/cpufeature.h>
-#include <asm/fpsimd.h>
 
 #include <linux/bitops.h>
 #include <linux/bug.h>
@@ -70,18 +69,6 @@ static const char *const hwcap_str[] = {
 	"fcma",
 	"lrcpc",
 	"dcpop",
-	"sha3",
-	"sm3",
-	"sm4",
-	"asimddp",
-	"sha512",
-	"sve",
-	"asimdfhm",
-	"dit",
-	"uscat",
-	"ilrcpc",
-	"flagm",
-	"ssbs",
 	NULL
 };
 
@@ -325,15 +312,7 @@ static void cpuinfo_detect_icache_policy(struct cpuinfo_arm64 *info)
 static void __cpuinfo_store_cpu(struct cpuinfo_arm64 *info)
 {
 	info->reg_cntfrq = arch_timer_get_cntfrq();
-	/*
-	 * Use the effective value of the CTR_EL0 than the raw value
-	 * exposed by the CPU. CTR_E0.IDC field value must be interpreted
-	 * with the CLIDR_EL1 fields to avoid triggering false warnings
-	 * when there is a mismatch across the CPUs. Keep track of the
-	 * effective value of the CTR_EL0 in our internal records for
-	 * acurate sanity check and feature enablement.
-	 */
-	info->reg_ctr = read_cpuid_effective_cachetype();
+	info->reg_ctr = read_cpuid_cachetype();
 	info->reg_dczid = read_cpuid(DCZID_EL0);
 	info->reg_midr = read_cpuid_id();
 	info->reg_revidr = read_cpuid(REVIDR_EL1);
@@ -347,7 +326,6 @@ static void __cpuinfo_store_cpu(struct cpuinfo_arm64 *info)
 	info->reg_id_aa64mmfr2 = read_cpuid(ID_AA64MMFR2_EL1);
 	info->reg_id_aa64pfr0 = read_cpuid(ID_AA64PFR0_EL1);
 	info->reg_id_aa64pfr1 = read_cpuid(ID_AA64PFR1_EL1);
-	info->reg_id_aa64zfr0 = read_cpuid(ID_AA64ZFR0_EL1);
 
 	/* Update the 32bit ID registers only if AArch32 is implemented */
 	if (id_aa64pfr0_32bit_el0(info->reg_id_aa64pfr0)) {
@@ -369,10 +347,6 @@ static void __cpuinfo_store_cpu(struct cpuinfo_arm64 *info)
 		info->reg_mvfr1 = read_cpuid(MVFR1_EL1);
 		info->reg_mvfr2 = read_cpuid(MVFR2_EL1);
 	}
-
-	if (IS_ENABLED(CONFIG_ARM64_SVE) &&
-	    id_aa64pfr0_sve(info->reg_id_aa64pfr0))
-		info->reg_zcr = read_zcr_features();
 
 	cpuinfo_detect_icache_policy(info);
 }

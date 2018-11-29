@@ -41,15 +41,17 @@
 #include <linux/module.h>
 #include "core_priv.h"
 
+#include "core_priv.h"
+
 static DEFINE_MUTEX(rdma_nl_mutex);
 static struct sock *nls;
 static struct {
 	const struct rdma_nl_cbs   *cb_table;
 } rdma_nl_types[RDMA_NL_NUM_CLIENTS];
 
-bool rdma_nl_chk_listeners(unsigned int group)
+int rdma_nl_chk_listeners(unsigned int group)
 {
-	return netlink_has_listeners(nls, group);
+	return (netlink_has_listeners(nls, group)) ? 0 : -1;
 }
 EXPORT_SYMBOL(rdma_nl_chk_listeners);
 
@@ -81,13 +83,15 @@ static bool is_nl_valid(unsigned int type, unsigned int op)
 	if (!is_nl_msg_valid(type, op))
 		return false;
 
-	if (!rdma_nl_types[type].cb_table) {
+	cb_table = rdma_nl_types[type].cb_table;
+#ifdef CONFIG_MODULES
+	if (!cb_table) {
 		mutex_unlock(&rdma_nl_mutex);
 		request_module("rdma-netlink-subsys-%d", type);
 		mutex_lock(&rdma_nl_mutex);
+		cb_table = rdma_nl_types[type].cb_table;
 	}
-
-	cb_table = rdma_nl_types[type].cb_table;
+#endif
 
 	if (!cb_table || (!cb_table[op].dump && !cb_table[op].doit))
 		return false;

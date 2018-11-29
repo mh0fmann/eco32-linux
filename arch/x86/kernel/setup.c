@@ -30,6 +30,7 @@
 #include <linux/sfi.h>
 #include <linux/apm_bios.h>
 #include <linux/initrd.h>
+#include <linux/bootmem.h>
 #include <linux/memblock.h>
 #include <linux/seq_file.h>
 #include <linux/console.h>
@@ -49,7 +50,6 @@
 #include <linux/init_ohci1394_dma.h>
 #include <linux/kvm_para.h>
 #include <linux/dma-contiguous.h>
-#include <xen/xen.h>
 
 #include <linux/errno.h>
 #include <linux/kernel.h>
@@ -114,6 +114,7 @@
 #include <asm/alternative.h>
 #include <asm/prom.h>
 #include <asm/microcode.h>
+#include <asm/mmu_context.h>
 #include <asm/kaslr.h>
 #include <asm/unwind.h>
 
@@ -134,6 +135,18 @@ RESERVE_BRK(dmi_alloc, 65536);
 
 static __initdata unsigned long _brk_start = (unsigned long)__brk_base;
 unsigned long _brk_end = (unsigned long)__brk_base;
+
+#ifdef CONFIG_X86_64
+int default_cpu_present_to_apicid(int mps_cpu)
+{
+	return __default_cpu_present_to_apicid(mps_cpu);
+}
+
+int default_check_phys_apicid_present(int phys_apicid)
+{
+	return __default_check_phys_apicid_present(phys_apicid);
+}
+#endif
 
 struct boot_params boot_params;
 
@@ -189,7 +202,9 @@ struct ist_info ist_info;
 #endif
 
 #else
-struct cpuinfo_x86 boot_cpu_data __read_mostly;
+struct cpuinfo_x86 boot_cpu_data __read_mostly = {
+	.x86_phys_bits = MAX_PHYSMEM_BITS,
+};
 EXPORT_SYMBOL(boot_cpu_data);
 #endif
 
@@ -360,6 +375,14 @@ static void __init reserve_initrd(void)
 	if (!boot_params.hdr.type_of_loader ||
 	    !ramdisk_image || !ramdisk_size)
 		return;		/* No initrd provided by bootloader */
+
+	/*
+	 * If SME is active, this memory will be marked encrypted by the
+	 * kernel when it is accessed (including relocation). However, the
+	 * ramdisk image was loaded decrypted by the bootloader, so make
+	 * sure that it is encrypted before accessing it.
+	 */
+	sme_early_encrypt(ramdisk_image, ramdisk_end - ramdisk_image);
 
 	initrd_start = 0;
 
@@ -532,11 +555,6 @@ static void __init reserve_crashkernel(void)
 		if (ret != 0 || crash_size <= 0)
 			return;
 		high = true;
-	}
-
-	if (xen_pv_domain()) {
-		pr_info("Ignoring crashkernel for a Xen PV domain\n");
-		return;
 	}
 
 	/* 0 means: find the address automatically */
@@ -804,6 +822,26 @@ dump_kernel_offset(struct notifier_block *self, unsigned long v, void *p)
 	return 0;
 }
 
+static void __init simple_udelay_calibration(void)
+{
+	unsigned int tsc_khz, cpu_khz;
+	unsigned long lpj;
+
+	if (!boot_cpu_has(X86_FEATURE_TSC))
+		return;
+
+	cpu_khz = x86_platform.calibrate_cpu();
+	tsc_khz = x86_platform.calibrate_tsc();
+
+	tsc_khz = tsc_khz ? : cpu_khz;
+	if (!tsc_khz)
+		return;
+
+	lpj = tsc_khz * 1000;
+	do_div(lpj, HZ);
+	loops_per_jiffy = lpj;
+}
+
 /*
  * Determine if we were loaded by an EFI loader.  If so, then we have also been
  * passed the efi memmap, systab, etc., so we should use these data structures
@@ -821,12 +859,6 @@ void __init setup_arch(char **cmdline_p)
 {
 	memblock_reserve(__pa_symbol(_text),
 			 (unsigned long)__bss_stop - (unsigned long)_text);
-
-	/*
-	 * Make sure page 0 is always reserved because on systems with
-	 * L1TF its contents can be leaked to user processes.
-	 */
-	memblock_reserve(0, PAGE_SIZE);
 
 	early_reserve_initrd();
 
@@ -860,7 +892,6 @@ void __init setup_arch(char **cmdline_p)
 	__flush_tlb_all();
 #else
 	printk(KERN_INFO "Command line: %s\n", boot_command_line);
-	boot_cpu_data.x86_phys_bits = MAX_PHYSMEM_BITS;
 #endif
 
 	/*
@@ -871,8 +902,6 @@ void __init setup_arch(char **cmdline_p)
 
 	idt_setup_early_traps();
 	early_cpu_init();
-	arch_init_ideal_nops();
-	jump_label_init();
 	early_ioremap_init();
 
 	setup_olpc_ofw_pgd();
@@ -907,6 +936,9 @@ void __init setup_arch(char **cmdline_p)
 		set_bit(EFI_BOOT, &efi.flags);
 		set_bit(EFI_64BIT, &efi.flags);
 	}
+
+	if (efi_enabled(EFI_BOOT))
+		efi_memblock_x86_reserve_range();
 #endif
 
 	x86_init.oem.arch_setup();
@@ -960,8 +992,6 @@ void __init setup_arch(char **cmdline_p)
 
 	parse_early_param();
 
-	if (efi_enabled(EFI_BOOT))
-		efi_memblock_x86_reserve_range();
 #ifdef CONFIG_MEMORY_HOTPLUG
 	/*
 	 * Memory used by the kernel cannot be hot-removed because Linux
@@ -998,6 +1028,11 @@ void __init setup_arch(char **cmdline_p)
 		setup_clear_cpu_cap(X86_FEATURE_APIC);
 	}
 
+#ifdef CONFIG_PCI
+	if (pci_early_dump_regs)
+		early_dump_pci_devices();
+#endif
+
 	e820__reserve_setup_data();
 	e820__finish_early_params();
 
@@ -1010,11 +1045,12 @@ void __init setup_arch(char **cmdline_p)
 
 	/*
 	 * VMware detection requires dmi to be available, so this
-	 * needs to be done after dmi_scan_machine(), for the boot CPU.
+	 * needs to be done after dmi_scan_machine, for the BP.
 	 */
 	init_hypervisor_platform();
 
-	tsc_early_init();
+	simple_udelay_calibration();
+
 	x86_init.resources.probe_roms();
 
 	/* after parse_early_param, so could debug it */
@@ -1098,6 +1134,9 @@ void __init setup_arch(char **cmdline_p)
 
 	memblock_set_current_limit(ISA_END_ADDRESS);
 	e820__memblock_setup();
+
+	if (!early_xdbc_setup_hardware())
+		early_xdbc_register_console();
 
 	reserve_bios_regions();
 
@@ -1200,20 +1239,28 @@ void __init setup_arch(char **cmdline_p)
 
 	memblock_find_dma_reserve();
 
-	if (!early_xdbc_setup_hardware())
-		early_xdbc_register_console();
+#ifdef CONFIG_KVM_GUEST
+	kvmclock_init();
+#endif
 
 	x86_init.paging.pagetable_init();
 
 	kasan_init();
 
+#ifdef CONFIG_X86_32
+	/* sync back kernel address range */
+	clone_pgd_range(initial_page_table + KERNEL_PGD_BOUNDARY,
+			swapper_pg_dir     + KERNEL_PGD_BOUNDARY,
+			KERNEL_PGD_PTRS);
+
 	/*
-	 * Sync back kernel address range.
-	 *
-	 * FIXME: Can the later sync in setup_cpu_entry_areas() replace
-	 * this call?
+	 * sync back low identity map too.  It is used for example
+	 * in the 32-bit EFI stub.
 	 */
-	sync_initial_page_table();
+	clone_pgd_range(initial_page_table,
+			swapper_pg_dir     + KERNEL_PGD_BOUNDARY,
+			min(KERNEL_PGD_PTRS, KERNEL_PGD_BOUNDARY));
+#endif
 
 	tboot_probe();
 
@@ -1247,10 +1294,10 @@ void __init setup_arch(char **cmdline_p)
 
 	io_apic_init_mappings();
 
-	x86_init.hyper.guest_late_init();
+	kvm_guest_init();
 
 	e820__reserve_resources();
-	e820__register_nosave_regions(max_pfn);
+	e820__register_nosave_regions(max_low_pfn);
 
 	x86_init.resources.reserve_resources();
 
@@ -1270,6 +1317,8 @@ void __init setup_arch(char **cmdline_p)
 
 	mcheck_init();
 
+	arch_init_ideal_nops();
+
 	register_refined_jiffies(CLOCK_TICK_RATE);
 
 #ifdef CONFIG_EFI
@@ -1278,23 +1327,6 @@ void __init setup_arch(char **cmdline_p)
 #endif
 
 	unwind_init();
-}
-
-/*
- * From boot protocol 2.14 onwards we expect the bootloader to set the
- * version to "0x8000 | <used version>". In case we find a version >= 2.14
- * without the 0x8000 we assume the boot loader supports 2.13 only and
- * reset the version accordingly. The 0x8000 flag is removed in any case.
- */
-void __init x86_verify_bootdata_version(void)
-{
-	if (boot_params.hdr.version & VERSION_WRITTEN)
-		boot_params.hdr.version &= ~VERSION_WRITTEN;
-	else if (boot_params.hdr.version >= 0x020e)
-		boot_params.hdr.version = 0x020d;
-
-	if (boot_params.hdr.version < 0x020e)
-		boot_params.hdr.acpi_rsdp_addr = 0;
 }
 
 #ifdef CONFIG_X86_32
@@ -1325,3 +1357,11 @@ static int __init register_kernel_offset_dumper(void)
 	return 0;
 }
 __initcall(register_kernel_offset_dumper);
+
+void arch_show_smap(struct seq_file *m, struct vm_area_struct *vma)
+{
+	if (!boot_cpu_has(X86_FEATURE_OSPKE))
+		return;
+
+	seq_printf(m, "ProtectionKey:  %8u\n", vma_pkey(vma));
+}

@@ -290,8 +290,7 @@ static void reg_w_val(struct gspca_dev *gspca_dev, __u16 index, __u8 value)
 			      0,		/* request */
 			      USB_DIR_OUT | USB_TYPE_VENDOR | USB_RECIP_DEVICE,
 			      value, index, NULL, 0, 500);
-	gspca_dbg(gspca_dev, D_USBO, "reg write: 0x%02x:0x%02x\n",
-		  index, value);
+	PDEBUG(D_USBO, "reg write: 0x%02x:0x%02x", index, value);
 	if (ret < 0)
 		pr_err("reg write: error %d\n", ret);
 }
@@ -421,7 +420,7 @@ static int sd_config(struct gspca_dev *gspca_dev,
 	data2 = gspca_dev->usb_buf[0];
 	product = (data2 << 8) | data1;
 	if (vendor != id->idVendor || product != id->idProduct) {
-		gspca_dbg(gspca_dev, D_PROBE, "Bad vendor / product from device\n");
+		PDEBUG(D_PROBE, "Bad vendor / product from device");
 		return -EINVAL;
 	}
 
@@ -443,13 +442,13 @@ static int sd_config(struct gspca_dev *gspca_dev,
 /* this function is called at probe and resume time */
 static int sd_init_12a(struct gspca_dev *gspca_dev)
 {
-	gspca_dbg(gspca_dev, D_STREAM, "Chip revision: 012a\n");
+	PDEBUG(D_STREAM, "Chip revision: 012a");
 	init_161rev12A(gspca_dev);
 	return 0;
 }
 static int sd_init_72a(struct gspca_dev *gspca_dev)
 {
-	gspca_dbg(gspca_dev, D_STREAM, "Chip revision: 072a\n");
+	PDEBUG(D_STREAM, "Chip revision: 072a");
 	write_vector(gspca_dev, rev72a_reset);
 	msleep(200);
 	write_vector(gspca_dev, rev72a_init_data1);
@@ -680,16 +679,25 @@ static void do_autogain(struct gspca_dev *gspca_dev)
 		y = (77 * R + 75 * (Gr + Gb) + 29 * B) >> 8;
 		/* u= (128*B-(43*(Gr+Gb+R))) >> 8; */
 		/* v= (128*R-(53*(Gr+Gb))-21*B) >> 8; */
+		/* PDEBUG(D_CONF,"reading Y %d U %d V %d ",y,u,v); */
 
 		if (y < luma_mean - luma_delta ||
 		    y > luma_mean + luma_delta) {
 			expotimes = i2c_read(gspca_dev, 0x09, 0x10);
 			pixelclk = 0x0800;
 			expotimes = expotimes & 0x07ff;
+			/* PDEBUG(D_PACK,
+				"Exposition Times 0x%03X Clock 0x%04X ",
+				expotimes,pixelclk); */
 			gainG = i2c_read(gspca_dev, 0x35, 0x10);
+			/* PDEBUG(D_PACK,
+				"reading Gain register %d", gainG); */
 
 			expotimes += (luma_mean - y) >> spring;
 			gainG += (luma_mean - y) / 50;
+			/* PDEBUG(D_PACK,
+				"compute expotimes %d gain %d",
+				expotimes,gainG); */
 
 			if (gainG > 0x3f)
 				gainG = 0x3f;
@@ -720,7 +728,7 @@ static void sd_pkt_scan(struct gspca_dev *gspca_dev,
 
 		/* This should never happen */
 		if (len < 2) {
-			gspca_err(gspca_dev, "Short SOF packet, ignoring\n\n\n\n\n");
+			PERR("Short SOF packet, ignoring");
 			gspca_dev->last_packet_type = DISCARD_PACKET;
 			return;
 		}

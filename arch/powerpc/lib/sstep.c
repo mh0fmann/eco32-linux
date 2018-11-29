@@ -31,8 +31,6 @@ extern char system_call_common[];
 #define XER_SO		0x80000000U
 #define XER_OV		0x40000000U
 #define XER_CA		0x20000000U
-#define XER_OV32	0x00080000U
-#define XER_CA32	0x00040000U
 
 #ifdef CONFIG_PPC_FPU
 /*
@@ -280,7 +278,7 @@ static nokprobe_inline int read_mem_aligned(unsigned long *dest,
  * Copy from userspace to a buffer, using the largest possible
  * aligned accesses, up to sizeof(long).
  */
-static nokprobe_inline int copy_mem_in(u8 *dest, unsigned long ea, int nb,
+static int nokprobe_inline copy_mem_in(u8 *dest, unsigned long ea, int nb,
 				       struct pt_regs *regs)
 {
 	int err = 0;
@@ -385,7 +383,7 @@ static nokprobe_inline int write_mem_aligned(unsigned long val,
  * Copy from a buffer to userspace, using the largest possible
  * aligned accesses, up to sizeof(long).
  */
-static nokprobe_inline int copy_mem_out(u8 *dest, unsigned long ea, int nb,
+static int nokprobe_inline copy_mem_out(u8 *dest, unsigned long ea, int nb,
 					struct pt_regs *regs)
 {
 	int err = 0;
@@ -964,16 +962,6 @@ static nokprobe_inline void set_cr0(const struct pt_regs *regs,
 		op->ccval |= 0x20000000;
 }
 
-static nokprobe_inline void set_ca32(struct instruction_op *op, bool val)
-{
-	if (cpu_has_feature(CPU_FTR_ARCH_300)) {
-		if (val)
-			op->xerval |= XER_CA32;
-		else
-			op->xerval &= ~XER_CA32;
-	}
-}
-
 static nokprobe_inline void add_with_carry(const struct pt_regs *regs,
 				     struct instruction_op *op, int rd,
 				     unsigned long val1, unsigned long val2,
@@ -997,9 +985,6 @@ static nokprobe_inline void add_with_carry(const struct pt_regs *regs,
 		op->xerval |= XER_CA;
 	else
 		op->xerval &= ~XER_CA;
-
-	set_ca32(op, (unsigned int)val < (unsigned int)val1 ||
-			(carry_in && (unsigned int)val == (unsigned int)val1));
 }
 
 static nokprobe_inline void do_cmp_signed(const struct pt_regs *regs,
@@ -1065,10 +1050,9 @@ static nokprobe_inline void do_popcnt(const struct pt_regs *regs,
 {
 	unsigned long long out = v1;
 
-	out -= (out >> 1) & 0x5555555555555555ULL;
-	out = (0x3333333333333333ULL & out) +
-	      (0x3333333333333333ULL & (out >> 2));
-	out = (out + (out >> 4)) & 0x0f0f0f0f0f0f0f0fULL;
+	out -= (out >> 1) & 0x5555555555555555;
+	out = (0x3333333333333333 & out) + (0x3333333333333333 & (out >> 2));
+	out = (out + (out >> 4)) & 0x0f0f0f0f0f0f0f0f;
 
 	if (size == 8) {	/* popcntb */
 		op->val = out;
@@ -1077,7 +1061,7 @@ static nokprobe_inline void do_popcnt(const struct pt_regs *regs,
 	out += out >> 8;
 	out += out >> 16;
 	if (size == 32) {	/* popcntw */
-		op->val = out & 0x0000003f0000003fULL;
+		op->val = out & 0x0000003f0000003f;
 		return;
 	}
 
@@ -1115,7 +1099,7 @@ static nokprobe_inline void do_prty(const struct pt_regs *regs,
 
 	res ^= res >> 16;
 	if (size == 32) {		/* prtyw */
-		op->val = res & 0x0000000100000001ULL;
+		op->val = res & 0x0000000100000001;
 		return;
 	}
 
@@ -1807,7 +1791,6 @@ int analyse_instr(struct instruction_op *op, const struct pt_regs *regs,
 				op->xerval |= XER_CA;
 			else
 				op->xerval &= ~XER_CA;
-			set_ca32(op, op->xerval & XER_CA);
 			goto logical_done;
 
 		case 824:	/* srawi */
@@ -1820,7 +1803,6 @@ int analyse_instr(struct instruction_op *op, const struct pt_regs *regs,
 				op->xerval |= XER_CA;
 			else
 				op->xerval &= ~XER_CA;
-			set_ca32(op, op->xerval & XER_CA);
 			goto logical_done;
 
 #ifdef __powerpc64__
@@ -1850,7 +1832,6 @@ int analyse_instr(struct instruction_op *op, const struct pt_regs *regs,
 				op->xerval |= XER_CA;
 			else
 				op->xerval &= ~XER_CA;
-			set_ca32(op, op->xerval & XER_CA);
 			goto logical_done;
 
 		case 826:	/* sradi with sh_5 = 0 */
@@ -1864,7 +1845,6 @@ int analyse_instr(struct instruction_op *op, const struct pt_regs *regs,
 				op->xerval |= XER_CA;
 			else
 				op->xerval &= ~XER_CA;
-			set_ca32(op, op->xerval & XER_CA);
 			goto logical_done;
 #endif /* __powerpc64__ */
 
@@ -2545,15 +2525,6 @@ int analyse_instr(struct instruction_op *op, const struct pt_regs *regs,
 #endif /* __powerpc64__ */
 
 	}
-
-#ifdef CONFIG_VSX
-	if ((GETTYPE(op->type) == LOAD_VSX ||
-	     GETTYPE(op->type) == STORE_VSX) &&
-	    !cpu_has_feature(CPU_FTR_VSX)) {
-		return -1;
-	}
-#endif /* CONFIG_VSX */
-
 	return 0;
 
  logical_done:
@@ -2651,7 +2622,7 @@ void emulate_update_regs(struct pt_regs *regs, struct instruction_op *op)
 	unsigned long next_pc;
 
 	next_pc = truncate_if_32bit(regs->msr, regs->nip + 4);
-	switch (GETTYPE(op->type)) {
+	switch (op->type & INSTR_TYPE_MASK) {
 	case COMPUTE:
 		if (op->type & SETREG)
 			regs->gpr[op->reg] = op->val;
@@ -2727,7 +2698,6 @@ void emulate_update_regs(struct pt_regs *regs, struct instruction_op *op)
 	}
 	regs->nip = next_pc;
 }
-NOKPROBE_SYMBOL(emulate_update_regs);
 
 /*
  * Emulate a previously-analysed load or store instruction.
@@ -2749,7 +2719,7 @@ int emulate_loadstore(struct pt_regs *regs, struct instruction_op *op)
 
 	err = 0;
 	size = GETSIZE(op->type);
-	type = GETTYPE(op->type);
+	type = op->type & INSTR_TYPE_MASK;
 	cross_endian = (regs->msr & MSR_LE) != (MSR_KERNEL & MSR_LE);
 	ea = truncate_if_32bit(regs->msr, op->ea);
 
@@ -3011,7 +2981,7 @@ int emulate_step(struct pt_regs *regs, unsigned int instr)
 	}
 
 	err = 0;
-	type = GETTYPE(op.type);
+	type = op.type & INSTR_TYPE_MASK;
 
 	if (OP_IS_LOAD_STORE(type)) {
 		err = emulate_loadstore(regs, &op);

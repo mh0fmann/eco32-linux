@@ -262,5 +262,3 @@ in the end provide a way to use driver-specific callbacks.
 .. kernel-doc:: include/media/media-devnode.h
 
 .. kernel-doc:: include/media/media-entity.h
-
-.. kernel-doc:: include/media/media-request.h

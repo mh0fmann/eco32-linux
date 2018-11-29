@@ -797,7 +797,6 @@ static int sca3000_write_raw(struct iio_dev *indio_dev,
 		mutex_lock(&st->lock);
 		ret = sca3000_write_3db_freq(st, val);
 		mutex_unlock(&st->lock);
-		return ret;
 	default:
 		return -EINVAL;
 	}
@@ -1278,7 +1277,7 @@ static int sca3000_configure_ring(struct iio_dev *indio_dev)
 {
 	struct iio_buffer *buffer;
 
-	buffer = devm_iio_kfifo_allocate(&indio_dev->dev);
+	buffer = iio_kfifo_allocate();
 	if (!buffer)
 		return -ENOMEM;
 
@@ -1286,6 +1285,11 @@ static int sca3000_configure_ring(struct iio_dev *indio_dev)
 	indio_dev->modes |= INDIO_BUFFER_SOFTWARE;
 
 	return 0;
+}
+
+static void sca3000_unconfigure_ring(struct iio_dev *indio_dev)
+{
+	iio_kfifo_free(indio_dev->buffer);
 }
 
 static inline
@@ -1450,6 +1454,7 @@ static const struct iio_info sca3000_info = {
 	.write_event_value = &sca3000_write_event_value,
 	.read_event_config = &sca3000_read_event_config,
 	.write_event_config = &sca3000_write_event_config,
+	.driver_module = THIS_MODULE,
 };
 
 static int sca3000_probe(struct spi_device *spi)
@@ -1482,9 +1487,7 @@ static int sca3000_probe(struct spi_device *spi)
 	}
 	indio_dev->modes = INDIO_DIRECT_MODE;
 
-	ret = sca3000_configure_ring(indio_dev);
-	if (ret)
-		return ret;
+	sca3000_configure_ring(indio_dev);
 
 	if (spi->irq) {
 		ret = request_threaded_irq(spi->irq,
@@ -1543,6 +1546,8 @@ static int sca3000_remove(struct spi_device *spi)
 	sca3000_stop_all_interrupts(st);
 	if (spi->irq)
 		free_irq(spi->irq, indio_dev);
+
+	sca3000_unconfigure_ring(indio_dev);
 
 	return 0;
 }

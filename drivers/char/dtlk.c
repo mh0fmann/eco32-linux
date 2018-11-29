@@ -62,7 +62,7 @@
 #include <linux/uaccess.h>	/* for get_user, etc. */
 #include <linux/wait.h>		/* for wait_queue */
 #include <linux/init.h>		/* for __init, module_{init,exit} */
-#include <linux/poll.h>		/* for EPOLLIN, etc. */
+#include <linux/poll.h>		/* for POLLIN, etc. */
 #include <linux/dtlk.h>		/* local header file for DoubleTalk values */
 
 #ifdef TRACING
@@ -74,7 +74,7 @@
 #endif				/* TRACING */
 
 static DEFINE_MUTEX(dtlk_mutex);
-static void dtlk_timer_tick(struct timer_list *unused);
+static void dtlk_timer_tick(unsigned long data);
 
 static int dtlk_major;
 static int dtlk_port_lpc;
@@ -84,14 +84,14 @@ static int dtlk_has_indexing;
 static unsigned int dtlk_portlist[] =
 {0x25e, 0x29e, 0x2de, 0x31e, 0x35e, 0x39e, 0};
 static wait_queue_head_t dtlk_process_list;
-static DEFINE_TIMER(dtlk_timer, dtlk_timer_tick);
+static DEFINE_TIMER(dtlk_timer, dtlk_timer_tick, 0, 0);
 
 /* prototypes for file_operations struct */
 static ssize_t dtlk_read(struct file *, char __user *,
 			 size_t nbytes, loff_t * ppos);
 static ssize_t dtlk_write(struct file *, const char __user *,
 			  size_t nbytes, loff_t * ppos);
-static __poll_t dtlk_poll(struct file *, poll_table *);
+static unsigned int dtlk_poll(struct file *, poll_table *);
 static int dtlk_open(struct inode *, struct file *);
 static int dtlk_release(struct inode *, struct file *);
 static long dtlk_ioctl(struct file *file,
@@ -228,9 +228,9 @@ static ssize_t dtlk_write(struct file *file, const char __user *buf,
 	return -EAGAIN;
 }
 
-static __poll_t dtlk_poll(struct file *file, poll_table * wait)
+static unsigned int dtlk_poll(struct file *file, poll_table * wait)
 {
-	__poll_t mask = 0;
+	int mask = 0;
 	unsigned long expires;
 
 	TRACE_TEXT(" dtlk_poll");
@@ -244,11 +244,11 @@ static __poll_t dtlk_poll(struct file *file, poll_table * wait)
 
 	if (dtlk_has_indexing && dtlk_readable()) {
 	        del_timer(&dtlk_timer);
-		mask = EPOLLIN | EPOLLRDNORM;
+		mask = POLLIN | POLLRDNORM;
 	}
 	if (dtlk_writeable()) {
 	        del_timer(&dtlk_timer);
-		mask |= EPOLLOUT | EPOLLWRNORM;
+		mask |= POLLOUT | POLLWRNORM;
 	}
 	/* there are no exception conditions */
 
@@ -259,7 +259,7 @@ static __poll_t dtlk_poll(struct file *file, poll_table * wait)
 	return mask;
 }
 
-static void dtlk_timer_tick(struct timer_list *unused)
+static void dtlk_timer_tick(unsigned long data)
 {
 	TRACE_TEXT(" dtlk_timer_tick");
 	wake_up_interruptible(&dtlk_process_list);

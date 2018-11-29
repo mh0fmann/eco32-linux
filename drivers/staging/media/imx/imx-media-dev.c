@@ -11,7 +11,6 @@
 #include <linux/delay.h>
 #include <linux/fs.h>
 #include <linux/module.h>
-#include <linux/of_graph.h>
 #include <linux/of_platform.h>
 #include <linux/pinctrl/consumer.h>
 #include <linux/platform_device.h>
@@ -29,61 +28,147 @@
 
 static inline struct imx_media_dev *notifier2dev(struct v4l2_async_notifier *n)
 {
-	return container_of(n, struct imx_media_dev, notifier);
+	return container_of(n, struct imx_media_dev, subdev_notifier);
 }
 
 /*
- * Adds a subdev to the root notifier's async subdev list. If fwnode is
- * non-NULL, adds the async as a V4L2_ASYNC_MATCH_FWNODE match type,
- * otherwise as a V4L2_ASYNC_MATCH_DEVNAME match type using the dev_name
- * of the given platform_device. This is called during driver load when
+ * Find a subdev by device node or device name. This is called during
+ * driver load to form the async subdev list and bind them.
+ */
+struct imx_media_subdev *
+imx_media_find_async_subdev(struct imx_media_dev *imxmd,
+			    struct device_node *np,
+			    const char *devname)
+{
+	struct fwnode_handle *fwnode = np ? of_fwnode_handle(np) : NULL;
+	struct imx_media_subdev *imxsd;
+	int i;
+
+	for (i = 0; i < imxmd->subdev_notifier.num_subdevs; i++) {
+		imxsd = &imxmd->subdev[i];
+		switch (imxsd->asd.match_type) {
+		case V4L2_ASYNC_MATCH_FWNODE:
+			if (fwnode && imxsd->asd.match.fwnode.fwnode == fwnode)
+				return imxsd;
+			break;
+		case V4L2_ASYNC_MATCH_DEVNAME:
+			if (devname &&
+			    !strcmp(imxsd->asd.match.device_name.name, devname))
+				return imxsd;
+			break;
+		default:
+			break;
+		}
+	}
+
+	return NULL;
+}
+
+
+/*
+ * Adds a subdev to the async subdev list. If np is non-NULL, adds
+ * the async as a V4L2_ASYNC_MATCH_FWNODE match type, otherwise as
+ * a V4L2_ASYNC_MATCH_DEVNAME match type using the dev_name of the
+ * given platform_device. This is called during driver load when
  * forming the async subdev list.
  */
-int imx_media_add_async_subdev(struct imx_media_dev *imxmd,
-			       struct fwnode_handle *fwnode,
-			       struct platform_device *pdev)
+struct imx_media_subdev *
+imx_media_add_async_subdev(struct imx_media_dev *imxmd,
+			   struct device_node *np,
+			   struct platform_device *pdev)
 {
-	struct device_node *np = to_of_node(fwnode);
-	struct imx_media_async_subdev *imxasd;
+	struct imx_media_subdev *imxsd;
 	struct v4l2_async_subdev *asd;
 	const char *devname = NULL;
-	int ret;
+	int sd_idx;
 
-	if (fwnode) {
-		asd = v4l2_async_notifier_add_fwnode_subdev(
-			&imxmd->notifier, fwnode, sizeof(*imxasd));
-	} else {
+	mutex_lock(&imxmd->mutex);
+
+	if (pdev)
 		devname = dev_name(&pdev->dev);
-		asd = v4l2_async_notifier_add_devname_subdev(
-			&imxmd->notifier, devname, sizeof(*imxasd));
+
+	/* return -EEXIST if this subdev already added */
+	if (imx_media_find_async_subdev(imxmd, np, devname)) {
+		dev_dbg(imxmd->md.dev, "%s: already added %s\n",
+			__func__, np ? np->name : devname);
+		imxsd = ERR_PTR(-EEXIST);
+		goto out;
 	}
 
-	if (IS_ERR(asd)) {
-		ret = PTR_ERR(asd);
-		if (ret == -EEXIST) {
-			if (np)
-				dev_dbg(imxmd->md.dev, "%s: already added %pOFn\n",
-					__func__, np);
-			else
-				dev_dbg(imxmd->md.dev, "%s: already added %s\n",
-					__func__, devname);
-		}
-		return ret;
+	sd_idx = imxmd->subdev_notifier.num_subdevs;
+	if (sd_idx >= IMX_MEDIA_MAX_SUBDEVS) {
+		dev_err(imxmd->md.dev, "%s: too many subdevs! can't add %s\n",
+			__func__, np ? np->name : devname);
+		imxsd = ERR_PTR(-ENOSPC);
+		goto out;
 	}
 
-	imxasd = to_imx_media_asd(asd);
+	imxsd = &imxmd->subdev[sd_idx];
 
-	if (devname)
-		imxasd->pdev = pdev;
+	asd = &imxsd->asd;
+	if (np) {
+		asd->match_type = V4L2_ASYNC_MATCH_FWNODE;
+		asd->match.fwnode.fwnode = of_fwnode_handle(np);
+	} else {
+		asd->match_type = V4L2_ASYNC_MATCH_DEVNAME;
+		strncpy(imxsd->devname, devname, sizeof(imxsd->devname));
+		asd->match.device_name.name = imxsd->devname;
+		imxsd->pdev = pdev;
+	}
 
-	if (np)
-		dev_dbg(imxmd->md.dev, "%s: added %pOFn, match type FWNODE\n",
-			__func__, np);
-	else
-		dev_dbg(imxmd->md.dev, "%s: added %s, match type DEVNAME\n",
-			__func__, devname);
+	imxmd->async_ptrs[sd_idx] = asd;
+	imxmd->subdev_notifier.num_subdevs++;
 
-	return 0;
+	dev_dbg(imxmd->md.dev, "%s: added %s, match type %s\n",
+		__func__, np ? np->name : devname, np ? "FWNODE" : "DEVNAME");
+
+out:
+	mutex_unlock(&imxmd->mutex);
+	return imxsd;
+}
+
+/*
+ * Adds an imx-media link to a subdev pad's link list. This is called
+ * during driver load when forming the links between subdevs.
+ *
+ * @pad: the local pad
+ * @remote_node: the device node of the remote subdev
+ * @remote_devname: the device name of the remote subdev
+ * @local_pad: local pad index
+ * @remote_pad: remote pad index
+ */
+int imx_media_add_pad_link(struct imx_media_dev *imxmd,
+			   struct imx_media_pad *pad,
+			   struct device_node *remote_node,
+			   const char *remote_devname,
+			   int local_pad, int remote_pad)
+{
+	struct imx_media_link *link;
+	int link_idx, ret = 0;
+
+	mutex_lock(&imxmd->mutex);
+
+	link_idx = pad->num_links;
+	if (link_idx >= IMX_MEDIA_MAX_LINKS) {
+		dev_err(imxmd->md.dev, "%s: too many links!\n", __func__);
+		ret = -ENOSPC;
+		goto out;
+	}
+
+	link = &pad->link[link_idx];
+
+	link->remote_sd_node = remote_node;
+	if (remote_devname)
+		strncpy(link->remote_devname, remote_devname,
+			sizeof(link->remote_devname));
+
+	link->local_pad = local_pad;
+	link->remote_pad = remote_pad;
+
+	pad->num_links++;
+out:
+	mutex_unlock(&imxmd->mutex);
+	return ret;
 }
 
 /*
@@ -121,62 +206,122 @@ static int imx_media_subdev_bound(struct v4l2_async_notifier *notifier,
 				  struct v4l2_async_subdev *asd)
 {
 	struct imx_media_dev *imxmd = notifier2dev(notifier);
+	struct device_node *np = to_of_node(sd->fwnode);
+	struct imx_media_subdev *imxsd;
 	int ret = 0;
 
 	mutex_lock(&imxmd->mutex);
 
+	imxsd = imx_media_find_async_subdev(imxmd, np, dev_name(sd->dev));
+	if (!imxsd) {
+		ret = -EINVAL;
+		goto out;
+	}
+
 	if (sd->grp_id & IMX_MEDIA_GRP_ID_CSI) {
 		ret = imx_media_get_ipu(imxmd, sd);
 		if (ret)
-			goto out;
+			goto out_unlock;
+	} else if (sd->entity.function == MEDIA_ENT_F_VID_MUX) {
+		/* this is a video mux */
+		sd->grp_id = IMX_MEDIA_GRP_ID_VIDMUX;
+	} else if (imxsd->num_sink_pads == 0) {
+		/*
+		 * this is an original source of video frames, it
+		 * could be a camera sensor, an analog decoder, or
+		 * a bridge device (HDMI -> MIPI CSI-2 for example).
+		 * This group ID is used to locate the entity that
+		 * is the original source of video in a pipeline.
+		 */
+		sd->grp_id = IMX_MEDIA_GRP_ID_SENSOR;
 	}
 
-	v4l2_info(&imxmd->v4l2_dev, "subdev %s bound\n", sd->name);
+	/* attach the subdev */
+	imxsd->sd = sd;
 out:
+	if (ret)
+		v4l2_warn(&imxmd->v4l2_dev,
+			  "Received unknown subdev %s\n", sd->name);
+	else
+		v4l2_info(&imxmd->v4l2_dev,
+			  "Registered subdev %s\n", sd->name);
+
+out_unlock:
 	mutex_unlock(&imxmd->mutex);
 	return ret;
 }
 
 /*
- * Create the media links for all subdevs that registered.
- * Called after all async subdevs have bound.
+ * Create a single source->sink media link given a subdev and a single
+ * link from one of its source pads. Called after all subdevs have
+ * registered.
  */
-static int imx_media_create_links(struct v4l2_async_notifier *notifier)
+static int imx_media_create_link(struct imx_media_dev *imxmd,
+				 struct imx_media_subdev *src,
+				 struct imx_media_link *link)
 {
-	struct imx_media_dev *imxmd = notifier2dev(notifier);
-	struct v4l2_subdev *sd;
+	struct imx_media_subdev *sink;
+	u16 source_pad, sink_pad;
 	int ret;
 
-	list_for_each_entry(sd, &imxmd->v4l2_dev.subdevs, list) {
-		switch (sd->grp_id) {
-		case IMX_MEDIA_GRP_ID_VDIC:
-		case IMX_MEDIA_GRP_ID_IC_PRP:
-		case IMX_MEDIA_GRP_ID_IC_PRPENC:
-		case IMX_MEDIA_GRP_ID_IC_PRPVF:
-		case IMX_MEDIA_GRP_ID_CSI0:
-		case IMX_MEDIA_GRP_ID_CSI1:
-			ret = imx_media_create_internal_links(imxmd, sd);
-			if (ret)
-				return ret;
-			/*
-			 * the CSIs straddle between the external and the IPU
-			 * internal entities, so create the external links
-			 * to the CSI sink pads.
-			 */
-			if (sd->grp_id & IMX_MEDIA_GRP_ID_CSI)
-				imx_media_create_csi_of_links(imxmd, sd);
-			break;
-		default:
-			/*
-			 * if this subdev has fwnode links, create media
-			 * links for them.
-			 */
-			imx_media_create_of_links(imxmd, sd);
-			break;
+	sink = imx_media_find_async_subdev(imxmd, link->remote_sd_node,
+					   link->remote_devname);
+	if (!sink) {
+		v4l2_warn(&imxmd->v4l2_dev, "%s: no sink for %s:%d\n",
+			  __func__, src->sd->name, link->local_pad);
+		return 0;
+	}
+
+	source_pad = link->local_pad;
+	sink_pad = link->remote_pad;
+
+	v4l2_info(&imxmd->v4l2_dev, "%s: %s:%d -> %s:%d\n", __func__,
+		  src->sd->name, source_pad, sink->sd->name, sink_pad);
+
+	ret = media_create_pad_link(&src->sd->entity, source_pad,
+				    &sink->sd->entity, sink_pad, 0);
+	if (ret)
+		v4l2_err(&imxmd->v4l2_dev,
+			 "create_pad_link failed: %d\n", ret);
+
+	return ret;
+}
+
+/*
+ * create the media links from all imx-media pads and their links.
+ * Called after all subdevs have registered.
+ */
+static int imx_media_create_links(struct imx_media_dev *imxmd)
+{
+	struct imx_media_subdev *imxsd;
+	struct imx_media_link *link;
+	struct imx_media_pad *pad;
+	int num_pads, i, j, k;
+	int ret = 0;
+
+	for (i = 0; i < imxmd->num_subdevs; i++) {
+		imxsd = &imxmd->subdev[i];
+		num_pads = imxsd->num_sink_pads + imxsd->num_src_pads;
+
+		for (j = 0; j < num_pads; j++) {
+			pad = &imxsd->pad[j];
+
+			/* only create the source->sink links */
+			if (!(pad->pad.flags & MEDIA_PAD_FL_SOURCE))
+				continue;
+
+			for (k = 0; k < pad->num_links; k++) {
+				link = &pad->link[k];
+
+				ret = imx_media_create_link(imxmd, imxsd, link);
+				if (ret)
+					goto out;
+			}
 		}
 	}
 
-	return 0;
+out:
+	return ret;
 }
 
 /*
@@ -188,45 +333,39 @@ static int imx_media_add_vdev_to_pad(struct imx_media_dev *imxmd,
 				     struct media_pad *srcpad)
 {
 	struct media_entity *entity = srcpad->entity;
-	struct imx_media_pad_vdev *pad_vdev;
-	struct list_head *pad_vdev_list;
+	struct imx_media_subdev *imxsd;
+	struct imx_media_pad *imxpad;
 	struct media_link *link;
 	struct v4l2_subdev *sd;
-	int i, ret;
+	int i, vdev_idx, ret;
 
 	/* skip this entity if not a v4l2_subdev */
 	if (!is_media_entity_v4l2_subdev(entity))
 		return 0;
 
 	sd = media_entity_to_v4l2_subdev(entity);
+	imxsd = imx_media_find_subdev_by_sd(imxmd, sd);
+	if (IS_ERR(imxsd))
+		return PTR_ERR(imxsd);
 
-	pad_vdev_list = to_pad_vdev_list(sd, srcpad->index);
-	if (!pad_vdev_list) {
-		v4l2_warn(&imxmd->v4l2_dev, "%s:%u has no vdev list!\n",
-			  entity->name, srcpad->index);
-		/*
-		 * shouldn't happen, but no reason to fail driver load,
-		 * just skip this entity.
-		 */
-		return 0;
-	}
+	imxpad = &imxsd->pad[srcpad->index];
+	vdev_idx = imxpad->num_vdevs;
 
 	/* just return if we've been here before */
-	list_for_each_entry(pad_vdev, pad_vdev_list, list) {
-		if (pad_vdev->vdev == vdev)
+	for (i = 0; i < vdev_idx; i++)
+		if (vdev == imxpad->vdev[i])
 			return 0;
+
+	if (vdev_idx >= IMX_MEDIA_MAX_VDEVS) {
+		dev_err(imxmd->md.dev, "can't add %s to pad %s:%u\n",
+			vdev->vfd->entity.name, entity->name, srcpad->index);
+		return -ENOSPC;
 	}
 
 	dev_dbg(imxmd->md.dev, "adding %s to pad %s:%u\n",
 		vdev->vfd->entity.name, entity->name, srcpad->index);
-
-	pad_vdev = devm_kzalloc(imxmd->md.dev, sizeof(*pad_vdev), GFP_KERNEL);
-	if (!pad_vdev)
-		return -ENOMEM;
-
-	/* attach this vdev to this pad */
-	pad_vdev->vdev = vdev;
-	list_add_tail(&pad_vdev->list, pad_vdev_list);
+	imxpad->vdev[vdev_idx] = vdev;
+	imxpad->num_vdevs++;
 
 	/* move upstream from this entity's sink pads */
 	for (i = 0; i < entity->num_pads; i++) {
@@ -248,49 +387,15 @@ static int imx_media_add_vdev_to_pad(struct imx_media_dev *imxmd,
 	return 0;
 }
 
-/*
- * For every subdevice, allocate an array of list_head's, one list_head
- * for each pad, to hold the list of video devices reachable from that
- * pad.
- */
-static int imx_media_alloc_pad_vdev_lists(struct imx_media_dev *imxmd)
-{
-	struct list_head *vdev_lists;
-	struct media_entity *entity;
-	struct v4l2_subdev *sd;
-	int i;
-
-	list_for_each_entry(sd, &imxmd->v4l2_dev.subdevs, list) {
-		entity = &sd->entity;
-		vdev_lists = devm_kcalloc(
-			imxmd->md.dev,
-			entity->num_pads, sizeof(*vdev_lists),
-			GFP_KERNEL);
-		if (!vdev_lists)
-			return -ENOMEM;
-
-		/* attach to the subdev's host private pointer */
-		sd->host_priv = vdev_lists;
-
-		for (i = 0; i < entity->num_pads; i++)
-			INIT_LIST_HEAD(to_pad_vdev_list(sd, i));
-	}
-
-	return 0;
-}
-
 /* form the vdev lists in all imx-media source pads */
 static int imx_media_create_pad_vdev_lists(struct imx_media_dev *imxmd)
 {
 	struct imx_media_video_dev *vdev;
 	struct media_link *link;
-	int ret;
+	int i, ret;
 
-	ret = imx_media_alloc_pad_vdev_lists(imxmd);
-	if (ret)
-		return ret;
-
-	list_for_each_entry(vdev, &imxmd->vdev_list, list) {
+	for (i = 0; i < imxmd->num_vdevs; i++) {
+		vdev = imxmd->vdev[i];
 		link = list_first_entry(&vdev->vfd->entity.links,
 					struct media_link, list);
 		ret = imx_media_add_vdev_to_pad(imxmd, vdev, link->source);
@@ -305,11 +410,20 @@ static int imx_media_create_pad_vdev_lists(struct imx_media_dev *imxmd)
 static int imx_media_probe_complete(struct v4l2_async_notifier *notifier)
 {
 	struct imx_media_dev *imxmd = notifier2dev(notifier);
-	int ret;
+	int i, ret;
 
 	mutex_lock(&imxmd->mutex);
 
-	ret = imx_media_create_links(notifier);
+	/* make sure all subdevs were bound */
+	for (i = 0; i < imxmd->num_subdevs; i++) {
+		if (!imxmd->subdev[i].sd) {
+			v4l2_err(&imxmd->v4l2_dev, "unbound subdev!\n");
+			ret = -ENODEV;
+			goto unlock;
+		}
+	}
+
+	ret = imx_media_create_links(imxmd);
 	if (ret)
 		goto unlock;
 
@@ -325,11 +439,6 @@ unlock:
 
 	return media_device_register(&imxmd->md);
 }
-
-static const struct v4l2_async_notifier_operations imx_media_subdev_ops = {
-	.bound = imx_media_subdev_bound,
-	.complete = imx_media_probe_complete,
-};
 
 /*
  * adds controls to a video device from an entity subdevice.
@@ -350,7 +459,7 @@ static int imx_media_inherit_controls(struct imx_media_dev *imxmd,
 
 		ret = v4l2_ctrl_add_handler(vfd->ctrl_handler,
 					    sd->ctrl_handler,
-					    NULL, true);
+					    NULL);
 		if (ret)
 			return ret;
 	}
@@ -378,12 +487,12 @@ static int imx_media_link_notify(struct media_link *link, u32 flags,
 				 unsigned int notification)
 {
 	struct media_entity *source = link->source->entity;
-	struct imx_media_pad_vdev *pad_vdev;
-	struct list_head *pad_vdev_list;
+	struct imx_media_subdev *imxsd;
+	struct imx_media_pad *imxpad;
 	struct imx_media_dev *imxmd;
 	struct video_device *vfd;
 	struct v4l2_subdev *sd;
-	int pad_idx, ret;
+	int i, pad_idx, ret;
 
 	ret = v4l2_pipeline_link_notify(link, flags, notification);
 	if (ret)
@@ -398,11 +507,10 @@ static int imx_media_link_notify(struct media_link *link, u32 flags,
 
 	imxmd = dev_get_drvdata(sd->v4l2_dev->dev);
 
-	pad_vdev_list = to_pad_vdev_list(sd, pad_idx);
-	if (!pad_vdev_list) {
-		/* shouldn't happen, but no reason to fail link setup */
-		return 0;
-	}
+	imxsd = imx_media_find_subdev_by_sd(imxmd, sd);
+	if (IS_ERR(imxsd))
+		return PTR_ERR(imxsd);
+	imxpad = &imxsd->pad[pad_idx];
 
 	/*
 	 * Before disabling a link, reset controls for all video
@@ -413,8 +521,8 @@ static int imx_media_link_notify(struct media_link *link, u32 flags,
 	 */
 	if (notification == MEDIA_DEV_NOTIFY_PRE_LINK_CH &&
 	    !(flags & MEDIA_LNK_FL_ENABLED)) {
-		list_for_each_entry(pad_vdev, pad_vdev_list, list) {
-			vfd = pad_vdev->vdev->vfd;
+		for (i = 0; i < imxpad->num_vdevs; i++) {
+			vfd = imxpad->vdev[i]->vfd;
 			dev_dbg(imxmd->md.dev,
 				"reset controls for %s\n",
 				vfd->entity.name);
@@ -423,8 +531,8 @@ static int imx_media_link_notify(struct media_link *link, u32 flags,
 		}
 	} else if (notification == MEDIA_DEV_NOTIFY_POST_LINK_CH &&
 		   (link->flags & MEDIA_LNK_FL_ENABLED)) {
-		list_for_each_entry(pad_vdev, pad_vdev_list, list) {
-			vfd = pad_vdev->vdev->vfd;
+		for (i = 0; i < imxpad->num_vdevs; i++) {
+			vfd = imxpad->vdev[i]->vfd;
 			dev_dbg(imxmd->md.dev,
 				"refresh controls for %s\n",
 				vfd->entity.name);
@@ -446,6 +554,7 @@ static int imx_media_probe(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
 	struct device_node *node = dev->of_node;
+	struct imx_media_subdev *csi[4] = {0};
 	struct imx_media_dev *imxmd;
 	int ret;
 
@@ -455,14 +564,14 @@ static int imx_media_probe(struct platform_device *pdev)
 
 	dev_set_drvdata(dev, imxmd);
 
-	strscpy(imxmd->md.model, "imx-media", sizeof(imxmd->md.model));
+	strlcpy(imxmd->md.model, "imx-media", sizeof(imxmd->md.model));
 	imxmd->md.ops = &imx_media_md_ops;
 	imxmd->md.dev = dev;
 
 	mutex_init(&imxmd->mutex);
 
 	imxmd->v4l2_dev.mdev = &imxmd->md;
-	strscpy(imxmd->v4l2_dev.name, "imx-media",
+	strlcpy(imxmd->v4l2_dev.name, "imx-media",
 		sizeof(imxmd->v4l2_dev.name));
 
 	media_device_init(&imxmd->md);
@@ -476,34 +585,33 @@ static int imx_media_probe(struct platform_device *pdev)
 
 	dev_set_drvdata(imxmd->v4l2_dev.dev, imxmd);
 
-	INIT_LIST_HEAD(&imxmd->vdev_list);
-
-	v4l2_async_notifier_init(&imxmd->notifier);
-
-	ret = imx_media_add_of_subdevs(imxmd, node);
+	ret = imx_media_of_parse(imxmd, &csi, node);
 	if (ret) {
 		v4l2_err(&imxmd->v4l2_dev,
-			 "add_of_subdevs failed with %d\n", ret);
-		goto notifier_cleanup;
+			 "imx_media_of_parse failed with %d\n", ret);
+		goto unreg_dev;
 	}
 
-	ret = imx_media_add_internal_subdevs(imxmd);
+	ret = imx_media_add_internal_subdevs(imxmd, csi);
 	if (ret) {
 		v4l2_err(&imxmd->v4l2_dev,
 			 "add_internal_subdevs failed with %d\n", ret);
-		goto notifier_cleanup;
+		goto unreg_dev;
 	}
 
 	/* no subdevs? just bail */
-	if (list_empty(&imxmd->notifier.asd_list)) {
+	imxmd->num_subdevs = imxmd->subdev_notifier.num_subdevs;
+	if (imxmd->num_subdevs == 0) {
 		ret = -ENODEV;
-		goto notifier_cleanup;
+		goto unreg_dev;
 	}
 
 	/* prepare the async subdev notifier and register it */
-	imxmd->notifier.ops = &imx_media_subdev_ops;
+	imxmd->subdev_notifier.subdevs = imxmd->async_ptrs;
+	imxmd->subdev_notifier.bound = imx_media_subdev_bound;
+	imxmd->subdev_notifier.complete = imx_media_probe_complete;
 	ret = v4l2_async_notifier_register(&imxmd->v4l2_dev,
-					   &imxmd->notifier);
+					   &imxmd->subdev_notifier);
 	if (ret) {
 		v4l2_err(&imxmd->v4l2_dev,
 			 "v4l2_async_notifier_register failed with %d\n", ret);
@@ -514,8 +622,7 @@ static int imx_media_probe(struct platform_device *pdev)
 
 del_int:
 	imx_media_remove_internal_subdevs(imxmd);
-notifier_cleanup:
-	v4l2_async_notifier_cleanup(&imxmd->notifier);
+unreg_dev:
 	v4l2_device_unregister(&imxmd->v4l2_dev);
 cleanup:
 	media_device_cleanup(&imxmd->md);
@@ -529,9 +636,8 @@ static int imx_media_remove(struct platform_device *pdev)
 
 	v4l2_info(&imxmd->v4l2_dev, "Removing imx-media\n");
 
-	v4l2_async_notifier_unregister(&imxmd->notifier);
+	v4l2_async_notifier_unregister(&imxmd->subdev_notifier);
 	imx_media_remove_internal_subdevs(imxmd);
-	v4l2_async_notifier_cleanup(&imxmd->notifier);
 	v4l2_device_unregister(&imxmd->v4l2_dev);
 	media_device_unregister(&imxmd->md);
 	media_device_cleanup(&imxmd->md);

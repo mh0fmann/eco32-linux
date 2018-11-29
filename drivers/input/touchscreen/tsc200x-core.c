@@ -68,8 +68,7 @@ const struct regmap_config tsc200x_regmap_config = {
 	.read_flag_mask = TSC200X_REG_READ,
 	.write_flag_mask = TSC200X_REG_PND0,
 	.wr_table = &tsc200x_writable_table,
-	.use_single_read = true,
-	.use_single_write = true,
+	.use_single_rw = true,
 };
 EXPORT_SYMBOL_GPL(tsc200x_regmap_config);
 
@@ -203,9 +202,9 @@ out:
 	return IRQ_HANDLED;
 }
 
-static void tsc200x_penup_timer(struct timer_list *t)
+static void tsc200x_penup_timer(unsigned long data)
 {
-	struct tsc200x *ts = from_timer(ts, t, penup_timer);
+	struct tsc200x *ts = (struct tsc200x *)data;
 	unsigned long flags;
 
 	spin_lock_irqsave(&ts->lock, flags);
@@ -507,7 +506,7 @@ int tsc200x_probe(struct device *dev, int irq, const struct input_id *tsc_id,
 	mutex_init(&ts->mutex);
 
 	spin_lock_init(&ts->lock);
-	timer_setup(&ts->penup_timer, tsc200x_penup_timer, 0);
+	setup_timer(&ts->penup_timer, tsc200x_penup_timer, (unsigned long)ts);
 
 	INIT_DELAYED_WORK(&ts->esd_work, tsc200x_esd_work);
 

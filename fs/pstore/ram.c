@@ -153,23 +153,21 @@ ramoops_get_next_prz(struct persistent_ram_zone *przs[], uint *c, uint max,
 	return prz;
 }
 
-static int ramoops_read_kmsg_hdr(char *buffer, struct timespec64 *time,
+static int ramoops_read_kmsg_hdr(char *buffer, struct timespec *time,
 				  bool *compressed)
 {
 	char data_type;
 	int header_length = 0;
 
-	if (sscanf(buffer, RAMOOPS_KERNMSG_HDR "%lld.%lu-%c\n%n",
-		   (time64_t *)&time->tv_sec, &time->tv_nsec, &data_type,
-		   &header_length) == 3) {
+	if (sscanf(buffer, RAMOOPS_KERNMSG_HDR "%lu.%lu-%c\n%n", &time->tv_sec,
+			&time->tv_nsec, &data_type, &header_length) == 3) {
 		if (data_type == 'C')
 			*compressed = true;
 		else
 			*compressed = false;
-	} else if (sscanf(buffer, RAMOOPS_KERNMSG_HDR "%lld.%lu\n%n",
-			  (time64_t *)&time->tv_sec, &time->tv_nsec,
-			  &header_length) == 2) {
-		*compressed = false;
+	} else if (sscanf(buffer, RAMOOPS_KERNMSG_HDR "%lu.%lu\n%n",
+			&time->tv_sec, &time->tv_nsec, &header_length) == 2) {
+			*compressed = false;
 	} else {
 		time->tv_sec = 0;
 		time->tv_nsec = 0;
@@ -362,8 +360,8 @@ static size_t ramoops_write_kmsg_hdr(struct persistent_ram_zone *prz,
 	char *hdr;
 	size_t len;
 
-	hdr = kasprintf(GFP_ATOMIC, RAMOOPS_KERNMSG_HDR "%lld.%06lu-%c\n",
-		(time64_t)record->time.tv_sec,
+	hdr = kasprintf(GFP_ATOMIC, RAMOOPS_KERNMSG_HDR "%lu.%lu-%c\n",
+		record->time.tv_sec,
 		record->time.tv_nsec / 1000,
 		record->compressed ? 'C' : 'D');
 	WARN_ON_ONCE(!hdr);
@@ -587,16 +585,9 @@ static int ramoops_init_przs(const char *name,
 		goto fail;
 
 	for (i = 0; i < *cnt; i++) {
-		char *label;
-
-		if (*cnt == 1)
-			label = kasprintf(GFP_KERNEL, "ramoops:%s", name);
-		else
-			label = kasprintf(GFP_KERNEL, "ramoops:%s(%d/%d)",
-					  name, i, *cnt - 1);
 		prz_ar[i] = persistent_ram_new(*paddr, zone_sz, sig,
-					       &cxt->ecc_info,
-					       cxt->memtype, flags, label);
+						  &cxt->ecc_info,
+						  cxt->memtype, flags);
 		if (IS_ERR(prz_ar[i])) {
 			err = PTR_ERR(prz_ar[i]);
 			dev_err(dev, "failed to request %s mem region (0x%zx@0x%llx): %d\n",
@@ -626,8 +617,6 @@ static int ramoops_init_prz(const char *name,
 			    struct persistent_ram_zone **prz,
 			    phys_addr_t *paddr, size_t sz, u32 sig)
 {
-	char *label;
-
 	if (!sz)
 		return 0;
 
@@ -638,9 +627,8 @@ static int ramoops_init_prz(const char *name,
 		return -ENOMEM;
 	}
 
-	label = kasprintf(GFP_KERNEL, "ramoops:%s", name);
 	*prz = persistent_ram_new(*paddr, sz, sig, &cxt->ecc_info,
-				  cxt->memtype, 0, label);
+				  cxt->memtype, 0);
 	if (IS_ERR(*prz)) {
 		int err = PTR_ERR(*prz);
 
@@ -908,22 +896,8 @@ static struct platform_driver ramoops_driver = {
 	},
 };
 
-static inline void ramoops_unregister_dummy(void)
+static void ramoops_register_dummy(void)
 {
-	platform_device_unregister(dummy);
-	dummy = NULL;
-
-	kfree(dummy_data);
-	dummy_data = NULL;
-}
-
-static void __init ramoops_register_dummy(void)
-{
-	/*
-	 * Prepare a dummy platform data structure to carry the module
-	 * parameters. If mem_size isn't set, then there are no module
-	 * parameters, and we can skip this.
-	 */
 	if (!mem_size)
 		return;
 
@@ -956,28 +930,21 @@ static void __init ramoops_register_dummy(void)
 	if (IS_ERR(dummy)) {
 		pr_info("could not create platform device: %ld\n",
 			PTR_ERR(dummy));
-		dummy = NULL;
-		ramoops_unregister_dummy();
 	}
 }
 
 static int __init ramoops_init(void)
 {
-	int ret;
-
 	ramoops_register_dummy();
-	ret = platform_driver_register(&ramoops_driver);
-	if (ret != 0)
-		ramoops_unregister_dummy();
-
-	return ret;
+	return platform_driver_register(&ramoops_driver);
 }
 postcore_initcall(ramoops_init);
 
 static void __exit ramoops_exit(void)
 {
 	platform_driver_unregister(&ramoops_driver);
-	ramoops_unregister_dummy();
+	platform_device_unregister(dummy);
+	kfree(dummy_data);
 }
 module_exit(ramoops_exit);
 

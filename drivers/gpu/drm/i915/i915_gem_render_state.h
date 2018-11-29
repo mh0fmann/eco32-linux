@@ -24,8 +24,10 @@
 #ifndef _I915_GEM_RENDER_STATE_H_
 #define _I915_GEM_RENDER_STATE_H_
 
-struct i915_request;
+struct drm_i915_gem_request;
 
-int i915_gem_render_state_emit(struct i915_request *rq);
+int i915_gem_render_state_init(struct intel_engine_cs *engine);
+int i915_gem_render_state_emit(struct drm_i915_gem_request *req);
+void i915_gem_render_state_fini(struct intel_engine_cs *engine);
 
 #endif /* _I915_GEM_RENDER_STATE_H_ */

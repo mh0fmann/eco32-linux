@@ -1,4 +1,3 @@
-// SPDX-License-Identifier: GPL-2.0
 /* cassini.c: Sun Microsystems Cassini(+) ethernet driver.
  *
  * Copyright (C) 2004 Sun Microsystems Inc.
@@ -4080,9 +4079,9 @@ done:
 #endif
 }
 
-static void cas_link_timer(struct timer_list *t)
+static void cas_link_timer(unsigned long data)
 {
-	struct cas *cp = from_timer(cp, t, link_timer);
+	struct cas *cp = (struct cas *) data;
 	int mask, pending = 0, reset = 0;
 	unsigned long flags;
 
@@ -5040,7 +5039,9 @@ static int cas_init_one(struct pci_dev *pdev, const struct pci_device_id *ent)
 	spin_lock_init(&cp->stat_lock[N_TX_RINGS]);
 	mutex_init(&cp->pm_mutex);
 
-	timer_setup(&cp->link_timer, cas_link_timer, 0);
+	init_timer(&cp->link_timer);
+	cp->link_timer.function = cas_link_timer;
+	cp->link_timer.data = (unsigned long) cp;
 
 #if 1
 	/* Just in case the implementation of atomic operations

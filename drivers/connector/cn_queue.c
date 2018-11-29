@@ -45,7 +45,7 @@ cn_queue_alloc_callback_entry(struct cn_queue_dev *dev, const char *name,
 		return NULL;
 	}
 
-	refcount_set(&cbq->refcnt, 1);
+	atomic_set(&cbq->refcnt, 1);
 
 	atomic_inc(&dev->refcnt);
 	cbq->pdev = dev;
@@ -58,7 +58,7 @@ cn_queue_alloc_callback_entry(struct cn_queue_dev *dev, const char *name,
 
 void cn_queue_release_callback(struct cn_callback_entry *cbq)
 {
-	if (!refcount_dec_and_test(&cbq->refcnt))
+	if (!atomic_dec_and_test(&cbq->refcnt))
 		return;
 
 	atomic_dec(&cbq->pdev->refcnt);

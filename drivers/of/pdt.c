@@ -1,4 +1,3 @@
-// SPDX-License-Identifier: GPL-2.0+
 /* pdt.c: OF PROM device tree support code.
  *
  * Paul Mackerras	August 1996.
@@ -9,6 +8,11 @@
  *
  *  Adapted for sparc by David S. Miller davem@davemloft.net
  *  Adapted for multiple architectures by Andres Salomon <dilinger@queued.net>
+ *
+ *      This program is free software; you can redistribute it and/or
+ *      modify it under the terms of the GNU General Public License
+ *      as published by the Free Software Foundation; either version
+ *      2 of the License, or (at your option) any later version.
  */
 
 #include <linux/kernel.h>

@@ -122,11 +122,11 @@ __setup("hcheck_dump_tasks", hangcheck_parse_dump_tasks);
 /* Last time scheduled */
 static unsigned long long hangcheck_tsc, hangcheck_tsc_margin;
 
-static void hangcheck_fire(struct timer_list *);
+static void hangcheck_fire(unsigned long);
 
-static DEFINE_TIMER(hangcheck_ticktock, hangcheck_fire);
+static DEFINE_TIMER(hangcheck_ticktock, hangcheck_fire, 0, 0);
 
-static void hangcheck_fire(struct timer_list *unused)
+static void hangcheck_fire(unsigned long data)
 {
 	unsigned long long cur_tsc, tsc_diff;
 

@@ -654,8 +654,8 @@ static int fimc_lite_querycap(struct file *file, void *priv,
 {
 	struct fimc_lite *fimc = video_drvdata(file);
 
-	strscpy(cap->driver, FIMC_LITE_DRV_NAME, sizeof(cap->driver));
-	strscpy(cap->card, FIMC_LITE_DRV_NAME, sizeof(cap->card));
+	strlcpy(cap->driver, FIMC_LITE_DRV_NAME, sizeof(cap->driver));
+	strlcpy(cap->card, FIMC_LITE_DRV_NAME, sizeof(cap->card));
 	snprintf(cap->bus_info, sizeof(cap->bus_info), "platform:%s",
 					dev_name(&fimc->pdev->dev));
 
@@ -673,7 +673,7 @@ static int fimc_lite_enum_fmt_mplane(struct file *file, void *priv,
 		return -EINVAL;
 
 	fmt = &fimc_lite_formats[f->index];
-	strscpy(f->description, fmt->name, sizeof(f->description));
+	strlcpy(f->description, fmt->name, sizeof(f->description));
 	f->pixelformat = fmt->fourcc;
 
 	return 0;
@@ -1462,7 +1462,10 @@ static void fimc_lite_clk_put(struct fimc_lite *fimc)
 static int fimc_lite_clk_get(struct fimc_lite *fimc)
 {
 	fimc->clock = clk_get(&fimc->pdev->dev, FLITE_CLK_NAME);
-	return PTR_ERR_OR_ZERO(fimc->clock);
+	if (IS_ERR(fimc->clock))
+		return PTR_ERR(fimc->clock);
+
+	return 0;
 }
 
 static const struct of_device_id flite_of_match[];
@@ -1643,7 +1646,7 @@ static const struct dev_pm_ops fimc_lite_pm_ops = {
 			   NULL)
 };
 
-/* EXYNOS4412 */
+/* EXYNOS4212, EXYNOS4412 */
 static struct flite_drvdata fimc_lite_drvdata_exynos4 = {
 	.max_width		= 8192,
 	.max_height		= 8192,

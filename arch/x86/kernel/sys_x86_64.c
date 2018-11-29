@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: GPL-2.0
-#include <linux/compat.h>
 #include <linux/errno.h>
 #include <linux/sched.h>
 #include <linux/sched/mm.h>
@@ -20,6 +19,7 @@
 #include <linux/elf.h>
 
 #include <asm/elf.h>
+#include <asm/compat.h>
 #include <asm/ia32.h>
 #include <asm/syscalls.h>
 #include <asm/mpx.h>
@@ -97,7 +97,7 @@ SYSCALL_DEFINE6(mmap, unsigned long, addr, unsigned long, len,
 	if (off & ~PAGE_MASK)
 		goto out;
 
-	error = ksys_mmap_pgoff(addr, len, prot, flags, fd, off >> PAGE_SHIFT);
+	error = sys_mmap_pgoff(addr, len, prot, flags, fd, off >> PAGE_SHIFT);
 out:
 	return error;
 }
@@ -105,7 +105,7 @@ out:
 static void find_start_end(unsigned long addr, unsigned long flags,
 		unsigned long *begin, unsigned long *end)
 {
-	if (!in_32bit_syscall() && (flags & MAP_32BIT)) {
+	if (!in_compat_syscall() && (flags & MAP_32BIT)) {
 		/* This is usually used needed to map code in small
 		   model, so it needs to be in the first 31bit. Limit
 		   it to that.  This means we need to move the
@@ -122,7 +122,7 @@ static void find_start_end(unsigned long addr, unsigned long flags,
 	}
 
 	*begin	= get_mmap_base(1);
-	if (in_32bit_syscall())
+	if (in_compat_syscall())
 		*end = task_size_32bit();
 	else
 		*end = task_size_64bit(addr > DEFAULT_MAP_WINDOW);
@@ -188,25 +188,21 @@ arch_get_unmapped_area_topdown(struct file *filp, const unsigned long addr0,
 	if (len > TASK_SIZE)
 		return -ENOMEM;
 
-	/* No address checking. See comment at mmap_address_hint_valid() */
 	if (flags & MAP_FIXED)
 		return addr;
 
 	/* for MAP_32BIT mappings we force the legacy mmap base */
-	if (!in_32bit_syscall() && (flags & MAP_32BIT))
+	if (!in_compat_syscall() && (flags & MAP_32BIT))
 		goto bottomup;
 
 	/* requesting a specific address */
 	if (addr) {
-		addr &= PAGE_MASK;
-		if (!mmap_address_hint_valid(addr, len))
-			goto get_unmapped_area;
-
+		addr = PAGE_ALIGN(addr);
 		vma = find_vma(mm, addr);
-		if (!vma || addr + len <= vm_start_gap(vma))
+		if (TASK_SIZE - len >= addr &&
+				(!vma || addr + len <= vm_start_gap(vma)))
 			return addr;
 	}
-get_unmapped_area:
 
 	info.flags = VM_UNMAPPED_AREA_TOPDOWN;
 	info.length = len;
@@ -217,10 +213,9 @@ get_unmapped_area:
 	 * If hint address is above DEFAULT_MAP_WINDOW, look for unmapped area
 	 * in the full address space.
 	 *
-	 * !in_32bit_syscall() check to avoid high addresses for x32
-	 * (and make it no op on native i386).
+	 * !in_compat_syscall() check to avoid high addresses for x32.
 	 */
-	if (addr > DEFAULT_MAP_WINDOW && !in_32bit_syscall())
+	if (addr > DEFAULT_MAP_WINDOW && !in_compat_syscall())
 		info.high_limit += TASK_SIZE_MAX - DEFAULT_MAP_WINDOW;
 
 	info.align_mask = 0;

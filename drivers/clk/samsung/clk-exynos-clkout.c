@@ -61,7 +61,8 @@ static void __init exynos_clkout_init(struct device_node *node, u32 mux_mask)
 	int ret;
 	int i;
 
-	clkout = kzalloc(struct_size(clkout, data.hws, EXYNOS_CLKOUT_NR_CLKS),
+	clkout = kzalloc(sizeof(*clkout) +
+			 sizeof(*clkout->data.hws) * EXYNOS_CLKOUT_NR_CLKS,
 			 GFP_KERNEL);
 	if (!clkout)
 		return;
@@ -142,6 +143,8 @@ static void __init exynos4_clkout_init(struct device_node *node)
 	exynos_clkout_init(node, EXYNOS4_CLKOUT_MUX_MASK);
 }
 CLK_OF_DECLARE_DRIVER(exynos4210_clkout, "samsung,exynos4210-pmu",
+		exynos4_clkout_init);
+CLK_OF_DECLARE_DRIVER(exynos4212_clkout, "samsung,exynos4212-pmu",
 		exynos4_clkout_init);
 CLK_OF_DECLARE_DRIVER(exynos4412_clkout, "samsung,exynos4412-pmu",
 		exynos4_clkout_init);

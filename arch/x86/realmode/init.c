@@ -64,10 +64,9 @@ static void __init setup_real_mode(void)
 	/*
 	 * If SME is active, the trampoline area will need to be in
 	 * decrypted memory in order to bring up other processors
-	 * successfully. This is not needed for SEV.
+	 * successfully.
 	 */
-	if (sme_active())
-		set_memory_decrypted((unsigned long)base, size >> PAGE_SHIFT);
+	set_memory_decrypted((unsigned long)base, size >> PAGE_SHIFT);
 
 	memcpy(base, real_mode_blob, size);
 

@@ -118,9 +118,10 @@ int tse_pcs_init(void __iomem *base, struct tse_pcs *pcs)
 	return ret;
 }
 
-static void pcs_link_timer_callback(struct tse_pcs *pcs)
+static void pcs_link_timer_callback(unsigned long data)
 {
 	u16 val = 0;
+	struct tse_pcs *pcs = (struct tse_pcs *)data;
 	void __iomem *tse_pcs_base = pcs->tse_pcs_base;
 	void __iomem *sgmii_adapter_base = pcs->sgmii_adapter_base;
 
@@ -137,11 +138,12 @@ static void pcs_link_timer_callback(struct tse_pcs *pcs)
 	}
 }
 
-static void auto_nego_timer_callback(struct tse_pcs *pcs)
+static void auto_nego_timer_callback(unsigned long data)
 {
 	u16 val = 0;
 	u16 speed = 0;
 	u16 duplex = 0;
+	struct tse_pcs *pcs = (struct tse_pcs *)data;
 	void __iomem *tse_pcs_base = pcs->tse_pcs_base;
 	void __iomem *sgmii_adapter_base = pcs->sgmii_adapter_base;
 
@@ -199,14 +201,14 @@ static void auto_nego_timer_callback(struct tse_pcs *pcs)
 	}
 }
 
-static void aneg_link_timer_callback(struct timer_list *t)
+static void aneg_link_timer_callback(unsigned long data)
 {
-	struct tse_pcs *pcs = from_timer(pcs, t, aneg_link_timer);
+	struct tse_pcs *pcs = (struct tse_pcs *)data;
 
 	if (pcs->autoneg == AUTONEG_ENABLE)
-		auto_nego_timer_callback(pcs);
+		auto_nego_timer_callback(data);
 	else if (pcs->autoneg == AUTONEG_DISABLE)
-		pcs_link_timer_callback(pcs);
+		pcs_link_timer_callback(data);
 }
 
 void tse_pcs_fix_mac_speed(struct tse_pcs *pcs, struct phy_device *phy_dev,
@@ -235,8 +237,8 @@ void tse_pcs_fix_mac_speed(struct tse_pcs *pcs, struct phy_device *phy_dev,
 
 		tse_pcs_reset(tse_pcs_base, pcs);
 
-		timer_setup(&pcs->aneg_link_timer, aneg_link_timer_callback,
-			    0);
+		setup_timer(&pcs->aneg_link_timer,
+			    aneg_link_timer_callback, (unsigned long)pcs);
 		mod_timer(&pcs->aneg_link_timer, jiffies +
 			  msecs_to_jiffies(AUTONEGO_LINK_TIMER));
 	} else if (phy_dev->autoneg == AUTONEG_DISABLE) {
@@ -268,8 +270,8 @@ void tse_pcs_fix_mac_speed(struct tse_pcs *pcs, struct phy_device *phy_dev,
 
 		tse_pcs_reset(tse_pcs_base, pcs);
 
-		timer_setup(&pcs->aneg_link_timer, aneg_link_timer_callback,
-			    0);
+		setup_timer(&pcs->aneg_link_timer,
+			    aneg_link_timer_callback, (unsigned long)pcs);
 		mod_timer(&pcs->aneg_link_timer, jiffies +
 			  msecs_to_jiffies(AUTONEGO_LINK_TIMER));
 	}

@@ -11,7 +11,7 @@
 
 	leds {
 		act {
-			gpios = <&gpio 16 GPIO_ACTIVE_LOW>;
+			gpios = <&gpio 16 1>;
 		};
 	};
 };
@@ -89,12 +89,6 @@
 
 &hdmi {
 	hpd-gpios = <&gpio 46 GPIO_ACTIVE_HIGH>;
-};
-
-&pwm {
-	pinctrl-names = "default";
-	pinctrl-0 = <&pwm0_gpio40 &pwm1_gpio45>;
-	status = "okay";
 };
 
 &uart0 {

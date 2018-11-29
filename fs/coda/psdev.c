@@ -39,7 +39,7 @@
 #include <linux/device.h>
 #include <linux/pid_namespace.h>
 #include <asm/io.h>
-#include <linux/poll.h>
+#include <asm/poll.h>
 #include <linux/uaccess.h>
 
 #include <linux/coda.h>
@@ -61,15 +61,15 @@ static struct class *coda_psdev_class;
  * Device operations
  */
 
-static __poll_t coda_psdev_poll(struct file *file, poll_table * wait)
+static unsigned int coda_psdev_poll(struct file *file, poll_table * wait)
 {
         struct venus_comm *vcp = (struct venus_comm *) file->private_data;
-	__poll_t mask = EPOLLOUT | EPOLLWRNORM;
+	unsigned int mask = POLLOUT | POLLWRNORM;
 
 	poll_wait(file, &vcp->vc_waitq, wait);
 	mutex_lock(&vcp->vc_mutex);
 	if (!list_empty(&vcp->vc_pending))
-                mask |= EPOLLIN | EPOLLRDNORM;
+                mask |= POLLIN | POLLRDNORM;
 	mutex_unlock(&vcp->vc_mutex);
 
 	return mask;

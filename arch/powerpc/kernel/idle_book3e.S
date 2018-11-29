@@ -17,7 +17,6 @@
 #include <asm/processor.h>
 #include <asm/thread_info.h>
 #include <asm/epapr_hcalls.h>
-#include <asm/hw_irq.h>
 
 /* 64-bit version only for now */
 #ifdef CONFIG_PPC64
@@ -36,7 +35,7 @@ _GLOBAL(\name)
 	 */
 	lbz	r3,PACAIRQHAPPENED(r13)
 	cmpwi	cr0,r3,0
-	bne	2f
+	bnelr
 
 	/* Now we are going to mark ourselves as soft and hard enabled in
 	 * order to be able to take interrupts while asleep. We inform lockdep
@@ -47,8 +46,8 @@ _GLOBAL(\name)
 	bl	trace_hardirqs_on
 	addi    r1,r1,128
 #endif
-	li	r0,IRQS_ENABLED
-	stb	r0,PACAIRQSOFTMASK(r13)
+	li	r0,1
+	stb	r0,PACASOFTIRQEN(r13)
 	
 	/* Interrupts will make use return to LR, so get something we want
 	 * in there
@@ -72,11 +71,6 @@ _GLOBAL(\name)
 	wrteei	1
 	\loop
 
-2:
-	lbz	r10,PACAIRQHAPPENED(r13)
-	ori	r10,r10,PACA_IRQ_HARD_DIS
-	stb	r10,PACAIRQHAPPENED(r13)
-	blr
 .endm
 
 .macro BOOK3E_IDLE_LOOP

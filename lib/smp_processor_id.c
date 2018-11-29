@@ -5,6 +5,7 @@
  * DEBUG_PREEMPT variant of smp_processor_id().
  */
 #include <linux/export.h>
+#include <linux/kallsyms.h>
 #include <linux/sched.h>
 
 notrace static unsigned int check_preemption_disabled(const char *what1,
@@ -42,7 +43,7 @@ notrace static unsigned int check_preemption_disabled(const char *what1,
 	printk(KERN_ERR "BUG: using %s%s() in preemptible [%08x] code: %s/%d\n",
 		what1, what2, preempt_count() - 1, current->comm, current->pid);
 
-	printk("caller is %pS\n", __builtin_return_address(0));
+	print_symbol("caller is %s\n", (long)__builtin_return_address(0));
 	dump_stack();
 
 out_enable:

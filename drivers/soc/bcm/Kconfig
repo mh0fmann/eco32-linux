@@ -20,6 +20,4 @@ config SOC_BRCMSTB
 
 	  If unsure, say N.
 
-source "drivers/soc/bcm/brcmstb/Kconfig"
-
 endmenu

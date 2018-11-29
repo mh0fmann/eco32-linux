@@ -23,7 +23,7 @@
 # Authors: Paul E. McKenney <paulmck@linux.vnet.ibm.com>
 
 i="$1"
-if test -d "$i" -a -r "$i"
+if test -d $i
 then
 	:
 else
@@ -31,7 +31,7 @@ else
 	exit 1
 fi
 PATH=`pwd`/tools/testing/selftests/rcutorture/bin:$PATH; export PATH
-. functions.sh
+. tools/testing/selftests/rcutorture/bin/functions.sh
 
 if kvm-recheck-rcuperf-ftrace.sh $i
 then

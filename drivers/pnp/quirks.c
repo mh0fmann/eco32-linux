@@ -21,6 +21,7 @@
 #include <linux/slab.h>
 #include <linux/pnp.h>
 #include <linux/io.h>
+#include <linux/kallsyms.h>
 #include "base.h"
 
 static void quirk_awe32_add_ports(struct pnp_dev *dev,

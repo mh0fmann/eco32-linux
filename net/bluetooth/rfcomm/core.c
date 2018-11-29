@@ -233,9 +233,9 @@ static int rfcomm_check_security(struct rfcomm_dlc *d)
 				 d->out);
 }
 
-static void rfcomm_session_timeout(struct timer_list *t)
+static void rfcomm_session_timeout(unsigned long arg)
 {
-	struct rfcomm_session *s = from_timer(s, t, timer);
+	struct rfcomm_session *s = (void *) arg;
 
 	BT_DBG("session %p state %ld", s, s->state);
 
@@ -258,9 +258,9 @@ static void rfcomm_session_clear_timer(struct rfcomm_session *s)
 }
 
 /* ---- RFCOMM DLCs ---- */
-static void rfcomm_dlc_timeout(struct timer_list *t)
+static void rfcomm_dlc_timeout(unsigned long arg)
 {
-	struct rfcomm_dlc *d = from_timer(d, t, timer);
+	struct rfcomm_dlc *d = (void *) arg;
 
 	BT_DBG("dlc %p state %ld", d, d->state);
 
@@ -307,7 +307,7 @@ struct rfcomm_dlc *rfcomm_dlc_alloc(gfp_t prio)
 	if (!d)
 		return NULL;
 
-	timer_setup(&d->timer, rfcomm_dlc_timeout, 0);
+	setup_timer(&d->timer, rfcomm_dlc_timeout, (unsigned long)d);
 
 	skb_queue_head_init(&d->tx_queue);
 	mutex_init(&d->lock);
@@ -650,7 +650,7 @@ static struct rfcomm_session *rfcomm_session_add(struct socket *sock, int state)
 
 	BT_DBG("session %p sock %p", s, sock);
 
-	timer_setup(&s->timer, rfcomm_session_timeout, 0);
+	setup_timer(&s->timer, rfcomm_session_timeout, (unsigned long) s);
 
 	INIT_LIST_HEAD(&s->dlcs);
 	s->state = state;

@@ -76,8 +76,6 @@ struct msm_pingroup {
 	u32 intr_status_reg;
 	u32 intr_target_reg;
 
-	unsigned int tile:2;
-
 	unsigned mux_bit:5;
 
 	unsigned pull_bit:5;
@@ -119,8 +117,6 @@ struct msm_pinctrl_soc_data {
 	unsigned ngroups;
 	unsigned ngpios;
 	bool pull_no_keeper;
-	const char *const *tiles;
-	unsigned int ntiles;
 };
 
 int msm_pinctrl_probe(struct platform_device *pdev,

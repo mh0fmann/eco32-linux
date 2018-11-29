@@ -17,7 +17,6 @@
 #include <linux/net.h>
 #include <linux/in6.h>
 #include <linux/slab.h>
-#include <linux/rhashtable.h>
 
 #include <net/ipv6.h>
 #include <net/protocol.h>
@@ -227,6 +226,7 @@ static int seg6_genl_get_tunsrc(struct sk_buff *skb, struct genl_info *info)
 
 nla_put_failure:
 	rcu_read_unlock();
+	genlmsg_cancel(msg, hdr);
 free_msg:
 	nlmsg_free(msg);
 	return -ENOMEM;
@@ -306,7 +306,9 @@ static int seg6_genl_dumphmac(struct sk_buff *skb, struct netlink_callback *cb)
 	struct seg6_hmac_info *hinfo;
 	int ret;
 
-	rhashtable_walk_start(iter);
+	ret = rhashtable_walk_start(iter);
+	if (ret && ret != -EAGAIN)
+		goto done;
 
 	for (;;) {
 		hinfo = rhashtable_walk_next(iter);

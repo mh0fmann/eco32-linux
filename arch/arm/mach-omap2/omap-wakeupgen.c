@@ -299,6 +299,8 @@ static void irq_save_context(void)
 	if (soc_is_dra7xx())
 		return;
 
+	if (!sar_base)
+		sar_base = omap4_get_sar_ram_base();
 	if (wakeupgen_ops && wakeupgen_ops->save_context)
 		wakeupgen_ops->save_context();
 }
@@ -595,8 +597,6 @@ static int __init wakeupgen_init(struct device_node *node,
 
 	irq_hotplug_init();
 	irq_pm_init();
-
-	sar_base = omap4_get_sar_ram_base();
 
 	return 0;
 }

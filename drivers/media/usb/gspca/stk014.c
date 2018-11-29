@@ -290,8 +290,8 @@ static int sd_start(struct gspca_dev *gspca_dev)
 	set_par(gspca_dev, 0x01000000);
 	set_par(gspca_dev, 0x01000000);
 	if (gspca_dev->usb_err >= 0)
-		gspca_dbg(gspca_dev, D_STREAM, "camera started alt: 0x%02x\n",
-			  gspca_dev->alt);
+		PDEBUG(D_STREAM, "camera started alt: 0x%02x",
+				gspca_dev->alt);
 out:
 	return gspca_dev->usb_err;
 }
@@ -312,7 +312,7 @@ static void sd_stopN(struct gspca_dev *gspca_dev)
 	reg_w(gspca_dev, 0x0640, 0);
 	reg_w(gspca_dev, 0x0650, 0);
 	reg_w(gspca_dev, 0x0660, 0);
-	gspca_dbg(gspca_dev, D_STREAM, "camera stopped\n");
+	PDEBUG(D_STREAM, "camera stopped");
 }
 
 static void sd_pkt_scan(struct gspca_dev *gspca_dev,

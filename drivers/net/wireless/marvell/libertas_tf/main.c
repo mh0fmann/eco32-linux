@@ -165,9 +165,9 @@ done:
  *  This function handles the timeout of command sending.
  *  It will re-send the same command again.
  */
-static void command_timer_fn(struct timer_list *t)
+static void command_timer_fn(unsigned long data)
 {
-	struct lbtf_private *priv = from_timer(priv, t, command_timer);
+	struct lbtf_private *priv = (struct lbtf_private *)data;
 	unsigned long flags;
 	lbtf_deb_enter(LBTF_DEB_CMD);
 
@@ -196,7 +196,8 @@ static int lbtf_init_adapter(struct lbtf_private *priv)
 	mutex_init(&priv->lock);
 
 	priv->vif = NULL;
-	timer_setup(&priv->command_timer, command_timer_fn, 0);
+	setup_timer(&priv->command_timer, command_timer_fn,
+		(unsigned long)priv);
 
 	INIT_LIST_HEAD(&priv->cmdfreeq);
 	INIT_LIST_HEAD(&priv->cmdpendingq);

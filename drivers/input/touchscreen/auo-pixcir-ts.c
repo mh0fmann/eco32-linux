@@ -408,6 +408,8 @@ static void auo_pixcir_input_close(struct input_dev *dev)
 	struct auo_pixcir_ts *ts = input_get_drvdata(dev);
 
 	auo_pixcir_stop(ts);
+
+	return;
 }
 
 static int __maybe_unused auo_pixcir_suspend(struct device *dev)
@@ -485,8 +487,10 @@ static struct auo_pixcir_ts_platdata *auo_pixcir_parse_dt(struct device *dev)
 		return ERR_PTR(-ENOENT);
 
 	pdata = devm_kzalloc(dev, sizeof(*pdata), GFP_KERNEL);
-	if (!pdata)
+	if (!pdata) {
+		dev_err(dev, "failed to allocate platform data\n");
 		return ERR_PTR(-ENOMEM);
+	}
 
 	pdata->gpio_int = of_get_gpio(np, 0);
 	if (!gpio_is_valid(pdata->gpio_int)) {

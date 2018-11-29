@@ -13,37 +13,13 @@
 
 #include <linux/of_graph.h>
 
-struct lvds_encoder {
-	struct drm_bridge bridge;
-	struct drm_bridge *panel_bridge;
-};
-
-static int lvds_encoder_attach(struct drm_bridge *bridge)
-{
-	struct lvds_encoder *lvds_encoder = container_of(bridge,
-							 struct lvds_encoder,
-							 bridge);
-
-	return drm_bridge_attach(bridge->encoder, lvds_encoder->panel_bridge,
-				 bridge);
-}
-
-static struct drm_bridge_funcs funcs = {
-	.attach = lvds_encoder_attach,
-};
-
 static int lvds_encoder_probe(struct platform_device *pdev)
 {
 	struct device_node *port;
 	struct device_node *endpoint;
 	struct device_node *panel_node;
 	struct drm_panel *panel;
-	struct lvds_encoder *lvds_encoder;
-
-	lvds_encoder = devm_kzalloc(&pdev->dev, sizeof(*lvds_encoder),
-				    GFP_KERNEL);
-	if (!lvds_encoder)
-		return -ENOMEM;
+	struct drm_bridge *bridge;
 
 	/* Locate the panel DT node. */
 	port = of_graph_get_port_by_id(pdev->dev.of_node, 1);
@@ -68,35 +44,25 @@ static int lvds_encoder_probe(struct platform_device *pdev)
 
 	panel = of_drm_find_panel(panel_node);
 	of_node_put(panel_node);
-	if (IS_ERR(panel)) {
+	if (!panel) {
 		dev_dbg(&pdev->dev, "panel not found, deferring probe\n");
-		return PTR_ERR(panel);
+		return -EPROBE_DEFER;
 	}
 
-	lvds_encoder->panel_bridge =
-		devm_drm_panel_bridge_add(&pdev->dev,
-					  panel, DRM_MODE_CONNECTOR_LVDS);
-	if (IS_ERR(lvds_encoder->panel_bridge))
-		return PTR_ERR(lvds_encoder->panel_bridge);
+	bridge = drm_panel_bridge_add(panel, DRM_MODE_CONNECTOR_LVDS);
+	if (IS_ERR(bridge))
+		return PTR_ERR(bridge);
 
-	/* The panel_bridge bridge is attached to the panel's of_node,
-	 * but we need a bridge attached to our of_node for our user
-	 * to look up.
-	 */
-	lvds_encoder->bridge.of_node = pdev->dev.of_node;
-	lvds_encoder->bridge.funcs = &funcs;
-	drm_bridge_add(&lvds_encoder->bridge);
-
-	platform_set_drvdata(pdev, lvds_encoder);
+	platform_set_drvdata(pdev, bridge);
 
 	return 0;
 }
 
 static int lvds_encoder_remove(struct platform_device *pdev)
 {
-	struct lvds_encoder *lvds_encoder = platform_get_drvdata(pdev);
+	struct drm_bridge *bridge = platform_get_drvdata(pdev);
 
-	drm_bridge_remove(&lvds_encoder->bridge);
+	drm_bridge_remove(bridge);
 
 	return 0;
 }

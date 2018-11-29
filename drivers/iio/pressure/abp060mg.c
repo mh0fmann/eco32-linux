@@ -168,6 +168,7 @@ static int abp060mg_read_raw(struct iio_dev *indio_dev,
 }
 
 static const struct iio_info abp060mg_info = {
+	.driver_module = THIS_MODULE,
 	.read_raw = abp060mg_read_raw,
 };
 

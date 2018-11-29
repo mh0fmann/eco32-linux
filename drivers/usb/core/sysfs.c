@@ -1,4 +1,3 @@
-// SPDX-License-Identifier: GPL-2.0
 /*
  * drivers/usb/core/sysfs.c
  *
@@ -9,6 +8,7 @@
  * All of the sysfs file attributes for usb devices and interfaces.
  *
  * Released under the GPLv2 only.
+ * SPDX-License-Identifier: GPL-2.0
  */
 
 
@@ -174,26 +174,6 @@ static ssize_t speed_show(struct device *dev, struct device_attribute *attr,
 	return sprintf(buf, "%s\n", speed);
 }
 static DEVICE_ATTR_RO(speed);
-
-static ssize_t rx_lanes_show(struct device *dev, struct device_attribute *attr,
-			  char *buf)
-{
-	struct usb_device *udev;
-
-	udev = to_usb_device(dev);
-	return sprintf(buf, "%d\n", udev->rx_lanes);
-}
-static DEVICE_ATTR_RO(rx_lanes);
-
-static ssize_t tx_lanes_show(struct device *dev, struct device_attribute *attr,
-			  char *buf)
-{
-	struct usb_device *udev;
-
-	udev = to_usb_device(dev);
-	return sprintf(buf, "%d\n", udev->tx_lanes);
-}
-static DEVICE_ATTR_RO(tx_lanes);
 
 static ssize_t busnum_show(struct device *dev, struct device_attribute *attr,
 			   char *buf)
@@ -674,8 +654,7 @@ static int add_power_attributes(struct device *dev)
 		if (udev->usb2_hw_lpm_capable == 1)
 			rc = sysfs_merge_group(&dev->kobj,
 					&usb2_hardware_lpm_attr_group);
-		if ((udev->speed == USB_SPEED_SUPER ||
-		     udev->speed == USB_SPEED_SUPER_PLUS) &&
+		if (udev->speed == USB_SPEED_SUPER &&
 				udev->lpm_capable == 1)
 			rc = sysfs_merge_group(&dev->kobj,
 					&usb3_hardware_lpm_attr_group);
@@ -810,8 +789,6 @@ static struct attribute *dev_attrs[] = {
 	&dev_attr_bNumConfigurations.attr,
 	&dev_attr_bMaxPacketSize0.attr,
 	&dev_attr_speed.attr,
-	&dev_attr_rx_lanes.attr,
-	&dev_attr_tx_lanes.attr,
 	&dev_attr_busnum.attr,
 	&dev_attr_devnum.attr,
 	&dev_attr_devpath.attr,
@@ -996,7 +973,7 @@ static ssize_t interface_show(struct device *dev, struct device_attribute *attr,
 	char *string;
 
 	intf = to_usb_interface(dev);
-	string = READ_ONCE(intf->cur_altsetting->string);
+	string = ACCESS_ONCE(intf->cur_altsetting->string);
 	if (!string)
 		return 0;
 	return sprintf(buf, "%s\n", string);
@@ -1012,7 +989,7 @@ static ssize_t modalias_show(struct device *dev, struct device_attribute *attr,
 
 	intf = to_usb_interface(dev);
 	udev = interface_to_usbdev(intf);
-	alt = READ_ONCE(intf->cur_altsetting);
+	alt = ACCESS_ONCE(intf->cur_altsetting);
 
 	return sprintf(buf, "usb:v%04Xp%04Xd%04Xdc%02Xdsc%02Xdp%02X"
 			"ic%02Xisc%02Xip%02Xin%02X\n",

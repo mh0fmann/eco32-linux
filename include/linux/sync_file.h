@@ -25,12 +25,8 @@
  * @file:		file representing this fence
  * @sync_file_list:	membership in global file list
  * @wq:			wait queue for fence signaling
- * @flags:		flags for the sync_file
  * @fence:		fence with the fences in the sync_file
  * @cb:			fence callback information
- *
- * flags:
- * POLL_ENABLED: whether userspace is currently poll()'ing or not
  */
 struct sync_file {
 	struct file		*file;

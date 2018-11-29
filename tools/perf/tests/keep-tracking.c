@@ -27,23 +27,18 @@
 static int find_comm(struct perf_evlist *evlist, const char *comm)
 {
 	union perf_event *event;
-	struct perf_mmap *md;
 	int i, found;
 
 	found = 0;
 	for (i = 0; i < evlist->nr_mmaps; i++) {
-		md = &evlist->mmap[i];
-		if (perf_mmap__read_init(md) < 0)
-			continue;
-		while ((event = perf_mmap__read_event(md)) != NULL) {
+		while ((event = perf_evlist__mmap_read(evlist, i)) != NULL) {
 			if (event->header.type == PERF_RECORD_COMM &&
 			    (pid_t)event->comm.pid == getpid() &&
 			    (pid_t)event->comm.tid == getpid() &&
 			    strcmp(event->comm.comm, comm) == 0)
 				found += 1;
-			perf_mmap__consume(md);
+			perf_evlist__mmap_consume(evlist, i);
 		}
-		perf_mmap__read_done(md);
 	}
 	return found;
 }
@@ -100,7 +95,7 @@ int test__keep_tracking(struct test *test __maybe_unused, int subtest __maybe_un
 		goto out_err;
 	}
 
-	CHECK__(perf_evlist__mmap(evlist, UINT_MAX));
+	CHECK__(perf_evlist__mmap(evlist, UINT_MAX, false));
 
 	/*
 	 * First, test that a 'comm' event can be found when the event is

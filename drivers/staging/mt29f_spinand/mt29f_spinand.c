@@ -316,7 +316,6 @@ static int spinand_read_page_to_cache(struct spi_device *spi_nand, u16 page_id)
 	row = page_id;
 	cmd.cmd = CMD_READ;
 	cmd.n_addr = 3;
-	cmd.addr[0] = (u8)((row & 0xff0000) >> 16);
 	cmd.addr[1] = (u8)((row & 0xff00) >> 8);
 	cmd.addr[2] = (u8)(row & 0x00ff);
 
@@ -465,7 +464,6 @@ static int spinand_program_execute(struct spi_device *spi_nand, u16 page_id)
 	row = page_id;
 	cmd.cmd = CMD_PROG_PAGE_EXC;
 	cmd.n_addr = 3;
-	cmd.addr[0] = (u8)((row & 0xff0000) >> 16);
 	cmd.addr[1] = (u8)((row & 0xff00) >> 8);
 	cmd.addr[2] = (u8)(row & 0x00ff);
 
@@ -581,7 +579,6 @@ static int spinand_erase_block_erase(struct spi_device *spi_nand, u16 block_id)
 	row = block_id;
 	cmd.cmd = CMD_ERASE_BLK;
 	cmd.n_addr = 3;
-	cmd.addr[0] = (u8)((row & 0xff0000) >> 16);
 	cmd.addr[1] = (u8)((row & 0xff00) >> 8);
 	cmd.addr[2] = (u8)(row & 0x00ff);
 
@@ -630,7 +627,8 @@ static int spinand_erase_block(struct spi_device *spi_nand, u16 block_id)
 }
 
 #ifdef CONFIG_MTD_SPINAND_ONDIEECC
-static int spinand_write_page_hwecc(struct nand_chip *chip,
+static int spinand_write_page_hwecc(struct mtd_info *mtd,
+				    struct nand_chip *chip,
 				    const u8 *buf, int oob_required,
 				    int page)
 {
@@ -639,25 +637,25 @@ static int spinand_write_page_hwecc(struct nand_chip *chip,
 	int eccsteps = chip->ecc.steps;
 
 	enable_hw_ecc = 1;
-	return nand_prog_page_op(chip, page, 0, p, eccsize * eccsteps);
+	chip->write_buf(mtd, p, eccsize * eccsteps);
+	return 0;
 }
 
-static int spinand_read_page_hwecc(struct nand_chip *chip, u8 *buf,
-				   int oob_required, int page)
+static int spinand_read_page_hwecc(struct mtd_info *mtd, struct nand_chip *chip,
+				   u8 *buf, int oob_required, int page)
 {
 	int retval;
 	u8 status;
 	u8 *p = buf;
 	int eccsize = chip->ecc.size;
 	int eccsteps = chip->ecc.steps;
-	struct mtd_info *mtd = nand_to_mtd(chip);
 	struct spinand_info *info = nand_get_controller_data(chip);
 
 	enable_read_hw_ecc = 1;
 
-	nand_read_page_op(chip, page, 0, p, eccsize * eccsteps);
+	chip->read_buf(mtd, p, eccsize * eccsteps);
 	if (oob_required)
-		chip->legacy.read_buf(chip, chip->oob_poi, mtd->oobsize);
+		chip->read_buf(mtd, chip->oob_poi, mtd->oobsize);
 
 	while (1) {
 		retval = spinand_read_status(info->spi, &status);
@@ -681,13 +679,13 @@ static int spinand_read_page_hwecc(struct nand_chip *chip, u8 *buf,
 }
 #endif
 
-static void spinand_select_chip(struct nand_chip *chip, int dev)
+static void spinand_select_chip(struct mtd_info *mtd, int dev)
 {
 }
 
-static u8 spinand_read_byte(struct nand_chip *chip)
+static u8 spinand_read_byte(struct mtd_info *mtd)
 {
-	struct spinand_state *state = mtd_to_state(nand_to_mtd(chip));
+	struct spinand_state *state = mtd_to_state(mtd);
 	u8 data;
 
 	data = state->buf[state->buf_ptr];
@@ -695,9 +693,8 @@ static u8 spinand_read_byte(struct nand_chip *chip)
 	return data;
 }
 
-static int spinand_wait(struct nand_chip *chip)
+static int spinand_wait(struct mtd_info *mtd, struct nand_chip *chip)
 {
-	struct mtd_info *mtd = nand_to_mtd(chip);
 	struct spinand_info *info = nand_get_controller_data(chip);
 
 	unsigned long timeo = jiffies;
@@ -725,17 +722,17 @@ static int spinand_wait(struct nand_chip *chip)
 	return 0;
 }
 
-static void spinand_write_buf(struct nand_chip *chip, const u8 *buf, int len)
+static void spinand_write_buf(struct mtd_info *mtd, const u8 *buf, int len)
 {
-	struct spinand_state *state = mtd_to_state(nand_to_mtd(chip));
+	struct spinand_state *state = mtd_to_state(mtd);
 
 	memcpy(state->buf + state->buf_ptr, buf, len);
 	state->buf_ptr += len;
 }
 
-static void spinand_read_buf(struct nand_chip *chip, u8 *buf, int len)
+static void spinand_read_buf(struct mtd_info *mtd, u8 *buf, int len)
 {
-	struct spinand_state *state = mtd_to_state(nand_to_mtd(chip));
+	struct spinand_state *state = mtd_to_state(mtd);
 
 	memcpy(buf, state->buf + state->buf_ptr, len);
 	state->buf_ptr += len;
@@ -760,10 +757,10 @@ static void spinand_reset(struct spi_device *spi_nand)
 		dev_err(&spi_nand->dev, "wait timedout!\n");
 }
 
-static void spinand_cmdfunc(struct nand_chip *chip, unsigned int command,
+static void spinand_cmdfunc(struct mtd_info *mtd, unsigned int command,
 			    int column, int page)
 {
-	struct mtd_info *mtd = nand_to_mtd(chip);
+	struct nand_chip *chip = mtd_to_nand(mtd);
 	struct spinand_info *info = nand_get_controller_data(chip);
 	struct spinand_state *state = info->priv;
 
@@ -915,15 +912,15 @@ static int spinand_probe(struct spi_device *spi_nand)
 
 	nand_set_flash_node(chip, spi_nand->dev.of_node);
 	nand_set_controller_data(chip, info);
-	chip->legacy.read_buf	= spinand_read_buf;
-	chip->legacy.write_buf	= spinand_write_buf;
-	chip->legacy.read_byte	= spinand_read_byte;
-	chip->legacy.cmdfunc	= spinand_cmdfunc;
-	chip->legacy.waitfunc	= spinand_wait;
+	chip->read_buf	= spinand_read_buf;
+	chip->write_buf	= spinand_write_buf;
+	chip->read_byte	= spinand_read_byte;
+	chip->cmdfunc	= spinand_cmdfunc;
+	chip->waitfunc	= spinand_wait;
 	chip->options	|= NAND_CACHEPRG;
 	chip->select_chip = spinand_select_chip;
-	chip->legacy.set_features = nand_get_set_features_notsupp;
-	chip->legacy.get_features = nand_get_set_features_notsupp;
+	chip->onfi_set_features = nand_onfi_get_set_features_notsupp;
+	chip->onfi_get_features = nand_onfi_get_set_features_notsupp;
 
 	mtd = nand_to_mtd(chip);
 
@@ -935,7 +932,7 @@ static int spinand_probe(struct spi_device *spi_nand)
 	mtd_set_ooblayout(mtd, &spinand_oob_64_ops);
 #endif
 
-	if (nand_scan(chip, 1))
+	if (nand_scan(mtd, 1))
 		return -ENXIO;
 
 	return mtd_device_register(mtd, NULL, 0);

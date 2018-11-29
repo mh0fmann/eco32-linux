@@ -11,7 +11,6 @@
 
 extern char *strndup_user(const char __user *, long);
 extern void *memdup_user(const void __user *, size_t);
-extern void *vmemdup_user(const void __user *, size_t);
 extern void *memdup_user_nul(const void __user *, size_t);
 
 /*
@@ -29,7 +28,7 @@ extern char * strncpy(char *,const char *, __kernel_size_t);
 size_t strlcpy(char *, const char *, size_t);
 #endif
 #ifndef __HAVE_ARCH_STRSCPY
-ssize_t strscpy(char *, const char *, size_t);
+ssize_t __must_check strscpy(char *, const char *, size_t);
 #endif
 #ifndef __HAVE_ARCH_STRCAT
 extern char * strcat(char *, const char *);
@@ -131,13 +130,6 @@ static inline void *memset_p(void **p, void *v, __kernel_size_t n)
 		return memset64((uint64_t *)p, (uintptr_t)v, n);
 }
 
-extern void **__memcat_p(void **a, void **b);
-#define memcat_p(a, b) ({					\
-	BUILD_BUG_ON_MSG(!__same_type(*(a), *(b)),		\
-			 "type mismatch in memcat_p()");	\
-	(typeof(*a) *)__memcat_p((void **)(a), (void **)(b));	\
-})
-
 #ifndef __HAVE_ARCH_MEMCPY
 extern void * memcpy(void *,const void *,__kernel_size_t);
 #endif
@@ -154,8 +146,8 @@ extern int memcmp(const void *,const void *,__kernel_size_t);
 extern void * memchr(const void *,int,__kernel_size_t);
 #endif
 #ifndef __HAVE_ARCH_MEMCPY_MCSAFE
-static inline __must_check unsigned long memcpy_mcsafe(void *dst,
-		const void *src, size_t cnt)
+static inline __must_check int memcpy_mcsafe(void *dst, const void *src,
+		size_t cnt)
 {
 	memcpy(dst, src, cnt);
 	return 0;
@@ -267,10 +259,7 @@ __FORTIFY_INLINE __kernel_size_t strlen(const char *p)
 {
 	__kernel_size_t ret;
 	size_t p_size = __builtin_object_size(p, 0);
-
-	/* Work around gcc excess stack consumption issue */
-	if (p_size == (size_t)-1 ||
-	    (__builtin_constant_p(p[p_size - 1]) && p[p_size - 1] == '\0'))
+	if (p_size == (size_t)-1)
 		return __builtin_strlen(p);
 	ret = strnlen(p, p_size);
 	if (p_size <= ret)

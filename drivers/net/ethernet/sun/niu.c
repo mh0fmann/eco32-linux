@@ -1,4 +1,3 @@
-// SPDX-License-Identifier: GPL-2.0
 /* niu.c: Neptune ethernet driver.
  *
  * Copyright (C) 2007, 2008 David S. Miller (davem@davemloft.net)
@@ -1225,9 +1224,25 @@ static int link_status_1g_rgmii(struct niu *np, int *link_up_p)
 
 	bmsr = err;
 	if (bmsr & BMSR_LSTATUS) {
+		u16 adv, lpa;
+
+		err = mii_read(np, np->phy_addr, MII_ADVERTISE);
+		if (err < 0)
+			goto out;
+		adv = err;
+
+		err = mii_read(np, np->phy_addr, MII_LPA);
+		if (err < 0)
+			goto out;
+		lpa = err;
+
+		err = mii_read(np, np->phy_addr, MII_ESTATUS);
+		if (err < 0)
+			goto out;
 		link_up = 1;
 		current_speed = SPEED_1000;
 		current_duplex = DUPLEX_FULL;
+
 	}
 	lp->active_speed = current_speed;
 	lp->active_duplex = current_duplex;
@@ -2206,9 +2221,9 @@ static int niu_link_status(struct niu *np, int *link_up_p)
 	return err;
 }
 
-static void niu_timer(struct timer_list *t)
+static void niu_timer(unsigned long __opaque)
 {
-	struct niu *np = from_timer(np, t, timer);
+	struct niu *np = (struct niu *) __opaque;
 	unsigned long off;
 	int err, link_up;
 
@@ -3427,7 +3442,7 @@ static int niu_process_rx_pkt(struct napi_struct *napi, struct niu *np,
 
 		len = (val & RCR_ENTRY_L2_LEN) >>
 			RCR_ENTRY_L2_LEN_SHIFT;
-		append_size = len + ETH_HLEN + ETH_FCS_LEN;
+		len -= ETH_FCS_LEN;
 
 		addr = (val & RCR_ENTRY_PKT_BUF_ADDR) <<
 			RCR_ENTRY_PKT_BUF_ADDR_SHIFT;
@@ -3437,6 +3452,7 @@ static int niu_process_rx_pkt(struct napi_struct *napi, struct niu *np,
 					 RCR_ENTRY_PKTBUFSZ_SHIFT];
 
 		off = addr & ~PAGE_MASK;
+		append_size = rcr_size;
 		if (num_rcr == 1) {
 			int ptype;
 
@@ -3449,7 +3465,7 @@ static int niu_process_rx_pkt(struct napi_struct *napi, struct niu *np,
 			else
 				skb_checksum_none_assert(skb);
 		} else if (!(val & RCR_ENTRY_MULTI))
-			append_size = append_size - skb->len;
+			append_size = len - skb->len;
 
 		niu_rx_skb_append(skb, page, off, append_size, rcr_size);
 		if ((page->index + rp->rbr_block_size) - rcr_size == addr) {
@@ -6107,8 +6123,10 @@ static int niu_open(struct net_device *dev)
 
 	err = niu_init_hw(np);
 	if (!err) {
-		timer_setup(&np->timer, niu_timer, 0);
+		init_timer(&np->timer);
 		np->timer.expires = jiffies + HZ;
+		np->timer.data = (unsigned long) np;
+		np->timer.function = niu_timer;
 
 		err = niu_enable_interrupts(np, 1);
 		if (err)
@@ -6227,7 +6245,7 @@ static void niu_get_rx_stats(struct niu *np,
 
 	pkts = dropped = errors = bytes = 0;
 
-	rx_rings = READ_ONCE(np->rx_rings);
+	rx_rings = ACCESS_ONCE(np->rx_rings);
 	if (!rx_rings)
 		goto no_rings;
 
@@ -6258,7 +6276,7 @@ static void niu_get_tx_stats(struct niu *np,
 
 	pkts = errors = bytes = 0;
 
-	tx_rings = READ_ONCE(np->tx_rings);
+	tx_rings = ACCESS_ONCE(np->tx_rings);
 	if (!tx_rings)
 		goto no_rings;
 
@@ -6757,8 +6775,10 @@ static int niu_change_mtu(struct net_device *dev, int new_mtu)
 
 	err = niu_init_hw(np);
 	if (!err) {
-		timer_setup(&np->timer, niu_timer, 0);
+		init_timer(&np->timer);
 		np->timer.expires = jiffies + HZ;
+		np->timer.data = (unsigned long) np;
+		np->timer.function = niu_timer;
 
 		err = niu_enable_interrupts(np, 1);
 		if (err)
@@ -9420,11 +9440,11 @@ static ssize_t show_num_ports(struct device *dev,
 }
 
 static struct device_attribute niu_parent_attributes[] = {
-	__ATTR(port_phy, 0444, show_port_phy, NULL),
-	__ATTR(plat_type, 0444, show_plat_type, NULL),
-	__ATTR(rxchan_per_port, 0444, show_rxchan_per_port, NULL),
-	__ATTR(txchan_per_port, 0444, show_txchan_per_port, NULL),
-	__ATTR(num_ports, 0444, show_num_ports, NULL),
+	__ATTR(port_phy, S_IRUGO, show_port_phy, NULL),
+	__ATTR(plat_type, S_IRUGO, show_plat_type, NULL),
+	__ATTR(rxchan_per_port, S_IRUGO, show_rxchan_per_port, NULL),
+	__ATTR(txchan_per_port, S_IRUGO, show_txchan_per_port, NULL),
+	__ATTR(num_ports, S_IRUGO, show_num_ports, NULL),
 	{}
 };
 

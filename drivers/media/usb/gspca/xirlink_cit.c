@@ -704,8 +704,7 @@ static int cit_read_reg(struct gspca_dev *gspca_dev, u16 index, int verbose)
 	}
 
 	if (verbose)
-		gspca_dbg(gspca_dev, D_PROBE, "Register %04x value: %02x\n",
-			  index, buf[0]);
+		PDEBUG(D_PROBE, "Register %04x value: %02x", index, buf[0]);
 
 	return 0;
 }
@@ -1472,11 +1471,10 @@ static int cit_get_clock_div(struct gspca_dev *gspca_dev)
 			fps[clock_div - 1] * 3 / 2)
 		clock_div--;
 
-	gspca_dbg(gspca_dev, D_PROBE,
-		  "PacketSize: %d, res: %dx%d -> using clockdiv: %d (%d fps)\n",
-		  packet_size,
-		  gspca_dev->pixfmt.width, gspca_dev->pixfmt.height,
-		  clock_div, fps[clock_div]);
+	PDEBUG(D_PROBE,
+	       "PacketSize: %d, res: %dx%d -> using clockdiv: %d (%d fps)",
+	       packet_size, gspca_dev->pixfmt.width, gspca_dev->pixfmt.height,
+	       clock_div, fps[clock_div]);
 
 	return clock_div;
 }
@@ -2867,17 +2865,17 @@ static u8 *cit_find_sof(struct gspca_dev *gspca_dev, u8 *data, int len)
 				sd->sof_read = 0;
 				if (data[i] == 0xff) {
 					if (i >= 4)
-						gspca_dbg(gspca_dev, D_FRAM,
-							  "header found at offset: %d: %02x %02x 00 %3ph\n\n",
-							  i - 1,
-							  data[i - 4],
-							  data[i - 3],
-							  &data[i]);
+						PDEBUG(D_FRAM,
+						       "header found at offset: %d: %02x %02x 00 %3ph\n",
+						       i - 1,
+						       data[i - 4],
+						       data[i - 3],
+						       &data[i]);
 					else
-						gspca_dbg(gspca_dev, D_FRAM,
-							  "header found at offset: %d: 00 %3ph\n\n",
-							  i - 1,
-							  &data[i]);
+						PDEBUG(D_FRAM,
+						       "header found at offset: %d: 00 %3ph\n",
+						       i - 1,
+						       &data[i]);
 					return data + i + (sd->sof_len - 1);
 				}
 				break;

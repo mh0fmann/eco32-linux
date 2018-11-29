@@ -57,7 +57,6 @@ struct altera_mbox {
 
 	/* If the controller supports only RX polling mode */
 	struct timer_list rxpoll_timer;
-	struct mbox_chan *chan;
 };
 
 static struct altera_mbox *mbox_chan_to_altera_mbox(struct mbox_chan *chan)
@@ -139,11 +138,12 @@ static void altera_mbox_rx_data(struct mbox_chan *chan)
 	}
 }
 
-static void altera_mbox_poll_rx(struct timer_list *t)
+static void altera_mbox_poll_rx(unsigned long data)
 {
-	struct altera_mbox *mbox = from_timer(mbox, t, rxpoll_timer);
+	struct mbox_chan *chan = (struct mbox_chan *)data;
+	struct altera_mbox *mbox = mbox_chan_to_altera_mbox(chan);
 
-	altera_mbox_rx_data(mbox->chan);
+	altera_mbox_rx_data(chan);
 
 	mod_timer(&mbox->rxpoll_timer,
 		  jiffies + msecs_to_jiffies(MBOX_POLLING_MS));
@@ -206,8 +206,8 @@ static int altera_mbox_startup_receiver(struct mbox_chan *chan)
 
 polling:
 	/* Setup polling timer */
-	mbox->chan = chan;
-	timer_setup(&mbox->rxpoll_timer, altera_mbox_poll_rx, 0);
+	setup_timer(&mbox->rxpoll_timer, altera_mbox_poll_rx,
+		    (unsigned long)chan);
 	mod_timer(&mbox->rxpoll_timer,
 		  jiffies + msecs_to_jiffies(MBOX_POLLING_MS));
 

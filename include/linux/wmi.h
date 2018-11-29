@@ -18,7 +18,6 @@
 
 #include <linux/device.h>
 #include <linux/acpi.h>
-#include <uapi/linux/wmi.h>
 
 struct wmi_device {
 	struct device dev;
@@ -27,17 +26,13 @@ struct wmi_device {
 	bool setable;
 };
 
-/* evaluate the ACPI method associated with this device */
-extern acpi_status wmidev_evaluate_method(struct wmi_device *wdev,
-					  u8 instance, u32 method_id,
-					  const struct acpi_buffer *in,
-					  struct acpi_buffer *out);
-
 /* Caller must kfree the result. */
 extern union acpi_object *wmidev_block_query(struct wmi_device *wdev,
 					     u8 instance);
 
-extern int set_required_buffer_size(struct wmi_device *wdev, u64 length);
+/* Gets another device on the same bus.  Caller must put_device the result. */
+extern struct wmi_device *wmidev_get_other_guid(struct wmi_device *wdev,
+						const char *guid_string);
 
 struct wmi_device_id {
 	const char *guid_string;
@@ -50,8 +45,6 @@ struct wmi_driver {
 	int (*probe)(struct wmi_device *wdev);
 	int (*remove)(struct wmi_device *wdev);
 	void (*notify)(struct wmi_device *device, union acpi_object *data);
-	long (*filter_callback)(struct wmi_device *wdev, unsigned int cmd,
-				struct wmi_ioctl_buffer *arg);
 };
 
 extern int __must_check __wmi_driver_register(struct wmi_driver *driver,

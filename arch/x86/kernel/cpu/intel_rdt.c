@@ -33,8 +33,8 @@
 #include <asm/intel_rdt_sched.h>
 #include "intel_rdt.h"
 
+#define MAX_MBA_BW	100u
 #define MBA_IS_LINEAR	0x4
-#define MBA_MAX_MBPS	U32_MAX
 
 /* Mutex to protect rdtgroup access. */
 DEFINE_MUTEX(rdtgroup_mutex);
@@ -135,40 +135,6 @@ struct rdt_resource rdt_resources_all[] = {
 		.format_str		= "%d=%0*x",
 		.fflags			= RFTYPE_RES_CACHE,
 	},
-	[RDT_RESOURCE_L2DATA] =
-	{
-		.rid			= RDT_RESOURCE_L2DATA,
-		.name			= "L2DATA",
-		.domains		= domain_init(RDT_RESOURCE_L2DATA),
-		.msr_base		= IA32_L2_CBM_BASE,
-		.msr_update		= cat_wrmsr,
-		.cache_level		= 2,
-		.cache = {
-			.min_cbm_bits	= 1,
-			.cbm_idx_mult	= 2,
-			.cbm_idx_offset	= 0,
-		},
-		.parse_ctrlval		= parse_cbm,
-		.format_str		= "%d=%0*x",
-		.fflags			= RFTYPE_RES_CACHE,
-	},
-	[RDT_RESOURCE_L2CODE] =
-	{
-		.rid			= RDT_RESOURCE_L2CODE,
-		.name			= "L2CODE",
-		.domains		= domain_init(RDT_RESOURCE_L2CODE),
-		.msr_base		= IA32_L2_CBM_BASE,
-		.msr_update		= cat_wrmsr,
-		.cache_level		= 2,
-		.cache = {
-			.min_cbm_bits	= 1,
-			.cbm_idx_mult	= 2,
-			.cbm_idx_offset	= 1,
-		},
-		.parse_ctrlval		= parse_cbm,
-		.format_str		= "%d=%0*x",
-		.fflags			= RFTYPE_RES_CACHE,
-	},
 	[RDT_RESOURCE_MBA] =
 	{
 		.rid			= RDT_RESOURCE_MBA,
@@ -178,7 +144,7 @@ struct rdt_resource rdt_resources_all[] = {
 		.msr_update		= mba_wrmsr,
 		.cache_level		= 3,
 		.parse_ctrlval		= parse_bw,
-		.format_str		= "%d=%*u",
+		.format_str		= "%d=%*d",
 		.fflags			= RFTYPE_RES_MB,
 	},
 };
@@ -228,14 +194,6 @@ static inline void cache_alloc_hsw_probe(void)
 	r->alloc_enabled = true;
 
 	rdt_alloc_capable = true;
-}
-
-bool is_mba_sc(struct rdt_resource *r)
-{
-	if (!r)
-		return rdt_resources_all[RDT_RESOURCE_MBA].membw.mba_sc;
-
-	return r->membw.mba_sc;
 }
 
 /*
@@ -301,15 +259,14 @@ static void rdt_get_cache_alloc_cfg(int idx, struct rdt_resource *r)
 	r->alloc_enabled = true;
 }
 
-static void rdt_get_cdp_config(int level, int type)
+static void rdt_get_cdp_l3_config(int type)
 {
-	struct rdt_resource *r_l = &rdt_resources_all[level];
+	struct rdt_resource *r_l3 = &rdt_resources_all[RDT_RESOURCE_L3];
 	struct rdt_resource *r = &rdt_resources_all[type];
 
-	r->num_closid = r_l->num_closid / 2;
-	r->cache.cbm_len = r_l->cache.cbm_len;
-	r->default_ctrl = r_l->default_ctrl;
-	r->cache.shareable_bits = r_l->cache.shareable_bits;
+	r->num_closid = r_l3->num_closid / 2;
+	r->cache.cbm_len = r_l3->cache.cbm_len;
+	r->default_ctrl = r_l3->default_ctrl;
 	r->data_width = (r->cache.cbm_len + 3) / 4;
 	r->alloc_capable = true;
 	/*
@@ -317,18 +274,6 @@ static void rdt_get_cdp_config(int level, int type)
 	 * "cdp" during resctrl file system mount time.
 	 */
 	r->alloc_enabled = false;
-}
-
-static void rdt_get_cdp_l3_config(void)
-{
-	rdt_get_cdp_config(RDT_RESOURCE_L3, RDT_RESOURCE_L3DATA);
-	rdt_get_cdp_config(RDT_RESOURCE_L3, RDT_RESOURCE_L3CODE);
-}
-
-static void rdt_get_cdp_l2_config(void)
-{
-	rdt_get_cdp_config(RDT_RESOURCE_L2, RDT_RESOURCE_L2DATA);
-	rdt_get_cdp_config(RDT_RESOURCE_L2, RDT_RESOURCE_L2CODE);
 }
 
 static int get_cache_id(int cpu, int level)
@@ -349,7 +294,7 @@ static int get_cache_id(int cpu, int level)
  * that can be written to QOS_MSRs.
  * There are currently no SKUs which support non linear delay values.
  */
-u32 delay_bw_map(unsigned long bw, struct rdt_resource *r)
+static u32 delay_bw_map(unsigned long bw, struct rdt_resource *r)
 {
 	if (r->membw.delay_linear)
 		return MAX_MBA_BW - bw;
@@ -439,40 +384,25 @@ struct rdt_domain *rdt_find_domain(struct rdt_resource *r, int id,
 	return NULL;
 }
 
-void setup_default_ctrlval(struct rdt_resource *r, u32 *dc, u32 *dm)
-{
-	int i;
-
-	/*
-	 * Initialize the Control MSRs to having no control.
-	 * For Cache Allocation: Set all bits in cbm
-	 * For Memory Allocation: Set b/w requested to 100%
-	 * and the bandwidth in MBps to U32_MAX
-	 */
-	for (i = 0; i < r->num_closid; i++, dc++, dm++) {
-		*dc = r->default_ctrl;
-		*dm = MBA_MAX_MBPS;
-	}
-}
-
 static int domain_setup_ctrlval(struct rdt_resource *r, struct rdt_domain *d)
 {
 	struct msr_param m;
-	u32 *dc, *dm;
+	u32 *dc;
+	int i;
 
 	dc = kmalloc_array(r->num_closid, sizeof(*d->ctrl_val), GFP_KERNEL);
 	if (!dc)
 		return -ENOMEM;
 
-	dm = kmalloc_array(r->num_closid, sizeof(*d->mbps_val), GFP_KERNEL);
-	if (!dm) {
-		kfree(dc);
-		return -ENOMEM;
-	}
-
 	d->ctrl_val = dc;
-	d->mbps_val = dm;
-	setup_default_ctrlval(r, dc, dm);
+
+	/*
+	 * Initialize the Control MSRs to having no control.
+	 * For Cache Allocation: Set all bits in cbm
+	 * For Memory Allocation: Set b/w requested to 100
+	 */
+	for (i = 0; i < r->num_closid; i++, dc++)
+		*dc = r->default_ctrl;
 
 	m.low = 0;
 	m.high = r->num_closid;
@@ -485,7 +415,9 @@ static int domain_setup_mon_state(struct rdt_resource *r, struct rdt_domain *d)
 	size_t tsize;
 
 	if (is_llc_occupancy_enabled()) {
-		d->rmid_busy_llc = bitmap_zalloc(r->num_rmid, GFP_KERNEL);
+		d->rmid_busy_llc = kcalloc(BITS_TO_LONGS(r->num_rmid),
+					   sizeof(unsigned long),
+					   GFP_KERNEL);
 		if (!d->rmid_busy_llc)
 			return -ENOMEM;
 		INIT_DELAYED_WORK(&d->cqm_limbo, cqm_handle_limbo);
@@ -494,7 +426,7 @@ static int domain_setup_mon_state(struct rdt_resource *r, struct rdt_domain *d)
 		tsize = sizeof(*d->mbm_total);
 		d->mbm_total = kcalloc(r->num_rmid, tsize, GFP_KERNEL);
 		if (!d->mbm_total) {
-			bitmap_free(d->rmid_busy_llc);
+			kfree(d->rmid_busy_llc);
 			return -ENOMEM;
 		}
 	}
@@ -502,7 +434,7 @@ static int domain_setup_mon_state(struct rdt_resource *r, struct rdt_domain *d)
 		tsize = sizeof(*d->mbm_local);
 		d->mbm_local = kcalloc(r->num_rmid, tsize, GFP_KERNEL);
 		if (!d->mbm_local) {
-			bitmap_free(d->rmid_busy_llc);
+			kfree(d->rmid_busy_llc);
 			kfree(d->mbm_total);
 			return -ENOMEM;
 		}
@@ -592,6 +524,10 @@ static void domain_remove_cpu(int cpu, struct rdt_resource *r)
 		 */
 		if (static_branch_unlikely(&rdt_mon_enable_key))
 			rmdir_mondata_subdir_allrdtgrp(r, d->id);
+		kfree(d->ctrl_val);
+		kfree(d->rmid_busy_llc);
+		kfree(d->mbm_total);
+		kfree(d->mbm_local);
 		list_del(&d->list);
 		if (is_mbm_enabled())
 			cancel_delayed_work(&d->mbm_over);
@@ -608,18 +544,6 @@ static void domain_remove_cpu(int cpu, struct rdt_resource *r)
 			cancel_delayed_work(&d->cqm_limbo);
 		}
 
-		/*
-		 * rdt_domain "d" is going to be freed below, so clear
-		 * its pointer from pseudo_lock_region struct.
-		 */
-		if (d->plr)
-			d->plr->d = NULL;
-
-		kfree(d->ctrl_val);
-		kfree(d->mbps_val);
-		bitmap_free(d->rmid_busy_llc);
-		kfree(d->mbm_total);
-		kfree(d->mbm_local);
 		kfree(d);
 		return;
 	}
@@ -720,7 +644,6 @@ enum {
 	RDT_FLAG_L3_CAT,
 	RDT_FLAG_L3_CDP,
 	RDT_FLAG_L2_CAT,
-	RDT_FLAG_L2_CDP,
 	RDT_FLAG_MBA,
 };
 
@@ -743,7 +666,6 @@ static struct rdt_options rdt_options[]  __initdata = {
 	RDT_OPT(RDT_FLAG_L3_CAT,    "l3cat",	X86_FEATURE_CAT_L3),
 	RDT_OPT(RDT_FLAG_L3_CDP,    "l3cdp",	X86_FEATURE_CDP_L3),
 	RDT_OPT(RDT_FLAG_L2_CAT,    "l2cat",	X86_FEATURE_CAT_L2),
-	RDT_OPT(RDT_FLAG_L2_CDP,    "l2cdp",	X86_FEATURE_CDP_L2),
 	RDT_OPT(RDT_FLAG_MBA,	    "mba",	X86_FEATURE_MBA),
 };
 #define NUM_RDT_OPTIONS ARRAY_SIZE(rdt_options)
@@ -806,15 +728,15 @@ static __init bool get_rdt_alloc_resources(void)
 
 	if (rdt_cpu_has(X86_FEATURE_CAT_L3)) {
 		rdt_get_cache_alloc_cfg(1, &rdt_resources_all[RDT_RESOURCE_L3]);
-		if (rdt_cpu_has(X86_FEATURE_CDP_L3))
-			rdt_get_cdp_l3_config();
+		if (rdt_cpu_has(X86_FEATURE_CDP_L3)) {
+			rdt_get_cdp_l3_config(RDT_RESOURCE_L3DATA);
+			rdt_get_cdp_l3_config(RDT_RESOURCE_L3CODE);
+		}
 		ret = true;
 	}
 	if (rdt_cpu_has(X86_FEATURE_CAT_L2)) {
 		/* CPUID 0x10.2 fields are same format at 0x10.1 */
 		rdt_get_cache_alloc_cfg(2, &rdt_resources_all[RDT_RESOURCE_L2]);
-		if (rdt_cpu_has(X86_FEATURE_CDP_L2))
-			rdt_get_cdp_l2_config();
 		ret = true;
 	}
 
@@ -848,10 +770,8 @@ static __init void rdt_quirks(void)
 			cache_alloc_hsw_probe();
 		break;
 	case INTEL_FAM6_SKYLAKE_X:
-		if (boot_cpu_data.x86_stepping <= 4)
+		if (boot_cpu_data.x86_mask <= 4)
 			set_rdt_options("!cmt,!mbmtotal,!mbmlocal,!l3cat");
-		else
-			set_rdt_options("!l3cat");
 	}
 }
 
@@ -863,8 +783,6 @@ static __init bool get_rdt_resources(void)
 
 	return (rdt_mon_capable || rdt_alloc_capable);
 }
-
-static enum cpuhp_state rdt_online;
 
 static int __init intel_rdt_late_init(void)
 {
@@ -887,7 +805,6 @@ static int __init intel_rdt_late_init(void)
 		cpuhp_remove_state(state);
 		return ret;
 	}
-	rdt_online = state;
 
 	for_each_alloc_capable_rdt_resource(r)
 		pr_info("Intel RDT %s allocation detected\n", r->name);
@@ -899,11 +816,3 @@ static int __init intel_rdt_late_init(void)
 }
 
 late_initcall(intel_rdt_late_init);
-
-static void __exit intel_rdt_exit(void)
-{
-	cpuhp_remove_state(rdt_online);
-	rdtgroup_exit();
-}
-
-__exitcall(intel_rdt_exit);

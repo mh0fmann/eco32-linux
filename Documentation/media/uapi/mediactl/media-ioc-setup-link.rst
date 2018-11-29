@@ -26,7 +26,6 @@ Arguments
     File descriptor returned by :ref:`open() <media-func-open>`.
 
 ``argp``
-    Pointer to struct :c:type:`media_link_desc`.
 
 
 Description

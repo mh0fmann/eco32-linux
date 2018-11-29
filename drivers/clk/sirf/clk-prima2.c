@@ -42,7 +42,7 @@ static struct clk_dmn clk_mmc45 = {
 	},
 };
 
-static const struct clk_init_data clk_nand_init = {
+static struct clk_init_data clk_nand_init = {
 	.name = "nand",
 	.ops = &ios_ops,
 	.parent_names = std_clk_io_parents,

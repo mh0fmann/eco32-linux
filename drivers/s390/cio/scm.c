@@ -1,4 +1,3 @@
-// SPDX-License-Identifier: GPL-2.0
 /*
  * Recognize and maintain s390 storage class memory.
  *

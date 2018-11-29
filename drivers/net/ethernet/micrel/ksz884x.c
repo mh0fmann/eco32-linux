@@ -3373,6 +3373,7 @@ static void port_get_link_speed(struct ksz_port *port)
  */
 static void port_set_link_speed(struct ksz_port *port)
 {
+	struct ksz_port_info *info;
 	struct ksz_hw *hw = port->hw;
 	u16 data;
 	u16 cfg;
@@ -3381,6 +3382,8 @@ static void port_set_link_speed(struct ksz_port *port)
 	int p;
 
 	for (i = 0, p = port->first_port; i < port->port_cnt; i++, p++) {
+		info = &hw->port_info[p];
+
 		port_r16(hw, p, KS884X_PORT_CTRL_4_OFFSET, &data);
 		port_r8(hw, p, KS884X_PORT_STATUS_OFFSET, &status);
 
@@ -4335,11 +4338,11 @@ static void ksz_stop_timer(struct ksz_timer_info *info)
 }
 
 static void ksz_init_timer(struct ksz_timer_info *info, int period,
-	void (*function)(struct timer_list *))
+	void (*function)(unsigned long), void *data)
 {
 	info->max = 0;
 	info->period = period;
-	timer_setup(&info->timer, function, 0);
+	setup_timer(&info->timer, function, (unsigned long)data);
 }
 
 static void ksz_update_timer(struct ksz_timer_info *info)
@@ -4369,7 +4372,7 @@ static void ksz_update_timer(struct ksz_timer_info *info)
  */
 static int ksz_alloc_soft_desc(struct ksz_desc_info *desc_info, int transmit)
 {
-	desc_info->ring = kcalloc(desc_info->alloc, sizeof(struct ksz_desc),
+	desc_info->ring = kzalloc(sizeof(struct ksz_desc) * desc_info->alloc,
 				  GFP_KERNEL);
 	if (!desc_info->ring)
 		return 1;
@@ -6686,9 +6689,9 @@ static void mib_read_work(struct work_struct *work)
 	}
 }
 
-static void mib_monitor(struct timer_list *t)
+static void mib_monitor(unsigned long ptr)
 {
-	struct dev_info *hw_priv = from_timer(hw_priv, t, mib_timer_info.timer);
+	struct dev_info *hw_priv = (struct dev_info *) ptr;
 
 	mib_read_work(&hw_priv->mib_read);
 
@@ -6713,10 +6716,10 @@ static void mib_monitor(struct timer_list *t)
  *
  * This routine is run in a kernel timer to monitor the network device.
  */
-static void dev_monitor(struct timer_list *t)
+static void dev_monitor(unsigned long ptr)
 {
-	struct dev_priv *priv = from_timer(priv, t, monitor_timer_info.timer);
-	struct net_device *dev = priv->mii_if.dev;
+	struct net_device *dev = (struct net_device *) ptr;
+	struct dev_priv *priv = netdev_priv(dev);
 	struct dev_info *hw_priv = priv->adapter;
 	struct ksz_hw *hw = &hw_priv->hw;
 	struct ksz_port *port = &priv->port;
@@ -6786,7 +6789,7 @@ static int __init netdev_init(struct net_device *dev)
 
 	/* 500 ms timeout */
 	ksz_init_timer(&priv->monitor_timer_info, 500 * HZ / 1000,
-		dev_monitor);
+		dev_monitor, dev);
 
 	/* 500 ms timeout */
 	dev->watchdog_timeo = HZ / 2;
@@ -7062,7 +7065,7 @@ static int pcidev_init(struct pci_dev *pdev, const struct pci_device_id *id)
 
 	/* 500 ms timeout */
 	ksz_init_timer(&hw_priv->mib_timer_info, 500 * HZ / 1000,
-		mib_monitor);
+		mib_monitor, hw_priv);
 
 	for (i = 0; i < hw->dev_count; i++) {
 		dev = alloc_etherdev(sizeof(struct dev_priv));

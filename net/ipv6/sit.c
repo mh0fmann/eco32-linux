@@ -91,35 +91,29 @@ struct sit_net {
  * Must be invoked with rcu_read_lock
  */
 static struct ip_tunnel *ipip6_tunnel_lookup(struct net *net,
-					     struct net_device *dev,
-					     __be32 remote, __be32 local,
-					     int sifindex)
+		struct net_device *dev, __be32 remote, __be32 local)
 {
 	unsigned int h0 = HASH(remote);
 	unsigned int h1 = HASH(local);
 	struct ip_tunnel *t;
 	struct sit_net *sitn = net_generic(net, sit_net_id);
-	int ifindex = dev ? dev->ifindex : 0;
 
 	for_each_ip_tunnel_rcu(t, sitn->tunnels_r_l[h0 ^ h1]) {
 		if (local == t->parms.iph.saddr &&
 		    remote == t->parms.iph.daddr &&
-		    (!dev || !t->parms.link || ifindex == t->parms.link ||
-		     sifindex == t->parms.link) &&
+		    (!dev || !t->parms.link || dev->ifindex == t->parms.link) &&
 		    (t->dev->flags & IFF_UP))
 			return t;
 	}
 	for_each_ip_tunnel_rcu(t, sitn->tunnels_r[h0]) {
 		if (remote == t->parms.iph.daddr &&
-		    (!dev || !t->parms.link || ifindex == t->parms.link ||
-		     sifindex == t->parms.link) &&
+		    (!dev || !t->parms.link || dev->ifindex == t->parms.link) &&
 		    (t->dev->flags & IFF_UP))
 			return t;
 	}
 	for_each_ip_tunnel_rcu(t, sitn->tunnels_l[h1]) {
 		if (local == t->parms.iph.saddr &&
-		    (!dev || !t->parms.link || ifindex == t->parms.link ||
-		     sifindex == t->parms.link) &&
+		    (!dev || !t->parms.link || dev->ifindex == t->parms.link) &&
 		    (t->dev->flags & IFF_UP))
 			return t;
 	}
@@ -182,7 +176,7 @@ static void ipip6_tunnel_clone_6rd(struct net_device *dev, struct sit_net *sitn)
 #ifdef CONFIG_IPV6_SIT_6RD
 	struct ip_tunnel *t = netdev_priv(dev);
 
-	if (dev == sitn->fb_tunnel_dev || !sitn->fb_tunnel_dev) {
+	if (t->dev == sitn->fb_tunnel_dev) {
 		ipv6_addr_set(&t->ip6rd.prefix, htonl(0x20020000), 0, 0, 0);
 		t->ip6rd.relay_prefix = 0;
 		t->ip6rd.prefixlen = 16;
@@ -250,13 +244,11 @@ static struct ip_tunnel *ipip6_tunnel_locate(struct net *net,
 	if (!create)
 		goto failed;
 
-	if (parms->name[0]) {
-		if (!dev_valid_name(parms->name))
-			goto failed;
+	if (parms->name[0])
 		strlcpy(name, parms->name, IFNAMSIZ);
-	} else {
+	else
 		strcpy(name, "sit%d");
-	}
+
 	dev = alloc_netdev(sizeof(*t), name, NET_NAME_UNKNOWN,
 			   ipip6_tunnel_setup);
 	if (!dev)
@@ -494,7 +486,6 @@ static int ipip6_err(struct sk_buff *skb, u32 info)
 	const int code = icmp_hdr(skb)->code;
 	unsigned int data_len = 0;
 	struct ip_tunnel *t;
-	int sifindex;
 	int err;
 
 	switch (type) {
@@ -526,21 +517,22 @@ static int ipip6_err(struct sk_buff *skb, u32 info)
 
 	err = -ENOENT;
 
-	sifindex = netif_is_l3_master(skb->dev) ? IPCB(skb)->iif : 0;
-	t = ipip6_tunnel_lookup(dev_net(skb->dev), skb->dev,
-				iph->daddr, iph->saddr, sifindex);
+	t = ipip6_tunnel_lookup(dev_net(skb->dev),
+				skb->dev,
+				iph->daddr,
+				iph->saddr);
 	if (!t)
 		goto out;
 
 	if (type == ICMP_DEST_UNREACH && code == ICMP_FRAG_NEEDED) {
 		ipv4_update_pmtu(skb, dev_net(skb->dev), info,
-				 t->parms.link, iph->protocol);
+				 t->parms.link, 0, iph->protocol, 0);
 		err = 0;
 		goto out;
 	}
 	if (type == ICMP_REDIRECT) {
-		ipv4_redirect(skb, dev_net(skb->dev), t->parms.link,
-			      iph->protocol);
+		ipv4_redirect(skb, dev_net(skb->dev), t->parms.link, 0,
+			      iph->protocol, 0);
 		err = 0;
 		goto out;
 	}
@@ -641,12 +633,10 @@ static int ipip6_rcv(struct sk_buff *skb)
 {
 	const struct iphdr *iph = ip_hdr(skb);
 	struct ip_tunnel *tunnel;
-	int sifindex;
 	int err;
 
-	sifindex = netif_is_l3_master(skb->dev) ? IPCB(skb)->iif : 0;
 	tunnel = ipip6_tunnel_lookup(dev_net(skb->dev), skb->dev,
-				     iph->saddr, iph->daddr, sifindex);
+				     iph->saddr, iph->daddr);
 	if (tunnel) {
 		struct pcpu_sw_netstats *tstats;
 
@@ -714,13 +704,10 @@ static int sit_tunnel_rcv(struct sk_buff *skb, u8 ipproto)
 {
 	const struct iphdr *iph;
 	struct ip_tunnel *tunnel;
-	int sifindex;
-
-	sifindex = netif_is_l3_master(skb->dev) ? IPCB(skb)->iif : 0;
 
 	iph = ip_hdr(skb);
 	tunnel = ipip6_tunnel_lookup(dev_net(skb->dev), skb->dev,
-				     iph->saddr, iph->daddr, sifindex);
+				     iph->saddr, iph->daddr);
 	if (tunnel) {
 		const struct tnl_ptk_info *tpi;
 
@@ -936,8 +923,8 @@ static netdev_tx_t ipip6_tunnel_xmit(struct sk_buff *skb,
 			df = 0;
 		}
 
-		if (tunnel->parms.iph.daddr)
-			skb_dst_update_pmtu(skb, mtu);
+		if (tunnel->parms.iph.daddr && skb_dst(skb))
+			skb_dst(skb)->ops->update_pmtu(skb_dst(skb), NULL, skb, mtu);
 
 		if (skb->len > mtu && !skb_is_gso(skb)) {
 			icmpv6_send(skb, ICMPV6_PKT_TOOBIG, 0, mtu);
@@ -1100,7 +1087,6 @@ static void ipip6_tunnel_update(struct ip_tunnel *t, struct ip_tunnel_parm *p,
 	ipip6_tunnel_link(sitn, t);
 	t->parms.iph.ttl = p->iph.ttl;
 	t->parms.iph.tos = p->iph.tos;
-	t->parms.iph.frag_off = p->iph.frag_off;
 	if (t->parms.link != p->link || t->fwmark != fwmark) {
 		t->parms.link = p->link;
 		t->fwmark = fwmark;
@@ -1371,7 +1357,7 @@ static void ipip6_tunnel_setup(struct net_device *dev)
 	dev->hard_header_len	= LL_MAX_HEADER + t_hlen;
 	dev->mtu		= ETH_DATA_LEN - t_hlen;
 	dev->min_mtu		= IPV6_MIN_MTU;
-	dev->max_mtu		= IP6_MAX_MTU - t_hlen;
+	dev->max_mtu		= 0xFFF8 - t_hlen;
 	dev->flags		= IFF_NOARP;
 	netif_keep_dst(dev);
 	dev->addr_len		= 4;
@@ -1579,14 +1565,6 @@ static int ipip6_newlink(struct net *src_net, struct net_device *dev,
 	err = ipip6_tunnel_create(dev);
 	if (err < 0)
 		return err;
-
-	if (tb[IFLA_MTU]) {
-		u32 mtu = nla_get_u32(tb[IFLA_MTU]);
-
-		if (mtu >= IPV6_MIN_MTU &&
-		    mtu <= IP6_MAX_MTU - dev->hard_header_len)
-			dev->mtu = mtu;
-	}
 
 #ifdef CONFIG_IPV6_SIT_6RD
 	if (ipip6_netlink_6rd_parms(data, &ip6rd))
@@ -1838,9 +1816,6 @@ static int __net_init sit_init_net(struct net *net)
 	sitn->tunnels[2] = sitn->tunnels_r;
 	sitn->tunnels[3] = sitn->tunnels_r_l;
 
-	if (!net_has_fallback_tunnels(net))
-		return 0;
-
 	sitn->fb_tunnel_dev = alloc_netdev(sizeof(struct ip_tunnel), "sit0",
 					   NET_NAME_UNKNOWN,
 					   ipip6_tunnel_setup);
@@ -1873,22 +1848,19 @@ err_alloc_dev:
 	return err;
 }
 
-static void __net_exit sit_exit_batch_net(struct list_head *net_list)
+static void __net_exit sit_exit_net(struct net *net)
 {
 	LIST_HEAD(list);
-	struct net *net;
 
 	rtnl_lock();
-	list_for_each_entry(net, net_list, exit_list)
-		sit_destroy_tunnels(net, &list);
-
+	sit_destroy_tunnels(net, &list);
 	unregister_netdevice_many(&list);
 	rtnl_unlock();
 }
 
 static struct pernet_operations sit_net_ops = {
 	.init = sit_init_net,
-	.exit_batch = sit_exit_batch_net,
+	.exit = sit_exit_net,
 	.id   = &sit_net_id,
 	.size = sizeof(struct sit_net),
 };

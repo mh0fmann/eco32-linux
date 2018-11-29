@@ -278,8 +278,7 @@ int ti_thermal_unregister_cpu_cooling(struct ti_bandgap *bgp, int id)
 
 	if (data) {
 		cpufreq_cooling_unregister(data->cool_dev);
-		if (data->policy)
-			cpufreq_cpu_put(data->policy);
+		cpufreq_cpu_put(data->policy);
 	}
 
 	return 0;

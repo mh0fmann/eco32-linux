@@ -15,7 +15,7 @@ static const uint8_t crc4_tab[] = {
 
 /**
  * crc4 - calculate the 4-bit crc of a value.
- * @c:    starting crc4
+ * @crc:  starting crc4
  * @x:    value to checksum
  * @bits: number of bits in @x to checksum
  *

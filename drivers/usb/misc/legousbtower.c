@@ -1,9 +1,13 @@
-// SPDX-License-Identifier: GPL-2.0+
 /*
  * LEGO USB Tower driver
  *
  * Copyright (C) 2003 David Glance <davidgsf@sourceforge.net>
  *               2001-2004 Juergen Stuber <starblue@users.sourceforge.net>
+ *
+ *	This program is free software; you can redistribute it and/or
+ *	modify it under the terms of the GNU General Public License as
+ *	published by the Free Software Foundation; either version 2 of
+ *	the License, or (at your option) any later version.
  *
  * derived from USB Skeleton driver - 0.5
  * Copyright (C) 2001 Greg Kroah-Hartman (greg@kroah.com)
@@ -224,7 +228,7 @@ static ssize_t tower_write	(struct file *file, const char __user *buffer, size_t
 static inline void tower_delete (struct lego_usb_tower *dev);
 static int tower_open		(struct inode *inode, struct file *file);
 static int tower_release	(struct inode *inode, struct file *file);
-static __poll_t tower_poll	(struct file *file, poll_table *wait);
+static unsigned int tower_poll	(struct file *file, poll_table *wait);
 static loff_t tower_llseek	(struct file *file, loff_t off, int whence);
 
 static void tower_abort_transfers (struct lego_usb_tower *dev);
@@ -509,25 +513,25 @@ static void tower_check_for_read_packet (struct lego_usb_tower *dev)
 /**
  *	tower_poll
  */
-static __poll_t tower_poll (struct file *file, poll_table *wait)
+static unsigned int tower_poll (struct file *file, poll_table *wait)
 {
 	struct lego_usb_tower *dev;
-	__poll_t mask = 0;
+	unsigned int mask = 0;
 
 	dev = file->private_data;
 
 	if (!dev->udev)
-		return EPOLLERR | EPOLLHUP;
+		return POLLERR | POLLHUP;
 
 	poll_wait(file, &dev->read_wait, wait);
 	poll_wait(file, &dev->write_wait, wait);
 
 	tower_check_for_read_packet(dev);
 	if (dev->read_packet_length > 0) {
-		mask |= EPOLLIN | EPOLLRDNORM;
+		mask |= POLLIN | POLLRDNORM;
 	}
 	if (!dev->interrupt_out_busy) {
-		mask |= EPOLLOUT | EPOLLWRNORM;
+		mask |= POLLOUT | POLLWRNORM;
 	}
 
 	return mask;
@@ -722,7 +726,6 @@ static void tower_interrupt_in_callback (struct urb *urb)
 	struct lego_usb_tower *dev = urb->context;
 	int status = urb->status;
 	int retval;
-	unsigned long flags;
 
 	lego_usb_tower_debug_data(&dev->udev->dev, __func__,
 				  urb->actual_length, urb->transfer_buffer);
@@ -741,7 +744,7 @@ static void tower_interrupt_in_callback (struct urb *urb)
 	}
 
 	if (urb->actual_length > 0) {
-		spin_lock_irqsave(&dev->read_buffer_lock, flags);
+		spin_lock (&dev->read_buffer_lock);
 		if (dev->read_buffer_length + urb->actual_length < read_buffer_size) {
 			memcpy (dev->read_buffer + dev->read_buffer_length,
 				dev->interrupt_in_buffer,
@@ -754,7 +757,7 @@ static void tower_interrupt_in_callback (struct urb *urb)
 			pr_warn("read_buffer overflow, %d bytes dropped\n",
 				urb->actual_length);
 		}
-		spin_unlock_irqrestore(&dev->read_buffer_lock, flags);
+		spin_unlock (&dev->read_buffer_lock);
 	}
 
 resubmit:

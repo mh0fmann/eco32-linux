@@ -8,6 +8,7 @@
 
 #include <linux/kernel.h>
 #include <linux/mm.h>
+#include <linux/bootmem.h>
 #include <linux/memblock.h>
 #ifdef CONFIG_BLK_DEV_INITRD
 #include <linux/initrd.h>
@@ -217,7 +218,7 @@ void __init mem_init(void)
 		free_highmem_page(pfn_to_page(tmp));
 #endif
 
-	memblock_free_all();
+	free_all_bootmem();
 	mem_init_print_info(NULL);
 }
 

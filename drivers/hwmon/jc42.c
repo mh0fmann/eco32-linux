@@ -22,7 +22,6 @@
  * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
-#include <linux/bitops.h>
 #include <linux/module.h>
 #include <linux/init.h>
 #include <linux/slab.h>
@@ -46,7 +45,6 @@ static const unsigned short normal_i2c[] = {
 #define JC42_REG_TEMP		0x05
 #define JC42_REG_MANID		0x06
 #define JC42_REG_DEVICEID	0x07
-#define JC42_REG_SMBUS		0x22 /* NXP and Atmel, possibly others? */
 
 /* Status bits in temperature register */
 #define JC42_ALARM_CRIT_BIT	15
@@ -76,9 +74,6 @@ static const unsigned short normal_i2c[] = {
 #define STM_MANID		0x104a  /* ST Microelectronics */
 #define GT_MANID		0x1c68	/* Giantec */
 #define GT_MANID2		0x132d	/* Giantec, 2nd mfg ID */
-
-/* SMBUS register */
-#define SMBUS_STMOUT		BIT(7)  /* SMBus time-out, active low */
 
 /* Supported chips */
 
@@ -499,22 +494,6 @@ static int jc42_probe(struct i2c_client *client, const struct i2c_device_id *id)
 		return cap;
 
 	data->extended = !!(cap & JC42_CAP_RANGE);
-
-	if (device_property_read_bool(dev, "smbus-timeout-disable")) {
-		int smbus;
-
-		/*
-		 * Not all chips support this register, but from a
-		 * quick read of various datasheets no chip appears
-		 * incompatible with the below attempt to disable
-		 * the timeout. And the whole thing is opt-in...
-		 */
-		smbus = i2c_smbus_read_word_swapped(client, JC42_REG_SMBUS);
-		if (smbus < 0)
-			return smbus;
-		i2c_smbus_write_word_swapped(client, JC42_REG_SMBUS,
-					     smbus | SMBUS_STMOUT);
-	}
 
 	config = i2c_smbus_read_word_swapped(client, JC42_REG_CONFIG);
 	if (config < 0)

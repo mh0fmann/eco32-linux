@@ -350,7 +350,7 @@ static void s2255_fillbuff(struct s2255_vc *vc, struct s2255_buffer *buf,
 			   int jpgsize);
 static int s2255_set_mode(struct s2255_vc *vc, struct s2255_mode *mode);
 static int s2255_board_shutdown(struct s2255_dev *dev);
-static void s2255_fwload_start(struct s2255_dev *dev);
+static void s2255_fwload_start(struct s2255_dev *dev, int reset);
 static void s2255_destroy(struct s2255_dev *dev);
 static long s2255_vendor_req(struct s2255_dev *dev, unsigned char req,
 			     u16 index, u16 value, void *buf,
@@ -476,7 +476,7 @@ static void planar422p_to_yuv_packed(const unsigned char *in,
 static void s2255_reset_dsppower(struct s2255_dev *dev)
 {
 	s2255_vendor_req(dev, 0x40, 0x0000, 0x0001, NULL, 0, 1);
-	msleep(50);
+	msleep(20);
 	s2255_vendor_req(dev, 0x50, 0x0000, 0x0000, NULL, 0, 1);
 	msleep(600);
 	s2255_vendor_req(dev, 0x10, 0x0000, 0x0000, NULL, 0, 1);
@@ -485,10 +485,9 @@ static void s2255_reset_dsppower(struct s2255_dev *dev)
 
 /* kickstarts the firmware loading. from probe
  */
-static void s2255_timer(struct timer_list *t)
+static void s2255_timer(unsigned long user_data)
 {
-	struct s2255_dev *dev = from_timer(dev, t, timer);
-	struct s2255_fw *data = dev->fw_data;
+	struct s2255_fw *data = (struct s2255_fw *)user_data;
 	if (usb_submit_urb(data->fw_urb, GFP_ATOMIC) < 0) {
 		pr_err("s2255: can't submit urb\n");
 		atomic_set(&data->fw_state, S2255_FW_FAILED);
@@ -648,8 +647,8 @@ static void s2255_fillbuff(struct s2255_vc *vc,
 		pr_err("s2255: =======no frame\n");
 		return;
 	}
-	dprintk(dev, 2, "s2255fill at : Buffer %p size= %d\n",
-		vbuf, pos);
+	dprintk(dev, 2, "s2255fill at : Buffer 0x%08lx size= %d\n",
+		(unsigned long)vbuf, pos);
 }
 
 
@@ -730,8 +729,8 @@ static int vidioc_querycap(struct file *file, void *priv,
 	struct s2255_vc *vc = video_drvdata(file);
 	struct s2255_dev *dev = vc->dev;
 
-	strscpy(cap->driver, "s2255", sizeof(cap->driver));
-	strscpy(cap->card, "s2255", sizeof(cap->card));
+	strlcpy(cap->driver, "s2255", sizeof(cap->driver));
+	strlcpy(cap->card, "s2255", sizeof(cap->card));
 	usb_make_path(dev->udev, cap->bus_info, sizeof(cap->bus_info));
 	cap->device_caps = V4L2_CAP_VIDEO_CAPTURE | V4L2_CAP_STREAMING |
 		V4L2_CAP_READWRITE;
@@ -749,7 +748,7 @@ static int vidioc_enum_fmt_vid_cap(struct file *file, void *priv,
 	if (!jpeg_enable && ((formats[index].fourcc == V4L2_PIX_FMT_JPEG) ||
 			(formats[index].fourcc == V4L2_PIX_FMT_MJPEG)))
 		return -EINVAL;
-	strscpy(f->description, formats[index].name, sizeof(f->description));
+	strlcpy(f->description, formats[index].name, sizeof(f->description));
 	f->pixelformat = formats[index].fourcc;
 	return 0;
 }
@@ -803,6 +802,10 @@ static int vidioc_try_fmt_vid_cap(struct file *file, void *priv,
 		}
 		if (f->fmt.pix.width >= LINE_SZ_4CIFS_NTSC)
 			f->fmt.pix.width = LINE_SZ_4CIFS_NTSC;
+		else if (f->fmt.pix.width >= LINE_SZ_2CIFS_NTSC)
+			f->fmt.pix.width = LINE_SZ_2CIFS_NTSC;
+		else if (f->fmt.pix.width >= LINE_SZ_1CIFS_NTSC)
+			f->fmt.pix.width = LINE_SZ_1CIFS_NTSC;
 		else
 			f->fmt.pix.width = LINE_SZ_1CIFS_NTSC;
 	} else {
@@ -816,6 +819,10 @@ static int vidioc_try_fmt_vid_cap(struct file *file, void *priv,
 		}
 		if (f->fmt.pix.width >= LINE_SZ_4CIFS_PAL)
 			f->fmt.pix.width = LINE_SZ_4CIFS_PAL;
+		else if (f->fmt.pix.width >= LINE_SZ_2CIFS_PAL)
+			f->fmt.pix.width = LINE_SZ_2CIFS_PAL;
+		else if (f->fmt.pix.width >= LINE_SZ_1CIFS_PAL)
+			f->fmt.pix.width = LINE_SZ_1CIFS_PAL;
 		else
 			f->fmt.pix.width = LINE_SZ_1CIFS_PAL;
 	}
@@ -1195,10 +1202,10 @@ static int vidioc_enum_input(struct file *file, void *priv,
 	switch (dev->pid) {
 	case 0x2255:
 	default:
-		strscpy(inp->name, "Composite", sizeof(inp->name));
+		strlcpy(inp->name, "Composite", sizeof(inp->name));
 		break;
 	case 0x2257:
-		strscpy(inp->name, (vc->idx < 2) ? "Composite" : "S-Video",
+		strlcpy(inp->name, (vc->idx < 2) ? "Composite" : "S-Video",
 			sizeof(inp->name));
 		break;
 	}
@@ -1442,7 +1449,7 @@ static int s2255_open(struct file *file)
 	case S2255_FW_FAILED:
 		s2255_dev_err(&dev->udev->dev,
 			"firmware load failed. retrying.\n");
-		s2255_fwload_start(dev);
+		s2255_fwload_start(dev, 1);
 		wait_event_timeout(dev->fw_data->wait_fw,
 				   ((atomic_read(&dev->fw_data->fw_state)
 				     == S2255_FW_SUCCESS) ||
@@ -2201,9 +2208,10 @@ static void s2255_stop_readpipe(struct s2255_dev *dev)
 	return;
 }
 
-static void s2255_fwload_start(struct s2255_dev *dev)
+static void s2255_fwload_start(struct s2255_dev *dev, int reset)
 {
-	s2255_reset_dsppower(dev);
+	if (reset)
+		s2255_reset_dsppower(dev);
 	dev->fw_data->fw_size = dev->fw_data->fw->size;
 	atomic_set(&dev->fw_data->fw_state, S2255_FW_NOTLOADED);
 	memcpy(dev->fw_data->pfw_data,
@@ -2275,7 +2283,7 @@ static int s2255_probe(struct usb_interface *interface,
 		dev_err(&interface->dev, "Could not find bulk-in endpoint\n");
 		goto errorEP;
 	}
-	timer_setup(&dev->timer, s2255_timer, 0);
+	setup_timer(&dev->timer, s2255_timer, (unsigned long)dev->fw_data);
 	init_waitqueue_head(&dev->fw_data->wait_fw);
 	for (i = 0; i < MAX_CHANNELS; i++) {
 		struct s2255_vc *vc = &dev->vc[i];
@@ -2328,7 +2336,7 @@ static int s2255_probe(struct usb_interface *interface,
 	retval = s2255_board_init(dev);
 	if (retval)
 		goto errorBOARDINIT;
-	s2255_fwload_start(dev);
+	s2255_fwload_start(dev, 0);
 	/* loads v4l specific */
 	retval = s2255_probe_v4l(dev);
 	if (retval)

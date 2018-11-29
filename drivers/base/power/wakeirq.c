@@ -33,6 +33,7 @@ static int dev_pm_attach_wake_irq(struct device *dev, int irq,
 				  struct wake_irq *wirq)
 {
 	unsigned long flags;
+	int err;
 
 	if (!dev || !wirq)
 		return -EINVAL;
@@ -44,11 +45,12 @@ static int dev_pm_attach_wake_irq(struct device *dev, int irq,
 		return -EEXIST;
 	}
 
-	dev->power.wakeirq = wirq;
-	device_wakeup_attach_irq(dev, wirq);
+	err = device_wakeup_attach_irq(dev, wirq);
+	if (!err)
+		dev->power.wakeirq = wirq;
 
 	spin_unlock_irqrestore(&dev->power.lock, flags);
-	return 0;
+	return err;
 }
 
 /**
@@ -112,7 +114,6 @@ void dev_pm_clear_wake_irq(struct device *dev)
 		free_irq(wirq->irq, wirq);
 		wirq->status &= ~WAKE_IRQ_DEDICATED_MASK;
 	}
-	kfree(wirq->name);
 	kfree(wirq);
 }
 EXPORT_SYMBOL_GPL(dev_pm_clear_wake_irq);
@@ -185,12 +186,6 @@ int dev_pm_set_dedicated_wake_irq(struct device *dev, int irq)
 	if (!wirq)
 		return -ENOMEM;
 
-	wirq->name = kasprintf(GFP_KERNEL, "%s:wakeup", dev_name(dev));
-	if (!wirq->name) {
-		err = -ENOMEM;
-		goto err_free;
-	}
-
 	wirq->dev = dev;
 	wirq->irq = irq;
 	irq_set_status_flags(irq, IRQ_NOAUTOEN);
@@ -203,9 +198,9 @@ int dev_pm_set_dedicated_wake_irq(struct device *dev, int irq)
 	 * so we use a threaded irq.
 	 */
 	err = request_threaded_irq(irq, NULL, handle_threaded_wake_irq,
-				   IRQF_ONESHOT, wirq->name, wirq);
+				   IRQF_ONESHOT, dev_name(dev), wirq);
 	if (err)
-		goto err_free_name;
+		goto err_free;
 
 	err = dev_pm_attach_wake_irq(dev, irq, wirq);
 	if (err)
@@ -217,8 +212,6 @@ int dev_pm_set_dedicated_wake_irq(struct device *dev, int irq)
 
 err_free_irq:
 	free_irq(irq, wirq);
-err_free_name:
-	kfree(wirq->name);
 err_free:
 	kfree(wirq);
 
@@ -330,8 +323,7 @@ void dev_pm_arm_wake_irq(struct wake_irq *wirq)
 		return;
 
 	if (device_may_wakeup(wirq->dev)) {
-		if (wirq->status & WAKE_IRQ_DEDICATED_ALLOCATED &&
-		    !pm_runtime_status_suspended(wirq->dev))
+		if (wirq->status & WAKE_IRQ_DEDICATED_ALLOCATED)
 			enable_irq(wirq->irq);
 
 		enable_irq_wake(wirq->irq);
@@ -353,8 +345,7 @@ void dev_pm_disarm_wake_irq(struct wake_irq *wirq)
 	if (device_may_wakeup(wirq->dev)) {
 		disable_irq_wake(wirq->irq);
 
-		if (wirq->status & WAKE_IRQ_DEDICATED_ALLOCATED &&
-		    !pm_runtime_status_suspended(wirq->dev))
+		if (wirq->status & WAKE_IRQ_DEDICATED_ALLOCATED)
 			disable_irq_nosync(wirq->irq);
 	}
 }

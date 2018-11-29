@@ -1,4 +1,3 @@
-// SPDX-License-Identifier: GPL-2.0
 /*
  * Author(s)......: Holger Smolinski <Holger.Smolinski@de.ibm.com>
  *		    Horst Hummel <Horst.Hummel@de.ibm.com>
@@ -214,24 +213,23 @@ static void set_ch_t(struct ch_t *geo, __u32 cyl, __u8 head)
 	geo->head |= head;
 }
 
-static int set_timestamp(struct ccw1 *ccw, struct DE_eckd_data *data,
+static int check_XRC(struct ccw1 *ccw, struct DE_eckd_data *data,
 		     struct dasd_device *device)
 {
 	struct dasd_eckd_private *private = device->private;
 	int rc;
 
-	rc = get_phys_clock(&data->ep_sys_time);
-	/*
-	 * Ignore return code if XRC is not supported or
-	 * sync clock is switched off
-	 */
-	if ((rc && !private->rdc_data.facilities.XRC_supported) ||
-	    rc == -EOPNOTSUPP || rc == -EACCES)
+	if (!private->rdc_data.facilities.XRC_supported)
 		return 0;
 
 	/* switch on System Time Stamp - needed for XRC Support */
 	data->ga_extended |= 0x08; /* switch on 'Time Stamp Valid'   */
 	data->ga_extended |= 0x02; /* switch on 'Extended Parameter' */
+
+	rc = get_phys_clock(&data->ep_sys_time);
+	/* Ignore return code if sync clock is switched off. */
+	if (rc == -EOPNOTSUPP || rc == -EACCES)
+		rc = 0;
 
 	if (ccw) {
 		ccw->count = sizeof(struct DE_eckd_data);
@@ -287,12 +285,12 @@ define_extent(struct ccw1 *ccw, struct DE_eckd_data *data, unsigned int trk,
 	case DASD_ECKD_CCW_WRITE_KD_MT:
 		data->mask.perm = 0x02;
 		data->attributes.operation = private->attrib.operation;
-		rc = set_timestamp(ccw, data, device);
+		rc = check_XRC(ccw, data, device);
 		break;
 	case DASD_ECKD_CCW_WRITE_CKD:
 	case DASD_ECKD_CCW_WRITE_CKD_MT:
 		data->attributes.operation = DASD_BYPASS_CACHE;
-		rc = set_timestamp(ccw, data, device);
+		rc = check_XRC(ccw, data, device);
 		break;
 	case DASD_ECKD_CCW_ERASE:
 	case DASD_ECKD_CCW_WRITE_HOME_ADDRESS:
@@ -300,7 +298,7 @@ define_extent(struct ccw1 *ccw, struct DE_eckd_data *data, unsigned int trk,
 		data->mask.perm = 0x3;
 		data->mask.auth = 0x1;
 		data->attributes.operation = DASD_BYPASS_CACHE;
-		rc = set_timestamp(ccw, data, device);
+		rc = check_XRC(ccw, data, device);
 		break;
 	case DASD_ECKD_CCW_WRITE_FULL_TRACK:
 		data->mask.perm = 0x03;
@@ -311,7 +309,7 @@ define_extent(struct ccw1 *ccw, struct DE_eckd_data *data, unsigned int trk,
 		data->mask.perm = 0x02;
 		data->attributes.operation = private->attrib.operation;
 		data->blk_size = blksize;
-		rc = set_timestamp(ccw, data, device);
+		rc = check_XRC(ccw, data, device);
 		break;
 	default:
 		dev_err(&device->cdev->dev,
@@ -532,12 +530,10 @@ static int prefix_LRE(struct ccw1 *ccw, struct PFX_eckd_data *pfxdata,
 	pfxdata->validity.define_extent = 1;
 
 	/* private uid is kept up to date, conf_data may be outdated */
-	if (startpriv->uid.type == UA_BASE_PAV_ALIAS)
+	if (startpriv->uid.type != UA_BASE_DEVICE) {
 		pfxdata->validity.verify_base = 1;
-
-	if (startpriv->uid.type == UA_HYPER_PAV_ALIAS) {
-		pfxdata->validity.verify_base = 1;
-		pfxdata->validity.hyper_pav = 1;
+		if (startpriv->uid.type == UA_HYPER_PAV_ALIAS)
+			pfxdata->validity.hyper_pav = 1;
 	}
 
 	rc = define_extent(NULL, dedata, trk, totrk, cmd, basedev, blksize);
@@ -886,7 +882,7 @@ static int dasd_eckd_read_conf_lpm(struct dasd_device *device,
 	}
 	cqr = dasd_smalloc_request(DASD_ECKD_MAGIC, 1 /* RCD */,
 				   0, /* use rcd_buf as data ara */
-				   device, NULL);
+				   device);
 	if (IS_ERR(cqr)) {
 		DBF_DEV_EVENT(DBF_WARNING, device, "%s",
 			      "Could not allocate RCD request");
@@ -994,7 +990,7 @@ static int dasd_eckd_read_conf(struct dasd_device *device)
 	struct dasd_eckd_private *private, path_private;
 	struct dasd_uid *uid;
 	char print_path_uid[60], print_device_uid[60];
-	struct channel_path_desc_fmt0 *chp_desc;
+	struct channel_path_desc *chp_desc;
 	struct subchannel_id sch_id;
 
 	private = device->private;
@@ -1442,7 +1438,7 @@ static int dasd_eckd_read_features(struct dasd_device *device)
 	cqr = dasd_smalloc_request(DASD_ECKD_MAGIC, 1 /* PSF */	+ 1 /* RSSD */,
 				   (sizeof(struct dasd_psf_prssd_data) +
 				    sizeof(struct dasd_rssd_features)),
-				   device, NULL);
+				   device);
 	if (IS_ERR(cqr)) {
 		DBF_EVENT_DEVID(DBF_WARNING, device->cdev, "%s", "Could not "
 				"allocate initialization request");
@@ -1504,7 +1500,7 @@ static struct dasd_ccw_req *dasd_eckd_build_psf_ssc(struct dasd_device *device,
 
 	cqr = dasd_smalloc_request(DASD_ECKD_MAGIC, 1 /* PSF */ ,
 				  sizeof(struct dasd_psf_ssc_data),
-				   device, NULL);
+				  device);
 
 	if (IS_ERR(cqr)) {
 		DBF_DEV_EVENT(DBF_WARNING, device, "%s",
@@ -1780,9 +1776,6 @@ static void dasd_eckd_uncheck_device(struct dasd_device *device)
 	struct dasd_eckd_private *private = device->private;
 	int i;
 
-	if (!private)
-		return;
-
 	dasd_alias_disconnect_device_from_lcu(device);
 	private->ned = NULL;
 	private->sneq = NULL;
@@ -1818,8 +1811,7 @@ dasd_eckd_analysis_ccw(struct dasd_device *device)
 
 	cplength = 8;
 	datasize = sizeof(struct DE_eckd_data) + 2*sizeof(struct LO_eckd_data);
-	cqr = dasd_smalloc_request(DASD_ECKD_MAGIC, cplength, datasize, device,
-				   NULL);
+	cqr = dasd_smalloc_request(DASD_ECKD_MAGIC, cplength, datasize, device);
 	if (IS_ERR(cqr))
 		return cqr;
 	ccw = cqr->cpaddr;
@@ -2038,11 +2030,8 @@ static int dasd_eckd_basic_to_ready(struct dasd_device *device)
 
 static int dasd_eckd_online_to_ready(struct dasd_device *device)
 {
-	if (cancel_work_sync(&device->reload_device))
-		dasd_put_device(device);
-	if (cancel_work_sync(&device->kick_validate))
-		dasd_put_device(device);
-
+	cancel_work_sync(&device->reload_device);
+	cancel_work_sync(&device->kick_validate);
 	return 0;
 };
 
@@ -2099,8 +2088,7 @@ dasd_eckd_build_check_tcw(struct dasd_device *base, struct format_data_t *fdata,
 	 */
 	itcw_size = itcw_calc_size(0, count, 0);
 
-	cqr = dasd_smalloc_request(DASD_ECKD_MAGIC, 0, itcw_size, startdev,
-				   NULL);
+	cqr = dasd_smalloc_request(DASD_ECKD_MAGIC, 0, itcw_size, startdev);
 	if (IS_ERR(cqr))
 		return cqr;
 
@@ -2194,7 +2182,7 @@ dasd_eckd_build_check(struct dasd_device *base, struct format_data_t *fdata,
 	cplength += count;
 
 	cqr = dasd_smalloc_request(DASD_ECKD_MAGIC, cplength, datasize,
-				   startdev, NULL);
+				  startdev);
 	if (IS_ERR(cqr))
 		return cqr;
 
@@ -2340,7 +2328,7 @@ dasd_eckd_build_format(struct dasd_device *base,
 	}
 	/* Allocate the format ccw request. */
 	fcp = dasd_smalloc_request(DASD_ECKD_MAGIC, cplength,
-				   datasize, startdev, NULL);
+				   datasize, startdev);
 	if (IS_ERR(fcp))
 		return fcp;
 
@@ -3111,7 +3099,7 @@ static struct dasd_ccw_req *dasd_eckd_build_cp_cmd_single(
 	}
 	/* Allocate the ccw request. */
 	cqr = dasd_smalloc_request(DASD_ECKD_MAGIC, cplength, datasize,
-				   startdev, blk_mq_rq_to_pdu(req));
+				   startdev);
 	if (IS_ERR(cqr))
 		return cqr;
 	ccw = cqr->cpaddr;
@@ -3270,7 +3258,7 @@ static struct dasd_ccw_req *dasd_eckd_build_cp_cmd_track(
 
 	/* Allocate the ccw request. */
 	cqr = dasd_smalloc_request(DASD_ECKD_MAGIC, cplength, datasize,
-				   startdev, blk_mq_rq_to_pdu(req));
+				   startdev);
 	if (IS_ERR(cqr))
 		return cqr;
 	ccw = cqr->cpaddr;
@@ -3426,12 +3414,10 @@ static int prepare_itcw(struct itcw *itcw,
 	pfxdata.validity.define_extent = 1;
 
 	/* private uid is kept up to date, conf_data may be outdated */
-	if (startpriv->uid.type == UA_BASE_PAV_ALIAS)
+	if (startpriv->uid.type != UA_BASE_DEVICE) {
 		pfxdata.validity.verify_base = 1;
-
-	if (startpriv->uid.type == UA_HYPER_PAV_ALIAS) {
-		pfxdata.validity.verify_base = 1;
-		pfxdata.validity.hyper_pav = 1;
+		if (startpriv->uid.type == UA_HYPER_PAV_ALIAS)
+			pfxdata.validity.hyper_pav = 1;
 	}
 
 	switch (cmd) {
@@ -3449,7 +3435,7 @@ static int prepare_itcw(struct itcw *itcw,
 		dedata->mask.perm = 0x02;
 		dedata->attributes.operation = basepriv->attrib.operation;
 		dedata->blk_size = blksize;
-		rc = set_timestamp(NULL, dedata, basedev);
+		rc = check_XRC(NULL, dedata, basedev);
 		dedata->ga_extended |= 0x42;
 		lredata->operation.orientation = 0x0;
 		lredata->operation.operation = 0x3F;
@@ -3541,7 +3527,7 @@ static int prepare_itcw(struct itcw *itcw,
 
 	dcw = itcw_add_dcw(itcw, pfx_cmd, 0,
 		     &pfxdata, sizeof(pfxdata), total_data_size);
-	return PTR_ERR_OR_ZERO(dcw);
+	return PTR_RET(dcw);
 }
 
 static struct dasd_ccw_req *dasd_eckd_build_cp_tpm_track(
@@ -3603,8 +3589,7 @@ static struct dasd_ccw_req *dasd_eckd_build_cp_tpm_track(
 
 	/* Allocate the ccw request. */
 	itcw_size = itcw_calc_size(0, ctidaw, 0);
-	cqr = dasd_smalloc_request(DASD_ECKD_MAGIC, 0, itcw_size, startdev,
-				   blk_mq_rq_to_pdu(req));
+	cqr = dasd_smalloc_request(DASD_ECKD_MAGIC, 0, itcw_size, startdev);
 	if (IS_ERR(cqr))
 		return cqr;
 
@@ -3871,7 +3856,7 @@ static struct dasd_ccw_req *dasd_eckd_build_cp_raw(struct dasd_device *startdev,
 
 	/* Allocate the ccw request. */
 	cqr = dasd_smalloc_request(DASD_ECKD_MAGIC, cplength,
-				   datasize, startdev, blk_mq_rq_to_pdu(req));
+				   datasize, startdev);
 	if (IS_ERR(cqr))
 		return cqr;
 
@@ -4111,7 +4096,7 @@ dasd_eckd_release(struct dasd_device *device)
 		return -EACCES;
 
 	useglobal = 0;
-	cqr = dasd_smalloc_request(DASD_ECKD_MAGIC, 1, 32, device, NULL);
+	cqr = dasd_smalloc_request(DASD_ECKD_MAGIC, 1, 32, device);
 	if (IS_ERR(cqr)) {
 		mutex_lock(&dasd_reserve_mutex);
 		useglobal = 1;
@@ -4166,7 +4151,7 @@ dasd_eckd_reserve(struct dasd_device *device)
 		return -EACCES;
 
 	useglobal = 0;
-	cqr = dasd_smalloc_request(DASD_ECKD_MAGIC, 1, 32, device, NULL);
+	cqr = dasd_smalloc_request(DASD_ECKD_MAGIC, 1, 32, device);
 	if (IS_ERR(cqr)) {
 		mutex_lock(&dasd_reserve_mutex);
 		useglobal = 1;
@@ -4220,7 +4205,7 @@ dasd_eckd_steal_lock(struct dasd_device *device)
 		return -EACCES;
 
 	useglobal = 0;
-	cqr = dasd_smalloc_request(DASD_ECKD_MAGIC, 1, 32, device, NULL);
+	cqr = dasd_smalloc_request(DASD_ECKD_MAGIC, 1, 32, device);
 	if (IS_ERR(cqr)) {
 		mutex_lock(&dasd_reserve_mutex);
 		useglobal = 1;
@@ -4280,8 +4265,7 @@ static int dasd_eckd_snid(struct dasd_device *device,
 
 	useglobal = 0;
 	cqr = dasd_smalloc_request(DASD_ECKD_MAGIC, 1,
-				   sizeof(struct dasd_snid_data), device,
-				   NULL);
+				   sizeof(struct dasd_snid_data), device);
 	if (IS_ERR(cqr)) {
 		mutex_lock(&dasd_reserve_mutex);
 		useglobal = 1;
@@ -4341,7 +4325,7 @@ dasd_eckd_performance(struct dasd_device *device, void __user *argp)
 	cqr = dasd_smalloc_request(DASD_ECKD_MAGIC, 1 /* PSF */  + 1 /* RSSD */,
 				   (sizeof(struct dasd_psf_prssd_data) +
 				    sizeof(struct dasd_rssd_perf_stats_t)),
-				   device, NULL);
+				   device);
 	if (IS_ERR(cqr)) {
 		DBF_DEV_EVENT(DBF_WARNING, device, "%s",
 			    "Could not allocate initialization request");
@@ -4487,7 +4471,7 @@ static int dasd_symm_io(struct dasd_device *device, void __user *argp)
 	psf1 = psf_data[1];
 
 	/* setup CCWs for PSF + RSSD */
-	cqr = dasd_smalloc_request(DASD_ECKD_MAGIC, 2, 0, device, NULL);
+	cqr = dasd_smalloc_request(DASD_ECKD_MAGIC, 2 , 0, device);
 	if (IS_ERR(cqr)) {
 		DBF_DEV_EVENT(DBF_WARNING, device, "%s",
 			"Could not allocate initialization request");
@@ -5047,7 +5031,7 @@ static int dasd_eckd_read_message_buffer(struct dasd_device *device,
 	cqr = dasd_smalloc_request(DASD_ECKD_MAGIC, 1 /* PSF */	+ 1 /* RSSD */,
 				   (sizeof(struct dasd_psf_prssd_data) +
 				    sizeof(struct dasd_rssd_messages)),
-				   device, NULL);
+				   device);
 	if (IS_ERR(cqr)) {
 		DBF_EVENT_DEVID(DBF_WARNING, device->cdev, "%s",
 				"Could not allocate read message buffer request");
@@ -5136,7 +5120,7 @@ static int dasd_eckd_query_host_access(struct dasd_device *device,
 
 	cqr = dasd_smalloc_request(DASD_ECKD_MAGIC, 1 /* PSF */	+ 1 /* RSSD */,
 				   sizeof(struct dasd_psf_prssd_data) + 1,
-				   device, NULL);
+				   device);
 	if (IS_ERR(cqr)) {
 		DBF_EVENT_DEVID(DBF_WARNING, device->cdev, "%s",
 				"Could not allocate read message buffer request");
@@ -5242,7 +5226,7 @@ static int dasd_hosts_print(struct dasd_device *device, struct seq_file *m)
 	struct dasd_ckd_path_group_entry *entry;
 	struct dasd_ckd_host_information *info;
 	char sysplex[9] = "";
-	int rc, i;
+	int rc, i, j;
 
 	access = kzalloc(sizeof(*access), GFP_NOIO);
 	if (!access) {
@@ -5262,7 +5246,10 @@ static int dasd_hosts_print(struct dasd_device *device, struct seq_file *m)
 		entry = (struct dasd_ckd_path_group_entry *)
 			(info->entry + i * info->entry_size);
 		/* PGID */
-		seq_printf(m, "pgid %*phN\n", 11, entry->pgid);
+		seq_puts(m, "pgid ");
+		for (j = 0; j < 11; j++)
+			seq_printf(m, "%02x", entry->pgid[j]);
+		seq_putc(m, '\n');
 		/* FLAGS */
 		seq_printf(m, "status_flags %02x\n", entry->status_flags);
 		/* SYSPLEX NAME */
@@ -5294,8 +5281,8 @@ dasd_eckd_psf_cuir_response(struct dasd_device *device, int response,
 	int rc;
 
 	cqr = dasd_smalloc_request(DASD_ECKD_MAGIC, 1 /* PSF */ ,
-				   sizeof(struct dasd_psf_cuir_response),
-				   device, NULL);
+				  sizeof(struct dasd_psf_cuir_response),
+				  device);
 
 	if (IS_ERR(cqr)) {
 		DBF_DEV_EVENT(DBF_WARNING, device, "%s",

@@ -65,7 +65,6 @@ struct bcsp_struct {
 	u8	rxseq_txack;		/* rxseq == txack. */
 	u8	rxack;			/* Last packet sent by us that the peer ack'ed */
 	struct	timer_list tbcsp;
-	struct	hci_uart *hu;
 
 	enum {
 		BCSP_W4_PKT_DELIMITER,
@@ -698,10 +697,10 @@ static int bcsp_recv(struct hci_uart *hu, const void *data, int count)
 }
 
 	/* Arrange to retransmit all messages in the relq. */
-static void bcsp_timed_event(struct timer_list *t)
+static void bcsp_timed_event(unsigned long arg)
 {
-	struct bcsp_struct *bcsp = from_timer(bcsp, t, tbcsp);
-	struct hci_uart *hu = bcsp->hu;
+	struct hci_uart *hu = (struct hci_uart *)arg;
+	struct bcsp_struct *bcsp = hu->priv;
 	struct sk_buff *skb;
 	unsigned long flags;
 
@@ -730,12 +729,11 @@ static int bcsp_open(struct hci_uart *hu)
 		return -ENOMEM;
 
 	hu->priv = bcsp;
-	bcsp->hu = hu;
 	skb_queue_head_init(&bcsp->unack);
 	skb_queue_head_init(&bcsp->rel);
 	skb_queue_head_init(&bcsp->unrel);
 
-	timer_setup(&bcsp->tbcsp, bcsp_timed_event, 0);
+	setup_timer(&bcsp->tbcsp, bcsp_timed_event, (u_long)hu);
 
 	bcsp->rx_state = BCSP_W4_PKT_DELIMITER;
 

@@ -211,7 +211,7 @@ static void int3400_notify(acpi_handle handle,
 				thermal_prop);
 		break;
 	default:
-		/* Ignore unknown notification codes sent to INT3400 device */
+		dev_err(&priv->adev->dev, "Unsupported event [0x%x]\n", event);
 		break;
 	}
 }
@@ -319,21 +319,17 @@ static int int3400_thermal_probe(struct platform_device *pdev)
 
 	result = sysfs_create_group(&pdev->dev.kobj, &uuid_attribute_group);
 	if (result)
-		goto free_rel_misc;
+		goto free_zone;
 
 	result = acpi_install_notify_handler(
 			priv->adev->handle, ACPI_DEVICE_NOTIFY, int3400_notify,
 			(void *)priv);
 	if (result)
-		goto free_sysfs;
+		goto free_zone;
 
 	return 0;
 
-free_sysfs:
-	sysfs_remove_group(&pdev->dev.kobj, &uuid_attribute_group);
-free_rel_misc:
-	if (!priv->rel_misc_dev_res)
-		acpi_thermal_rel_misc_device_remove(priv->adev->handle);
+free_zone:
 	thermal_zone_device_unregister(priv->thermal);
 free_art_trt:
 	kfree(priv->trts);

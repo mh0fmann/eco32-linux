@@ -249,7 +249,6 @@ static void pwm_export_release(struct device *child)
 static int pwm_export_child(struct device *parent, struct pwm_device *pwm)
 {
 	struct pwm_export *export;
-	char *pwm_prop[2];
 	int ret;
 
 	if (test_and_set_bit(PWMF_EXPORTED, &pwm->flags))
@@ -273,14 +272,9 @@ static int pwm_export_child(struct device *parent, struct pwm_device *pwm)
 	ret = device_register(&export->child);
 	if (ret) {
 		clear_bit(PWMF_EXPORTED, &pwm->flags);
-		put_device(&export->child);
-		export = NULL;
+		kfree(export);
 		return ret;
 	}
-	pwm_prop[0] = kasprintf(GFP_KERNEL, "EXPORT=pwm%u", pwm->hwpwm);
-	pwm_prop[1] = NULL;
-	kobject_uevent_env(&parent->kobj, KOBJ_CHANGE, pwm_prop);
-	kfree(pwm_prop[0]);
 
 	return 0;
 }
@@ -293,7 +287,6 @@ static int pwm_unexport_match(struct device *child, void *data)
 static int pwm_unexport_child(struct device *parent, struct pwm_device *pwm)
 {
 	struct device *child;
-	char *pwm_prop[2];
 
 	if (!test_and_clear_bit(PWMF_EXPORTED, &pwm->flags))
 		return -ENODEV;
@@ -301,11 +294,6 @@ static int pwm_unexport_child(struct device *parent, struct pwm_device *pwm)
 	child = device_find_child(parent, pwm, pwm_unexport_match);
 	if (!child)
 		return -ENODEV;
-
-	pwm_prop[0] = kasprintf(GFP_KERNEL, "UNEXPORT=pwm%u", pwm->hwpwm);
-	pwm_prop[1] = NULL;
-	kobject_uevent_env(&parent->kobj, KOBJ_CHANGE, pwm_prop);
-	kfree(pwm_prop[0]);
 
 	/* for device_find_child() */
 	put_device(child);

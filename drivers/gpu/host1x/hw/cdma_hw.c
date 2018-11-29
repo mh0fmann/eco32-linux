@@ -172,30 +172,6 @@ static void cdma_stop(struct host1x_cdma *cdma)
 	mutex_unlock(&cdma->lock);
 }
 
-static void cdma_hw_cmdproc_stop(struct host1x *host, struct host1x_channel *ch,
-				 bool stop)
-{
-#if HOST1X_HW >= 6
-	host1x_ch_writel(ch, stop ? 0x1 : 0x0, HOST1X_CHANNEL_CMDPROC_STOP);
-#else
-	u32 cmdproc_stop = host1x_sync_readl(host, HOST1X_SYNC_CMDPROC_STOP);
-	if (stop)
-		cmdproc_stop |= BIT(ch->id);
-	else
-		cmdproc_stop &= ~BIT(ch->id);
-	host1x_sync_writel(host, cmdproc_stop, HOST1X_SYNC_CMDPROC_STOP);
-#endif
-}
-
-static void cdma_hw_teardown(struct host1x *host, struct host1x_channel *ch)
-{
-#if HOST1X_HW >= 6
-	host1x_ch_writel(ch, 0x1, HOST1X_CHANNEL_TEARDOWN);
-#else
-	host1x_sync_writel(host, BIT(ch->id), HOST1X_SYNC_CH_TEARDOWN);
-#endif
-}
-
 /*
  * Stops both channel's command processor and CDMA immediately.
  * Also, tears down the channel and resets corresponding module.
@@ -204,6 +180,7 @@ static void cdma_freeze(struct host1x_cdma *cdma)
 {
 	struct host1x *host = cdma_to_host1x(cdma);
 	struct host1x_channel *ch = cdma_to_channel(cdma);
+	u32 cmdproc_stop;
 
 	if (cdma->torndown && !cdma->running) {
 		dev_warn(host->dev, "Already torn down\n");
@@ -212,7 +189,9 @@ static void cdma_freeze(struct host1x_cdma *cdma)
 
 	dev_dbg(host->dev, "freezing channel (id %d)\n", ch->id);
 
-	cdma_hw_cmdproc_stop(host, ch, true);
+	cmdproc_stop = host1x_sync_readl(host, HOST1X_SYNC_CMDPROC_STOP);
+	cmdproc_stop |= BIT(ch->id);
+	host1x_sync_writel(host, cmdproc_stop, HOST1X_SYNC_CMDPROC_STOP);
 
 	dev_dbg(host->dev, "%s: DMA GET 0x%x, PUT HW 0x%x / shadow 0x%x\n",
 		__func__, host1x_ch_readl(ch, HOST1X_CHANNEL_DMAGET),
@@ -222,7 +201,7 @@ static void cdma_freeze(struct host1x_cdma *cdma)
 	host1x_ch_writel(ch, HOST1X_CHANNEL_DMACTRL_DMASTOP,
 			 HOST1X_CHANNEL_DMACTRL);
 
-	cdma_hw_teardown(host, ch);
+	host1x_sync_writel(host, BIT(ch->id), HOST1X_SYNC_CH_TEARDOWN);
 
 	cdma->running = false;
 	cdma->torndown = true;
@@ -232,12 +211,15 @@ static void cdma_resume(struct host1x_cdma *cdma, u32 getptr)
 {
 	struct host1x *host1x = cdma_to_host1x(cdma);
 	struct host1x_channel *ch = cdma_to_channel(cdma);
+	u32 cmdproc_stop;
 
 	dev_dbg(host1x->dev,
 		"resuming channel (id %u, DMAGET restart = 0x%x)\n",
 		ch->id, getptr);
 
-	cdma_hw_cmdproc_stop(host1x, ch, false);
+	cmdproc_stop = host1x_sync_readl(host1x, HOST1X_SYNC_CMDPROC_STOP);
+	cmdproc_stop &= ~BIT(ch->id);
+	host1x_sync_writel(host1x, cmdproc_stop, HOST1X_SYNC_CMDPROC_STOP);
 
 	cdma->torndown = false;
 	cdma_timeout_restart(cdma, getptr);
@@ -250,7 +232,7 @@ static void cdma_resume(struct host1x_cdma *cdma, u32 getptr)
  */
 static void cdma_timeout_handler(struct work_struct *work)
 {
-	u32 syncpt_val;
+	u32 prev_cmdproc, cmdproc_stop, syncpt_val;
 	struct host1x_cdma *cdma;
 	struct host1x *host1x;
 	struct host1x_channel *ch;
@@ -272,7 +254,12 @@ static void cdma_timeout_handler(struct work_struct *work)
 	}
 
 	/* stop processing to get a clean snapshot */
-	cdma_hw_cmdproc_stop(host1x, ch, true);
+	prev_cmdproc = host1x_sync_readl(host1x, HOST1X_SYNC_CMDPROC_STOP);
+	cmdproc_stop = prev_cmdproc | BIT(ch->id);
+	host1x_sync_writel(host1x, cmdproc_stop, HOST1X_SYNC_CMDPROC_STOP);
+
+	dev_dbg(host1x->dev, "cdma_timeout: cmdproc was 0x%x is 0x%x\n",
+		prev_cmdproc, cmdproc_stop);
 
 	syncpt_val = host1x_syncpt_load(cdma->timeout.syncpt);
 
@@ -281,7 +268,9 @@ static void cdma_timeout_handler(struct work_struct *work)
 		dev_dbg(host1x->dev,
 			"cdma_timeout: expired, but buffer had completed\n");
 		/* restore */
-		cdma_hw_cmdproc_stop(host1x, ch, false);
+		cmdproc_stop = prev_cmdproc & ~(BIT(ch->id));
+		host1x_sync_writel(host1x, cmdproc_stop,
+				   HOST1X_SYNC_CMDPROC_STOP);
 		mutex_unlock(&cdma->lock);
 		return;
 	}

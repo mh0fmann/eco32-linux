@@ -25,7 +25,7 @@
 /**
  * process_vm_rw_pages - read/write pages from task specified
  * @pages: array of pointers to pages we want to copy
- * @offset: offset in page to start copying from/to
+ * @start_offset: offset in page to start copying from/to
  * @len: number of bytes to copy
  * @iter: where to copy to/from locally
  * @vm_write: 0 means copy from, 1 means copy to
@@ -147,7 +147,6 @@ static int process_vm_rw_single_vec(unsigned long addr,
  * @riovcnt: size of rvec array
  * @flags: currently unused
  * @vm_write: 0 if reading from other process, 1 if writing to other process
- *
  * Returns the number of bytes read/written or error code. May
  *  return less bytes than expected if an error occurs during the copying
  *  process.
@@ -198,7 +197,11 @@ static ssize_t process_vm_rw_core(pid_t pid, struct iov_iter *iter,
 	}
 
 	/* Get process information */
-	task = find_get_task_by_vpid(pid);
+	rcu_read_lock();
+	task = find_task_by_vpid(pid);
+	if (task)
+		get_task_struct(task);
+	rcu_read_unlock();
 	if (!task) {
 		rc = -ESRCH;
 		goto free_proc_pages;
@@ -250,7 +253,6 @@ free_proc_pages:
  * @riovcnt: size of rvec array
  * @flags: currently unused
  * @vm_write: 0 if reading from other process, 1 if writing to other process
- *
  * Returns the number of bytes read/written or error code. May
  *  return less bytes than expected if an error occurs during the copying
  *  process.

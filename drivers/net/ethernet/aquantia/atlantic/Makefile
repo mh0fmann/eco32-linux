@@ -39,5 +39,4 @@ atlantic-objs := aq_main.o \
 	hw_atl/hw_atl_a0.o \
 	hw_atl/hw_atl_b0.o \
 	hw_atl/hw_atl_utils.o \
-	hw_atl/hw_atl_utils_fw2x.o \
 	hw_atl/hw_atl_llh.o

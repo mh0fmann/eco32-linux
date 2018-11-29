@@ -57,6 +57,8 @@ static const char * const gcc_xo_gpll0_gpll4[] = {
 	"gpll4",
 };
 
+#define F(f, s, h, m, n) { (f), (s), (2 * (h) - 1), (m), (n) }
+
 static struct clk_fixed_factor xo = {
 	.mult = 1,
 	.div = 1,
@@ -71,7 +73,6 @@ static struct clk_fixed_factor xo = {
 
 static struct clk_alpha_pll gpll0_early = {
 	.offset = 0x00000,
-	.regs = clk_alpha_pll_regs[CLK_ALPHA_PLL_TYPE_DEFAULT],
 	.clkr = {
 		.enable_reg = 0x1480,
 		.enable_mask = BIT(0),
@@ -87,7 +88,6 @@ static struct clk_alpha_pll gpll0_early = {
 
 static struct clk_alpha_pll_postdiv gpll0 = {
 	.offset = 0x00000,
-	.regs = clk_alpha_pll_regs[CLK_ALPHA_PLL_TYPE_DEFAULT],
 	.clkr.hw.init = &(struct clk_init_data)
 	{
 		.name = "gpll0",
@@ -99,7 +99,6 @@ static struct clk_alpha_pll_postdiv gpll0 = {
 
 static struct clk_alpha_pll gpll4_early = {
 	.offset = 0x1dc0,
-	.regs = clk_alpha_pll_regs[CLK_ALPHA_PLL_TYPE_DEFAULT],
 	.clkr = {
 		.enable_reg = 0x1480,
 		.enable_mask = BIT(4),
@@ -115,7 +114,6 @@ static struct clk_alpha_pll gpll4_early = {
 
 static struct clk_alpha_pll_postdiv gpll4 = {
 	.offset = 0x1dc0,
-	.regs = clk_alpha_pll_regs[CLK_ALPHA_PLL_TYPE_DEFAULT],
 	.clkr.hw.init = &(struct clk_init_data)
 	{
 		.name = "gpll4",

@@ -30,10 +30,11 @@
 #if !defined(CONFIG_GENERIC_LOCKBREAK) || defined(CONFIG_DEBUG_LOCK_ALLOC)
 /*
  * The __lock_function inlines are taken from
- * spinlock : include/linux/spinlock_api_smp.h
- * rwlock   : include/linux/rwlock_api_smp.h
+ * include/linux/spinlock_api_smp.h
  */
 #else
+#define raw_read_can_lock(l)	read_can_lock(l)
+#define raw_write_can_lock(l)	write_can_lock(l)
 
 /*
  * Some architectures can relax in favour of the CPU owning the lock.
@@ -66,8 +67,12 @@ void __lockfunc __raw_##op##_lock(locktype##_t *lock)			\
 			break;						\
 		preempt_enable();					\
 									\
-		arch_##op##_relax(&lock->raw_lock);			\
+		if (!(lock)->break_lock)				\
+			(lock)->break_lock = 1;				\
+		while (!raw_##op##_can_lock(lock) && (lock)->break_lock)\
+			arch_##op##_relax(&lock->raw_lock);		\
 	}								\
+	(lock)->break_lock = 0;						\
 }									\
 									\
 unsigned long __lockfunc __raw_##op##_lock_irqsave(locktype##_t *lock)	\
@@ -82,9 +87,12 @@ unsigned long __lockfunc __raw_##op##_lock_irqsave(locktype##_t *lock)	\
 		local_irq_restore(flags);				\
 		preempt_enable();					\
 									\
-		arch_##op##_relax(&lock->raw_lock);			\
+		if (!(lock)->break_lock)				\
+			(lock)->break_lock = 1;				\
+		while (!raw_##op##_can_lock(lock) && (lock)->break_lock)\
+			arch_##op##_relax(&lock->raw_lock);		\
 	}								\
-									\
+	(lock)->break_lock = 0;						\
 	return flags;							\
 }									\
 									\

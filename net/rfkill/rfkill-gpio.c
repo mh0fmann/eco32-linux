@@ -20,7 +20,6 @@
 #include <linux/init.h>
 #include <linux/kernel.h>
 #include <linux/module.h>
-#include <linux/mod_devicetable.h>
 #include <linux/rfkill.h>
 #include <linux/platform_device.h>
 #include <linux/clk.h>
@@ -138,18 +137,13 @@ static int rfkill_gpio_probe(struct platform_device *pdev)
 
 	ret = rfkill_register(rfkill->rfkill_dev);
 	if (ret < 0)
-		goto err_destroy;
+		return ret;
 
 	platform_set_drvdata(pdev, rfkill);
 
 	dev_info(&pdev->dev, "%s device registered.\n", rfkill->name);
 
 	return 0;
-
-err_destroy:
-	rfkill_destroy(rfkill->rfkill_dev);
-
-	return ret;
 }
 
 static int rfkill_gpio_remove(struct platform_device *pdev)

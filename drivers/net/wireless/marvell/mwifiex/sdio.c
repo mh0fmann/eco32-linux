@@ -181,13 +181,13 @@ static int mwifiex_sdio_resume(struct device *dev)
 
 	adapter = card->adapter;
 
-	if (test_bit(MWIFIEX_IS_SUSPENDED, &adapter->work_flags)) {
+	if (!adapter->is_suspended) {
 		mwifiex_dbg(adapter, WARN,
 			    "device already resumed\n");
 		return 0;
 	}
 
-	clear_bit(MWIFIEX_IS_SUSPENDED, &adapter->work_flags);
+	adapter->is_suspended = false;
 
 	/* Disable Host Sleep */
 	mwifiex_cancel_hs(mwifiex_get_priv(adapter, MWIFIEX_BSS_ROLE_STA),
@@ -260,7 +260,7 @@ mwifiex_write_data_sync(struct mwifiex_adapter *adapter,
 				MWIFIEX_SDIO_BLOCK_SIZE) : pkt_len;
 	u32 ioport = (port & MWIFIEX_SDIO_IO_PORT_MASK);
 
-	if (test_bit(MWIFIEX_IS_SUSPENDED, &adapter->work_flags)) {
+	if (adapter->is_suspended) {
 		mwifiex_dbg(adapter, ERROR,
 			    "%s: not allowed while suspended\n", __func__);
 		return -1;
@@ -450,7 +450,7 @@ static int mwifiex_sdio_suspend(struct device *dev)
 	if (!mwifiex_enable_hs(adapter)) {
 		mwifiex_dbg(adapter, ERROR,
 			    "cmd: failed to suspend\n");
-		clear_bit(MWIFIEX_IS_HS_ENABLING, &adapter->work_flags);
+		adapter->hs_enabling = false;
 		mwifiex_disable_wake(adapter);
 		return -EFAULT;
 	}
@@ -460,21 +460,10 @@ static int mwifiex_sdio_suspend(struct device *dev)
 	ret = sdio_set_host_pm_flags(func, MMC_PM_KEEP_POWER);
 
 	/* Indicate device suspended */
-	set_bit(MWIFIEX_IS_SUSPENDED, &adapter->work_flags);
-	clear_bit(MWIFIEX_IS_HS_ENABLING, &adapter->work_flags);
+	adapter->is_suspended = true;
+	adapter->hs_enabling = false;
 
 	return ret;
-}
-
-static void mwifiex_sdio_coredump(struct device *dev)
-{
-	struct sdio_func *func = dev_to_sdio_func(dev);
-	struct sdio_mmc_card *card;
-
-	card = sdio_get_drvdata(func);
-	if (!test_and_set_bit(MWIFIEX_IFACE_WORK_DEVICE_DUMP,
-			      &card->work_flags))
-		schedule_work(&card->work);
 }
 
 /* Device ID for SD8786 */
@@ -526,7 +515,6 @@ static struct sdio_driver mwifiex_sdio = {
 	.remove = mwifiex_sdio_remove,
 	.drv = {
 		.owner = THIS_MODULE,
-		.coredump = mwifiex_sdio_coredump,
 		.pm = &mwifiex_sdio_pm_ops,
 	}
 };
@@ -2106,16 +2094,15 @@ static int mwifiex_init_sdio(struct mwifiex_adapter *adapter)
 		return -ENOMEM;
 
 	/* Allocate skb pointer buffers */
-	card->mpa_rx.skb_arr = kcalloc(card->mp_agg_pkt_limit, sizeof(void *),
-				       GFP_KERNEL);
+	card->mpa_rx.skb_arr = kzalloc((sizeof(void *)) *
+				       card->mp_agg_pkt_limit, GFP_KERNEL);
 	if (!card->mpa_rx.skb_arr) {
 		kfree(card->mp_regs);
 		return -ENOMEM;
 	}
 
-	card->mpa_rx.len_arr = kcalloc(card->mp_agg_pkt_limit,
-				       sizeof(*card->mpa_rx.len_arr),
-				       GFP_KERNEL);
+	card->mpa_rx.len_arr = kzalloc(sizeof(*card->mpa_rx.len_arr) *
+				       card->mp_agg_pkt_limit, GFP_KERNEL);
 	if (!card->mpa_rx.len_arr) {
 		kfree(card->mp_regs);
 		kfree(card->mpa_rx.skb_arr);
@@ -2518,21 +2505,15 @@ done:
 static void mwifiex_sdio_device_dump_work(struct mwifiex_adapter *adapter)
 {
 	struct sdio_mmc_card *card = adapter->card;
+	int drv_info_size;
+	void *drv_info;
 
-	adapter->devdump_data = vzalloc(MWIFIEX_FW_DUMP_SIZE);
-	if (!adapter->devdump_data) {
-		mwifiex_dbg(adapter, ERROR,
-			    "vzalloc devdump data failure!\n");
-		return;
-	}
-
-	mwifiex_drv_info_dump(adapter);
+	drv_info_size = mwifiex_drv_info_dump(adapter, &drv_info);
 	if (card->fw_dump_enh)
 		mwifiex_sdio_generic_fw_dump(adapter);
 	else
 		mwifiex_sdio_fw_dump(adapter);
-	mwifiex_prepare_fw_dump_info(adapter);
-	mwifiex_upload_device_dump(adapter);
+	mwifiex_upload_device_dump(adapter, drv_info, drv_info_size);
 }
 
 static void mwifiex_sdio_work(struct work_struct *work)

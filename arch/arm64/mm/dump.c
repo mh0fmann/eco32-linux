@@ -36,8 +36,8 @@ static const struct addr_marker address_markers[] = {
 #endif
 	{ MODULES_VADDR,		"Modules start" },
 	{ MODULES_END,			"Modules end" },
-	{ VMALLOC_START,		"vmalloc() area" },
-	{ VMALLOC_END,			"vmalloc() end" },
+	{ VMALLOC_START,		"vmalloc() Area" },
+	{ VMALLOC_END,			"vmalloc() End" },
 	{ FIXADDR_START,		"Fixmap start" },
 	{ FIXADDR_TOP,			"Fixmap end" },
 	{ PCI_IO_START,			"PCI I/O start" },
@@ -46,7 +46,7 @@ static const struct addr_marker address_markers[] = {
 	{ VMEMMAP_START,		"vmemmap start" },
 	{ VMEMMAP_START + VMEMMAP_SIZE,	"vmemmap end" },
 #endif
-	{ PAGE_OFFSET,			"Linear mapping" },
+	{ PAGE_OFFSET,			"Linear Mapping" },
 	{ -1,				NULL },
 };
 
@@ -286,52 +286,48 @@ static void note_page(struct pg_state *st, unsigned long addr, unsigned level,
 
 }
 
-static void walk_pte(struct pg_state *st, pmd_t *pmdp, unsigned long start)
+static void walk_pte(struct pg_state *st, pmd_t *pmd, unsigned long start)
 {
-	pte_t *ptep = pte_offset_kernel(pmdp, 0UL);
+	pte_t *pte = pte_offset_kernel(pmd, 0UL);
 	unsigned long addr;
 	unsigned i;
 
-	for (i = 0; i < PTRS_PER_PTE; i++, ptep++) {
+	for (i = 0; i < PTRS_PER_PTE; i++, pte++) {
 		addr = start + i * PAGE_SIZE;
-		note_page(st, addr, 4, READ_ONCE(pte_val(*ptep)));
+		note_page(st, addr, 4, pte_val(*pte));
 	}
 }
 
-static void walk_pmd(struct pg_state *st, pud_t *pudp, unsigned long start)
+static void walk_pmd(struct pg_state *st, pud_t *pud, unsigned long start)
 {
-	pmd_t *pmdp = pmd_offset(pudp, 0UL);
+	pmd_t *pmd = pmd_offset(pud, 0UL);
 	unsigned long addr;
 	unsigned i;
 
-	for (i = 0; i < PTRS_PER_PMD; i++, pmdp++) {
-		pmd_t pmd = READ_ONCE(*pmdp);
-
+	for (i = 0; i < PTRS_PER_PMD; i++, pmd++) {
 		addr = start + i * PMD_SIZE;
-		if (pmd_none(pmd) || pmd_sect(pmd)) {
-			note_page(st, addr, 3, pmd_val(pmd));
+		if (pmd_none(*pmd) || pmd_sect(*pmd)) {
+			note_page(st, addr, 3, pmd_val(*pmd));
 		} else {
-			BUG_ON(pmd_bad(pmd));
-			walk_pte(st, pmdp, addr);
+			BUG_ON(pmd_bad(*pmd));
+			walk_pte(st, pmd, addr);
 		}
 	}
 }
 
-static void walk_pud(struct pg_state *st, pgd_t *pgdp, unsigned long start)
+static void walk_pud(struct pg_state *st, pgd_t *pgd, unsigned long start)
 {
-	pud_t *pudp = pud_offset(pgdp, 0UL);
+	pud_t *pud = pud_offset(pgd, 0UL);
 	unsigned long addr;
 	unsigned i;
 
-	for (i = 0; i < PTRS_PER_PUD; i++, pudp++) {
-		pud_t pud = READ_ONCE(*pudp);
-
+	for (i = 0; i < PTRS_PER_PUD; i++, pud++) {
 		addr = start + i * PUD_SIZE;
-		if (pud_none(pud) || pud_sect(pud)) {
-			note_page(st, addr, 2, pud_val(pud));
+		if (pud_none(*pud) || pud_sect(*pud)) {
+			note_page(st, addr, 2, pud_val(*pud));
 		} else {
-			BUG_ON(pud_bad(pud));
-			walk_pmd(st, pudp, addr);
+			BUG_ON(pud_bad(*pud));
+			walk_pmd(st, pud, addr);
 		}
 	}
 }
@@ -339,19 +335,17 @@ static void walk_pud(struct pg_state *st, pgd_t *pgdp, unsigned long start)
 static void walk_pgd(struct pg_state *st, struct mm_struct *mm,
 		     unsigned long start)
 {
-	pgd_t *pgdp = pgd_offset(mm, 0UL);
+	pgd_t *pgd = pgd_offset(mm, 0UL);
 	unsigned i;
 	unsigned long addr;
 
-	for (i = 0; i < PTRS_PER_PGD; i++, pgdp++) {
-		pgd_t pgd = READ_ONCE(*pgdp);
-
+	for (i = 0; i < PTRS_PER_PGD; i++, pgd++) {
 		addr = start + i * PGDIR_SIZE;
-		if (pgd_none(pgd)) {
-			note_page(st, addr, 1, pgd_val(pgd));
+		if (pgd_none(*pgd)) {
+			note_page(st, addr, 1, pgd_val(*pgd));
 		} else {
-			BUG_ON(pgd_bad(pgd));
-			walk_pud(st, pgdp, addr);
+			BUG_ON(pgd_bad(*pgd));
+			walk_pud(st, pgd, addr);
 		}
 	}
 }
@@ -395,7 +389,7 @@ void ptdump_check_wx(void)
 		.check_wx = true,
 	};
 
-	walk_pgd(&st, &init_mm, VA_START);
+	walk_pgd(&st, &init_mm, 0);
 	note_page(&st, 0, 0, 0);
 	if (st.wx_pages || st.uxn_pages)
 		pr_warn("Checked W+X mappings: FAILED, %lu W+X pages found, %lu non-UXN pages found\n",

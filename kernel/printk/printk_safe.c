@@ -39,7 +39,7 @@
  * There are situations when we want to make sure that all buffers
  * were handled or when IRQs are blocked.
  */
-static int printk_safe_irq_ready __read_mostly;
+static int printk_safe_irq_ready;
 
 #define SAFE_LOG_BUF_LEN ((1 << CONFIG_PRINTK_SAFE_LOG_BUF_SHIFT) -	\
 				sizeof(atomic_t) -			\
@@ -63,8 +63,11 @@ static DEFINE_PER_CPU(struct printk_safe_seq_buf, nmi_print_seq);
 /* Get flushed in a more safe context. */
 static void queue_flush_work(struct printk_safe_seq_buf *s)
 {
-	if (printk_safe_irq_ready)
+	if (printk_safe_irq_ready) {
+		/* Make sure that IRQ work is really initialized. */
+		smp_rmb();
 		irq_work_queue(&s->work);
+	}
 }
 
 /*
@@ -72,7 +75,7 @@ static void queue_flush_work(struct printk_safe_seq_buf *s)
  * have dedicated buffers, because otherwise printk-safe preempted by
  * NMI-printk would have overwritten the NMI messages.
  *
- * The messages are flushed from irq work (or from panic()), possibly,
+ * The messages are fushed from irq work (or from panic()), possibly,
  * from other CPU, concurrently with printk_safe_log_store(). Should this
  * happen, printk_safe_log_store() will notice the buffer->len mismatch
  * and repeat the write.
@@ -82,7 +85,6 @@ static __printf(2, 0) int printk_safe_log_store(struct printk_safe_seq_buf *s,
 {
 	int add;
 	size_t len;
-	va_list ap;
 
 again:
 	len = atomic_read(&s->len);
@@ -101,9 +103,7 @@ again:
 	if (!len)
 		smp_rmb();
 
-	va_copy(ap, args);
-	add = vscnprintf(s->buffer + len, sizeof(s->buffer) - len, fmt, ap);
-	va_end(ap);
+	add = vscnprintf(s->buffer + len, sizeof(s->buffer) - len, fmt, args);
 	if (!add)
 		return 0;
 
@@ -281,7 +281,7 @@ void printk_safe_flush_on_panic(void)
 	 * Make sure that we could access the main ring buffer.
 	 * Do not risk a double release when more CPUs are up.
 	 */
-	if (raw_spin_is_locked(&logbuf_lock)) {
+	if (in_nmi() && raw_spin_is_locked(&logbuf_lock)) {
 		if (num_online_cpus() > 1)
 			return;
 
@@ -306,35 +306,26 @@ static __printf(1, 0) int vprintk_nmi(const char *fmt, va_list args)
 	return printk_safe_log_store(s, fmt, args);
 }
 
-void notrace printk_nmi_enter(void)
+void printk_nmi_enter(void)
 {
-	this_cpu_or(printk_context, PRINTK_NMI_CONTEXT_MASK);
+	/*
+	 * The size of the extra per-CPU buffer is limited. Use it only when
+	 * the main one is locked. If this CPU is not in the safe context,
+	 * the lock must be taken on another CPU and we could wait for it.
+	 */
+	if ((this_cpu_read(printk_context) & PRINTK_SAFE_CONTEXT_MASK) &&
+	    raw_spin_is_locked(&logbuf_lock)) {
+		this_cpu_or(printk_context, PRINTK_NMI_CONTEXT_MASK);
+	} else {
+		this_cpu_or(printk_context, PRINTK_NMI_DEFERRED_CONTEXT_MASK);
+	}
 }
 
-void notrace printk_nmi_exit(void)
+void printk_nmi_exit(void)
 {
-	this_cpu_and(printk_context, ~PRINTK_NMI_CONTEXT_MASK);
-}
-
-/*
- * Marks a code that might produce many messages in NMI context
- * and the risk of losing them is more critical than eventual
- * reordering.
- *
- * It has effect only when called in NMI context. Then printk()
- * will try to store the messages into the main logbuf directly
- * and use the per-CPU buffers only as a fallback when the lock
- * is not available.
- */
-void printk_nmi_direct_enter(void)
-{
-	if (this_cpu_read(printk_context) & PRINTK_NMI_CONTEXT_MASK)
-		this_cpu_or(printk_context, PRINTK_NMI_DIRECT_CONTEXT_MASK);
-}
-
-void printk_nmi_direct_exit(void)
-{
-	this_cpu_and(printk_context, ~PRINTK_NMI_DIRECT_CONTEXT_MASK);
+	this_cpu_and(printk_context,
+		     ~(PRINTK_NMI_CONTEXT_MASK |
+		       PRINTK_NMI_DEFERRED_CONTEXT_MASK));
 }
 
 #else
@@ -372,20 +363,6 @@ void __printk_safe_exit(void)
 
 __printf(1, 0) int vprintk_func(const char *fmt, va_list args)
 {
-	/*
-	 * Try to use the main logbuf even in NMI. But avoid calling console
-	 * drivers that might have their own locks.
-	 */
-	if ((this_cpu_read(printk_context) & PRINTK_NMI_DIRECT_CONTEXT_MASK) &&
-	    raw_spin_trylock(&logbuf_lock)) {
-		int len;
-
-		len = vprintk_store(0, LOGLEVEL_DEFAULT, NULL, 0, fmt, args);
-		raw_spin_unlock(&logbuf_lock);
-		defer_console_output();
-		return len;
-	}
-
 	/* Use extra buffer in NMI when logbuf_lock is taken or in safe mode. */
 	if (this_cpu_read(printk_context) & PRINTK_NMI_CONTEXT_MASK)
 		return vprintk_nmi(fmt, args);
@@ -393,6 +370,13 @@ __printf(1, 0) int vprintk_func(const char *fmt, va_list args)
 	/* Use extra buffer to prevent a recursion deadlock in safe mode. */
 	if (this_cpu_read(printk_context) & PRINTK_SAFE_CONTEXT_MASK)
 		return vprintk_safe(fmt, args);
+
+	/*
+	 * Use the main logbuf when logbuf_lock is available in NMI.
+	 * But avoid calling console drivers that might have their own locks.
+	 */
+	if (this_cpu_read(printk_context) & PRINTK_NMI_DEFERRED_CONTEXT_MASK)
+		return vprintk_deferred(fmt, args);
 
 	/* No obstacles. */
 	return vprintk_default(fmt, args);
@@ -414,12 +398,8 @@ void __init printk_safe_init(void)
 #endif
 	}
 
-	/*
-	 * In the highly unlikely event that a NMI were to trigger at
-	 * this moment. Make sure IRQ work is set up before this
-	 * variable is set.
-	 */
-	barrier();
+	/* Make sure that IRQ works are initialized before enabling. */
+	smp_wmb();
 	printk_safe_irq_ready = 1;
 
 	/* Flush pending messages that did not have scheduled IRQ works. */

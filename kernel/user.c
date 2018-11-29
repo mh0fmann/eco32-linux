@@ -26,32 +26,26 @@
 struct user_namespace init_user_ns = {
 	.uid_map = {
 		.nr_extents = 1,
-		{
-			.extent[0] = {
-				.first = 0,
-				.lower_first = 0,
-				.count = 4294967295U,
-			},
+		.extent[0] = {
+			.first = 0,
+			.lower_first = 0,
+			.count = 4294967295U,
 		},
 	},
 	.gid_map = {
 		.nr_extents = 1,
-		{
-			.extent[0] = {
-				.first = 0,
-				.lower_first = 0,
-				.count = 4294967295U,
-			},
+		.extent[0] = {
+			.first = 0,
+			.lower_first = 0,
+			.count = 4294967295U,
 		},
 	},
 	.projid_map = {
 		.nr_extents = 1,
-		{
-			.extent[0] = {
-				.first = 0,
-				.lower_first = 0,
-				.count = 4294967295U,
-			},
+		.extent[0] = {
+			.first = 0,
+			.lower_first = 0,
+			.count = 4294967295U,
 		},
 	},
 	.count = ATOMIC_INIT(3),
@@ -96,12 +90,11 @@ static DEFINE_SPINLOCK(uidhash_lock);
 
 /* root_user.__count is 1, for init task cred */
 struct user_struct root_user = {
-	.__count	= REFCOUNT_INIT(1),
+	.__count	= ATOMIC_INIT(1),
 	.processes	= ATOMIC_INIT(1),
 	.sigpending	= ATOMIC_INIT(0),
 	.locked_shm     = 0,
 	.uid		= GLOBAL_ROOT_UID,
-	.ratelimit	= RATELIMIT_STATE_INIT(root_user.ratelimit, 0, 0),
 };
 
 /*
@@ -123,7 +116,7 @@ static struct user_struct *uid_hash_find(kuid_t uid, struct hlist_head *hashent)
 
 	hlist_for_each_entry(user, hashent, uidhash_node) {
 		if (uid_eq(user->uid, uid)) {
-			refcount_inc(&user->__count);
+			atomic_inc(&user->__count);
 			return user;
 		}
 	}
@@ -169,8 +162,11 @@ void free_uid(struct user_struct *up)
 	if (!up)
 		return;
 
-	if (refcount_dec_and_lock_irqsave(&up->__count, &uidhash_lock, &flags))
+	local_irq_save(flags);
+	if (atomic_dec_and_lock(&up->__count, &uidhash_lock))
 		free_user(up, flags);
+	else
+		local_irq_restore(flags);
 }
 
 struct user_struct *alloc_uid(kuid_t uid)
@@ -188,9 +184,7 @@ struct user_struct *alloc_uid(kuid_t uid)
 			goto out_unlock;
 
 		new->uid = uid;
-		refcount_set(&new->__count, 1);
-		ratelimit_state_init(&new->ratelimit, HZ, 100);
-		ratelimit_set_flags(&new->ratelimit, RATELIMIT_MSG_ON_RELEASE);
+		atomic_set(&new->__count, 1);
 
 		/*
 		 * Before adding this, check whether we raced

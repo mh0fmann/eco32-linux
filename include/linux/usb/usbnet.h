@@ -1,4 +1,3 @@
-// SPDX-License-Identifier: GPL-2.0+
 /*
  * USB Networking Link Interface
  *
@@ -28,7 +27,7 @@ struct usbnet {
 	/* housekeeping */
 	struct usb_device	*udev;
 	struct usb_interface	*intf;
-	const struct driver_info *driver_info;
+	struct driver_info	*driver_info;
 	const char		*driver_name;
 	void			*driver_priv;
 	wait_queue_head_t	wait;
@@ -82,7 +81,6 @@ struct usbnet {
 #		define EVENT_RX_KILL	10
 #		define EVENT_LINK_CHANGE	11
 #		define EVENT_SET_RX_MODE	12
-#		define EVENT_NO_IP_ALIGN	13
 };
 
 static inline struct usb_driver *driver_of(struct usb_interface *intf)

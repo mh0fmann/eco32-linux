@@ -19,7 +19,6 @@
 #include <linux/sched.h>
 #include <linux/firmware.h>
 #include <linux/export.h>
-#include <linux/module.h>
 #include <linux/platform_device.h>
 #include <linux/dma-mapping.h>
 #include <linux/dmaengine.h>
@@ -270,11 +269,12 @@ void sst_dsp_dma_put_channel(struct sst_dsp *dsp)
 }
 EXPORT_SYMBOL_GPL(sst_dsp_dma_put_channel);
 
-static int sst_dma_new(struct sst_dsp *sst)
+int sst_dma_new(struct sst_dsp *sst)
 {
 	struct sst_pdata *sst_pdata = sst->pdata;
 	struct sst_dma *dma;
 	struct resource mem;
+	const char *dma_dev_name;
 	int ret = 0;
 
 	if (sst->pdata->resindex_dma_base == -1)
@@ -285,6 +285,7 @@ static int sst_dma_new(struct sst_dsp *sst)
 	* is attached to the ADSP IP. */
 	switch (sst->pdata->dma_engine) {
 	case SST_DMA_TYPE_DW:
+		dma_dev_name = "dw_dmac";
 		break;
 	default:
 		dev_err(sst->dev, "error: invalid DMA engine %d\n",
@@ -320,8 +321,9 @@ err_dma_dev:
 	devm_kfree(sst->dev, dma);
 	return ret;
 }
+EXPORT_SYMBOL(sst_dma_new);
 
-static void sst_dma_free(struct sst_dma *dma)
+void sst_dma_free(struct sst_dma *dma)
 {
 
 	if (dma == NULL)
@@ -334,6 +336,7 @@ static void sst_dma_free(struct sst_dma *dma)
 		dw_remove(dma->chip);
 
 }
+EXPORT_SYMBOL(sst_dma_free);
 
 /* create new generic firmware object */
 struct sst_fw *sst_fw_new(struct sst_dsp *dsp, 
@@ -355,7 +358,7 @@ struct sst_fw *sst_fw_new(struct sst_dsp *dsp,
 
 	/* allocate DMA buffer to store FW data */
 	sst_fw->dma_buf = dma_alloc_coherent(dsp->dma_dev, sst_fw->size,
-				&sst_fw->dmable_fw_paddr, GFP_KERNEL);
+				&sst_fw->dmable_fw_paddr, GFP_DMA | GFP_KERNEL);
 	if (!sst_fw->dma_buf) {
 		dev_err(dsp->dev, "error: DMA alloc failed\n");
 		kfree(sst_fw);

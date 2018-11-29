@@ -11,6 +11,7 @@
 #include <linux/module.h>
 #include <linux/ptrace.h>
 #include <linux/sched/debug.h>
+#include <linux/kallsyms.h>
 #include <linux/bug.h>
 
 #include <asm/soc.h>
@@ -244,6 +245,7 @@ static struct exception_info eexcept_table[128] = {
 static void do_trap(struct exception_info *except_info, struct pt_regs *regs)
 {
 	unsigned long addr = instruction_pointer(regs);
+	siginfo_t info;
 
 	if (except_info->code != TRAP_BRKPT)
 		pr_err("TRAP: %s PC[0x%lx] signo[%d] code[%d]\n",
@@ -252,8 +254,12 @@ static void do_trap(struct exception_info *except_info, struct pt_regs *regs)
 
 	die_if_kernel(except_info->kernel_str, regs, addr);
 
-	force_sig_fault(except_info->signo, except_info->code,
-			(void __user *)addr, current);
+	info.si_signo = except_info->signo;
+	info.si_errno = 0;
+	info.si_code  = except_info->code;
+	info.si_addr  = (void __user *)addr;
+
+	force_sig_info(except_info->signo, &info, current);
 }
 
 /*
@@ -369,7 +375,8 @@ static void show_trace(unsigned long *stack, unsigned long *endstack)
 			if (i % 5 == 0)
 				pr_debug("\n	    ");
 #endif
-			pr_debug(" [<%08lx>] %pS\n", addr, (void *)addr);
+			pr_debug(" [<%08lx>]", addr);
+			print_symbol(" %s\n", addr);
 			i++;
 		}
 	}

@@ -391,6 +391,7 @@ out:
 struct xcopy_pt_cmd {
 	bool remote_port;
 	struct se_cmd se_cmd;
+	struct xcopy_op *xcopy_op;
 	struct completion xpt_passthrough_sem;
 	unsigned char sense_buffer[TRANSPORT_SENSE_BUFFER];
 };
@@ -496,7 +497,10 @@ int target_xcopy_setup_pt(void)
 	INIT_LIST_HEAD(&xcopy_pt_nacl.acl_list);
 	INIT_LIST_HEAD(&xcopy_pt_nacl.acl_sess_list);
 	memset(&xcopy_pt_sess, 0, sizeof(struct se_session));
-	transport_init_session(&xcopy_pt_sess);
+	INIT_LIST_HEAD(&xcopy_pt_sess.sess_list);
+	INIT_LIST_HEAD(&xcopy_pt_sess.sess_acl_list);
+	INIT_LIST_HEAD(&xcopy_pt_sess.sess_cmd_list);
+	spin_lock_init(&xcopy_pt_sess.sess_cmd_lock);
 
 	xcopy_pt_nacl.se_tpg = &xcopy_pt_tpg;
 	xcopy_pt_nacl.nacl_sess = &xcopy_pt_sess;
@@ -595,6 +599,8 @@ static int target_xcopy_setup_pt_cmd(
 	 * X-COPY PUSH or X-COPY PULL based upon where the CDB was received.
 	 */
 	target_xcopy_init_pt_lun(se_dev, cmd, remote_port);
+
+	xpt_cmd->xcopy_op = xop;
 	target_xcopy_setup_pt_port(xpt_cmd, xop, remote_port);
 
 	cmd->tag = 0;

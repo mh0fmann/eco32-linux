@@ -75,7 +75,7 @@ static int max6916_read_time(struct device *dev, struct rtc_time *dt)
 	dt->tm_wday = bcd2bin(buf[5]) - 1;
 	dt->tm_year = bcd2bin(buf[6]) + 100;
 
-	return 0;
+	return rtc_valid_tm(dt);
 }
 
 static int max6916_set_time(struct device *dev, struct rtc_time *dt)

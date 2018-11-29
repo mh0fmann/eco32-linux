@@ -33,6 +33,8 @@
 #include <linux/uaccess.h>
 #include <linux/slab.h>
 
+#include "cros_ec_dev.h"
+
 /* Rate-limit the lightbar interface to prevent DoS. */
 static unsigned long lb_interval_jiffies = 50 * HZ / 1000;
 
@@ -170,7 +172,8 @@ static ssize_t version_show(struct device *dev,
 			    struct device_attribute *attr, char *buf)
 {
 	uint32_t version = 0, flags = 0;
-	struct cros_ec_dev *ec = to_cros_ec_dev(dev);
+	struct cros_ec_dev *ec = container_of(dev,
+					      struct cros_ec_dev, class_dev);
 	int ret;
 
 	ret = lb_throttle();
@@ -192,7 +195,8 @@ static ssize_t brightness_store(struct device *dev,
 	struct cros_ec_command *msg;
 	int ret;
 	unsigned int val;
-	struct cros_ec_dev *ec = to_cros_ec_dev(dev);
+	struct cros_ec_dev *ec = container_of(dev,
+					      struct cros_ec_dev, class_dev);
 
 	if (kstrtouint(buf, 0, &val))
 		return -EINVAL;
@@ -236,7 +240,8 @@ static ssize_t led_rgb_store(struct device *dev, struct device_attribute *attr,
 {
 	struct ec_params_lightbar *param;
 	struct cros_ec_command *msg;
-	struct cros_ec_dev *ec = to_cros_ec_dev(dev);
+	struct cros_ec_dev *ec = container_of(dev,
+					      struct cros_ec_dev, class_dev);
 	unsigned int val[4];
 	int ret, i = 0, j = 0, ok = 0;
 
@@ -308,7 +313,8 @@ static ssize_t sequence_show(struct device *dev,
 	struct ec_response_lightbar *resp;
 	struct cros_ec_command *msg;
 	int ret;
-	struct cros_ec_dev *ec = to_cros_ec_dev(dev);
+	struct cros_ec_dev *ec = container_of(dev,
+					      struct cros_ec_dev, class_dev);
 
 	msg = alloc_lightbar_cmd_msg(ec);
 	if (!msg)
@@ -408,7 +414,6 @@ error:
 
 	return ret;
 }
-EXPORT_SYMBOL(lb_manual_suspend_ctrl);
 
 int lb_suspend(struct cros_ec_dev *ec)
 {
@@ -417,7 +422,6 @@ int lb_suspend(struct cros_ec_dev *ec)
 
 	return lb_send_empty_cmd(ec, LIGHTBAR_CMD_SUSPEND);
 }
-EXPORT_SYMBOL(lb_suspend);
 
 int lb_resume(struct cros_ec_dev *ec)
 {
@@ -426,7 +430,6 @@ int lb_resume(struct cros_ec_dev *ec)
 
 	return lb_send_empty_cmd(ec, LIGHTBAR_CMD_RESUME);
 }
-EXPORT_SYMBOL(lb_resume);
 
 static ssize_t sequence_store(struct device *dev, struct device_attribute *attr,
 			      const char *buf, size_t count)
@@ -435,7 +438,8 @@ static ssize_t sequence_store(struct device *dev, struct device_attribute *attr,
 	struct cros_ec_command *msg;
 	unsigned int num;
 	int ret, len;
-	struct cros_ec_dev *ec = to_cros_ec_dev(dev);
+	struct cros_ec_dev *ec = container_of(dev,
+					      struct cros_ec_dev, class_dev);
 
 	for (len = 0; len < count; len++)
 		if (!isalnum(buf[len]))
@@ -483,7 +487,8 @@ static ssize_t program_store(struct device *dev, struct device_attribute *attr,
 	int extra_bytes, max_size, ret;
 	struct ec_params_lightbar *param;
 	struct cros_ec_command *msg;
-	struct cros_ec_dev *ec = to_cros_ec_dev(dev);
+	struct cros_ec_dev *ec = container_of(dev, struct cros_ec_dev,
+					      class_dev);
 
 	/*
 	 * We might need to reject the program for size reasons. The EC
@@ -593,7 +598,8 @@ static umode_t cros_ec_lightbar_attrs_are_visible(struct kobject *kobj,
 						  struct attribute *a, int n)
 {
 	struct device *dev = container_of(kobj, struct device, kobj);
-	struct cros_ec_dev *ec = to_cros_ec_dev(dev);
+	struct cros_ec_dev *ec = container_of(dev,
+					      struct cros_ec_dev, class_dev);
 	struct platform_device *pdev = to_platform_device(ec->dev);
 	struct cros_ec_platform *pdata = pdev->dev.platform_data;
 	int is_cros_ec;
@@ -616,4 +622,3 @@ struct attribute_group cros_ec_lightbar_attr_group = {
 	.attrs = __lb_cmds_attrs,
 	.is_visible = cros_ec_lightbar_attrs_are_visible,
 };
-EXPORT_SYMBOL(cros_ec_lightbar_attr_group);

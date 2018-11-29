@@ -5,14 +5,14 @@
  */
 #include <linux/kernel.h>
 #include <linux/types.h>
+#include <linux/memblock.h>
 #include <linux/log2.h>
 #include <linux/list.h>
 #include <linux/slab.h>
 #include <linux/mm.h>
 #include <linux/miscdevice.h>
-#include <linux/memblock.h>
+#include <linux/bootmem.h>
 #include <linux/export.h>
-#include <linux/refcount.h>
 
 #include <asm/cpudata.h>
 #include <asm/hypervisor.h>
@@ -21,7 +21,6 @@
 #include <linux/uaccess.h>
 #include <asm/oplib.h>
 #include <asm/smp.h>
-#include <asm/adi.h>
 
 /* Unlike the OBP device tree, the machine description is a full-on
  * DAG.  An arbitrary number of ARCs are possible from one
@@ -72,7 +71,7 @@ struct mdesc_handle {
 	struct list_head	list;
 	struct mdesc_mem_ops	*mops;
 	void			*self_base;
-	refcount_t		refcnt;
+	atomic_t		refcnt;
 	unsigned int		handle_size;
 	struct mdesc_hdr	mdesc;
 };
@@ -154,7 +153,7 @@ static void mdesc_handle_init(struct mdesc_handle *hp,
 	memset(hp, 0, handle_size);
 	INIT_LIST_HEAD(&hp->list);
 	hp->self_base = base;
-	refcount_set(&hp->refcnt, 1);
+	atomic_set(&hp->refcnt, 1);
 	hp->handle_size = handle_size;
 }
 
@@ -169,7 +168,7 @@ static struct mdesc_handle * __init mdesc_memblock_alloc(unsigned int mdesc_size
 		       mdesc_size);
 	alloc_size = PAGE_ALIGN(handle_size);
 
-	paddr = memblock_phys_alloc(alloc_size, PAGE_SIZE);
+	paddr = memblock_alloc(alloc_size, PAGE_SIZE);
 
 	hp = NULL;
 	if (paddr) {
@@ -184,12 +183,12 @@ static void __init mdesc_memblock_free(struct mdesc_handle *hp)
 	unsigned int alloc_size;
 	unsigned long start;
 
-	BUG_ON(refcount_read(&hp->refcnt) != 0);
+	BUG_ON(atomic_read(&hp->refcnt) != 0);
 	BUG_ON(!list_empty(&hp->list));
 
 	alloc_size = PAGE_ALIGN(hp->handle_size);
 	start = __pa(hp);
-	memblock_free_late(start, alloc_size);
+	free_bootmem_late(start, alloc_size);
 }
 
 static struct mdesc_mem_ops memblock_mdesc_ops = {
@@ -222,7 +221,7 @@ static struct mdesc_handle *mdesc_kmalloc(unsigned int mdesc_size)
 
 static void mdesc_kfree(struct mdesc_handle *hp)
 {
-	BUG_ON(refcount_read(&hp->refcnt) != 0);
+	BUG_ON(atomic_read(&hp->refcnt) != 0);
 	BUG_ON(!list_empty(&hp->list));
 
 	kfree(hp->self_base);
@@ -261,7 +260,7 @@ struct mdesc_handle *mdesc_grab(void)
 	spin_lock_irqsave(&mdesc_lock, flags);
 	hp = cur_mdesc;
 	if (hp)
-		refcount_inc(&hp->refcnt);
+		atomic_inc(&hp->refcnt);
 	spin_unlock_irqrestore(&mdesc_lock, flags);
 
 	return hp;
@@ -273,7 +272,7 @@ void mdesc_release(struct mdesc_handle *hp)
 	unsigned long flags;
 
 	spin_lock_irqsave(&mdesc_lock, flags);
-	if (refcount_dec_and_test(&hp->refcnt)) {
+	if (atomic_dec_and_test(&hp->refcnt)) {
 		list_del_init(&hp->list);
 		hp->mops->free(hp);
 	}
@@ -515,7 +514,7 @@ void mdesc_update(void)
 	if (status != HV_EOK || real_len > len) {
 		printk(KERN_ERR "MD: mdesc reread fails with %lu\n",
 		       status);
-		refcount_dec(&hp->refcnt);
+		atomic_dec(&hp->refcnt);
 		mdesc_free(hp);
 		goto out;
 	}
@@ -528,7 +527,7 @@ void mdesc_update(void)
 	mdesc_notify_clients(orig_hp, hp);
 
 	spin_lock_irqsave(&mdesc_lock, flags);
-	if (refcount_dec_and_test(&orig_hp->refcnt))
+	if (atomic_dec_and_test(&orig_hp->refcnt))
 		mdesc_free(orig_hp);
 	else
 		list_add(&orig_hp->list, &mdesc_zombie_list);
@@ -1345,6 +1344,5 @@ void __init sun4v_mdesc_init(void)
 
 	cur_mdesc = hp;
 
-	mdesc_adi_init();
 	report_platform_properties();
 }

@@ -5,7 +5,7 @@
  * PPC440 support
  */
 
-#include <asm/asm-const.h>
+#include <asm/page.h>
 
 #define PPC44x_MMUCR_TID	0x000000ff
 #define PPC44x_MMUCR_STS	0x00010000
@@ -124,19 +124,19 @@ typedef struct {
 /* Size of the TLBs used for pinning in lowmem */
 #define PPC_PIN_SIZE	(1 << 28)	/* 256M */
 
-#if defined(CONFIG_PPC_4K_PAGES)
+#if (PAGE_SHIFT == 12)
 #define PPC44x_TLBE_SIZE	PPC44x_TLB_4K
 #define PPC47x_TLBE_SIZE	PPC47x_TLB0_4K
 #define mmu_virtual_psize	MMU_PAGE_4K
-#elif defined(CONFIG_PPC_16K_PAGES)
+#elif (PAGE_SHIFT == 14)
 #define PPC44x_TLBE_SIZE	PPC44x_TLB_16K
 #define PPC47x_TLBE_SIZE	PPC47x_TLB0_16K
 #define mmu_virtual_psize	MMU_PAGE_16K
-#elif defined(CONFIG_PPC_64K_PAGES)
+#elif (PAGE_SHIFT == 16)
 #define PPC44x_TLBE_SIZE	PPC44x_TLB_64K
 #define PPC47x_TLBE_SIZE	PPC47x_TLB0_64K
 #define mmu_virtual_psize	MMU_PAGE_64K
-#elif defined(CONFIG_PPC_256K_PAGES)
+#elif (PAGE_SHIFT == 18)
 #define PPC44x_TLBE_SIZE	PPC44x_TLB_256K
 #define mmu_virtual_psize	MMU_PAGE_256K
 #else

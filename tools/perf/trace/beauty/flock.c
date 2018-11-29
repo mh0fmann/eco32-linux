@@ -1,8 +1,5 @@
-// SPDX-License-Identifier: LGPL-2.1
-
-#include "trace/beauty/beauty.h"
-#include <linux/kernel.h>
-#include <uapi/linux/fcntl.h>
+// SPDX-License-Identifier: GPL-2.0
+#include <fcntl.h>
 
 #ifndef LOCK_MAND
 #define LOCK_MAND	 32
@@ -20,7 +17,8 @@
 #define LOCK_RW		192
 #endif
 
-size_t syscall_arg__scnprintf_flock(char *bf, size_t size, struct syscall_arg *arg)
+static size_t syscall_arg__scnprintf_flock(char *bf, size_t size,
+					   struct syscall_arg *arg)
 {
 	int printed = 0, op = arg->val;
 
@@ -47,3 +45,5 @@ size_t syscall_arg__scnprintf_flock(char *bf, size_t size, struct syscall_arg *a
 
 	return printed;
 }
+
+#define SCA_FLOCK syscall_arg__scnprintf_flock

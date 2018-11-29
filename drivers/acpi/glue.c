@@ -320,7 +320,7 @@ static int acpi_platform_notify(struct device *dev)
 	if (!adev)
 		goto out;
 
-	if (dev_is_platform(dev))
+	if (dev->bus == &platform_bus_type)
 		acpi_configure_pmsi_domain(dev);
 
 	if (type && type->setup)

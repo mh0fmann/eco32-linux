@@ -97,7 +97,7 @@ static void fc_fcp_complete_locked(struct fc_fcp_pkt *);
 static void fc_tm_done(struct fc_seq *, struct fc_frame *, void *);
 static void fc_fcp_error(struct fc_fcp_pkt *, struct fc_frame *);
 static void fc_fcp_recovery(struct fc_fcp_pkt *, u8 code);
-static void fc_fcp_timeout(struct timer_list *);
+static void fc_fcp_timeout(unsigned long);
 static void fc_fcp_rec(struct fc_fcp_pkt *);
 static void fc_fcp_rec_error(struct fc_fcp_pkt *, struct fc_frame *);
 static void fc_fcp_rec_resp(struct fc_seq *, struct fc_frame *, void *);
@@ -155,7 +155,8 @@ static struct fc_fcp_pkt *fc_fcp_pkt_alloc(struct fc_lport *lport, gfp_t gfp)
 		fsp->lp = lport;
 		fsp->xfer_ddp = FC_XID_UNKNOWN;
 		refcount_set(&fsp->ref_cnt, 1);
-		timer_setup(&fsp->timer, NULL, 0);
+		init_timer(&fsp->timer);
+		fsp->timer.data = (unsigned long)fsp;
 		INIT_LIST_HEAD(&fsp->list);
 		spin_lock_init(&fsp->scsi_pkt_lock);
 	} else {
@@ -1214,7 +1215,7 @@ static int fc_fcp_cmd_send(struct fc_lport *lport, struct fc_fcp_pkt *fsp,
 	fsp->seq_ptr = seq;
 	fc_fcp_pkt_hold(fsp);	/* hold for fc_fcp_pkt_destroy */
 
-	fsp->timer.function = fc_fcp_timeout;
+	setup_timer(&fsp->timer, fc_fcp_timeout, (unsigned long)fsp);
 	if (rpriv->flags & FC_RP_FLAGS_REC_SUPPORTED)
 		fc_fcp_timer_set(fsp, get_fsp_rec_tov(fsp));
 
@@ -1297,9 +1298,9 @@ static int fc_fcp_pkt_abort(struct fc_fcp_pkt *fsp)
  * fc_lun_reset_send() - Send LUN reset command
  * @data: The FCP packet that identifies the LUN to be reset
  */
-static void fc_lun_reset_send(struct timer_list *t)
+static void fc_lun_reset_send(unsigned long data)
 {
-	struct fc_fcp_pkt *fsp = from_timer(fsp, t, timer);
+	struct fc_fcp_pkt *fsp = (struct fc_fcp_pkt *)data;
 	struct fc_lport *lport = fsp->lp;
 
 	if (lport->tt.fcp_cmd_send(lport, fsp, fc_tm_done)) {
@@ -1307,7 +1308,7 @@ static void fc_lun_reset_send(struct timer_list *t)
 			return;
 		if (fc_fcp_lock_pkt(fsp))
 			return;
-		fsp->timer.function = fc_lun_reset_send;
+		setup_timer(&fsp->timer, fc_lun_reset_send, (unsigned long)fsp);
 		fc_fcp_timer_set(fsp, get_fsp_rec_tov(fsp));
 		fc_fcp_unlock_pkt(fsp);
 	}
@@ -1333,7 +1334,7 @@ static int fc_lun_reset(struct fc_lport *lport, struct fc_fcp_pkt *fsp,
 	fsp->wait_for_comp = 1;
 	init_completion(&fsp->tm_done);
 
-	fc_lun_reset_send(&fsp->timer);
+	fc_lun_reset_send((unsigned long)fsp);
 
 	/*
 	 * wait for completion of reset
@@ -1430,9 +1431,9 @@ static void fc_fcp_cleanup(struct fc_lport *lport)
  * received we see if data was received recently. If it has been then we
  * continue waiting, otherwise, we abort the command.
  */
-static void fc_fcp_timeout(struct timer_list *t)
+static void fc_fcp_timeout(unsigned long data)
 {
-	struct fc_fcp_pkt *fsp = from_timer(fsp, t, timer);
+	struct fc_fcp_pkt *fsp = (struct fc_fcp_pkt *)data;
 	struct fc_rport *rport = fsp->rport;
 	struct fc_rport_libfc_priv *rpriv = rport->dd_data;
 
@@ -1445,7 +1446,7 @@ static void fc_fcp_timeout(struct timer_list *t)
 	if (fsp->lp->qfull) {
 		FC_FCP_DBG(fsp, "fcp timeout, resetting timer delay %d\n",
 			   fsp->timer_delay);
-		fsp->timer.function = fc_fcp_timeout;
+		setup_timer(&fsp->timer, fc_fcp_timeout, (unsigned long)fsp);
 		fc_fcp_timer_set(fsp, fsp->timer_delay);
 		goto unlock;
 	}
@@ -1872,6 +1873,7 @@ int fc_queuecommand(struct Scsi_Host *shost, struct scsi_cmnd *sc_cmd)
 	struct fc_lport *lport = shost_priv(shost);
 	struct fc_rport *rport = starget_to_rport(scsi_target(sc_cmd->device));
 	struct fc_fcp_pkt *fsp;
+	struct fc_rport_libfc_priv *rpriv;
 	int rval;
 	int rc = 0;
 	struct fc_stats *stats;
@@ -1892,6 +1894,8 @@ int fc_queuecommand(struct Scsi_Host *shost, struct scsi_cmnd *sc_cmd)
 		sc_cmd->scsi_done(sc_cmd);
 		goto out;
 	}
+
+	rpriv = rport->dd_data;
 
 	if (!fc_fcp_lport_queue_ready(lport)) {
 		if (lport->qfull) {
@@ -2292,7 +2296,8 @@ int fc_setup_fcp(void)
 
 void fc_destroy_fcp(void)
 {
-	kmem_cache_destroy(scsi_pkt_cachep);
+	if (scsi_pkt_cachep)
+		kmem_cache_destroy(scsi_pkt_cachep);
 }
 
 /**

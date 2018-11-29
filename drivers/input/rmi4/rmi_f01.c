@@ -570,17 +570,12 @@ static int rmi_f01_probe(struct rmi_function *fn)
 
 	dev_set_drvdata(&fn->dev, f01);
 
-	error = sysfs_create_group(&fn->rmi_dev->dev.kobj, &rmi_f01_attr_group);
+	error = devm_device_add_group(&fn->rmi_dev->dev, &rmi_f01_attr_group);
 	if (error)
-		dev_warn(&fn->dev, "Failed to create sysfs group: %d\n", error);
+		dev_warn(&fn->dev,
+			 "Failed to create attribute group: %d\n", error);
 
 	return 0;
-}
-
-static void rmi_f01_remove(struct rmi_function *fn)
-{
-	/* Note that the bus device is used, not the F01 device */
-	sysfs_remove_group(&fn->rmi_dev->dev.kobj, &rmi_f01_attr_group);
 }
 
 static int rmi_f01_config(struct rmi_function *fn)
@@ -681,9 +676,9 @@ static int rmi_f01_resume(struct rmi_function *fn)
 	return 0;
 }
 
-static irqreturn_t rmi_f01_attention(int irq, void *ctx)
+static int rmi_f01_attention(struct rmi_function *fn,
+			     unsigned long *irq_bits)
 {
-	struct rmi_function *fn = ctx;
 	struct rmi_device *rmi_dev = fn->rmi_dev;
 	int error;
 	u8 device_status;
@@ -692,7 +687,7 @@ static irqreturn_t rmi_f01_attention(int irq, void *ctx)
 	if (error) {
 		dev_err(&fn->dev,
 			"Failed to read device status: %d.\n", error);
-		return IRQ_RETVAL(error);
+		return error;
 	}
 
 	if (RMI_F01_STATUS_BOOTLOADER(device_status))
@@ -704,11 +699,11 @@ static irqreturn_t rmi_f01_attention(int irq, void *ctx)
 		error = rmi_dev->driver->reset_handler(rmi_dev);
 		if (error) {
 			dev_err(&fn->dev, "Device reset failed: %d\n", error);
-			return IRQ_RETVAL(error);
+			return error;
 		}
 	}
 
-	return IRQ_HANDLED;
+	return 0;
 }
 
 struct rmi_function_handler rmi_f01_handler = {
@@ -722,7 +717,6 @@ struct rmi_function_handler rmi_f01_handler = {
 	},
 	.func		= 0x01,
 	.probe		= rmi_f01_probe,
-	.remove		= rmi_f01_remove,
 	.config		= rmi_f01_config,
 	.attention	= rmi_f01_attention,
 	.suspend	= rmi_f01_suspend,

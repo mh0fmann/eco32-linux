@@ -1,4 +1,3 @@
-// SPDX-License-Identifier: GPL-2.0
 /*
  * Driver for the PSC of the Freescale MPC52xx PSCs configured as UARTs.
  *
@@ -24,6 +23,10 @@
  *                    Grant Likely <grant.likely@secretlab.ca>
  * Copyright (C) 2004-2006 Sylvain Munaut <tnt@246tNt.com>
  * Copyright (C) 2003 MontaVista, Software, Inc.
+ *
+ * This file is licensed under the terms of the GNU General Public License
+ * version 2. This program is licensed "as is" without any warranty of any
+ * kind, whether express or implied.
  */
 
 #undef DEBUG

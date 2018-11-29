@@ -71,7 +71,6 @@
 
 struct net_local {
 	struct timer_list	watchdog;
-	struct net_device	*watchdog_dev;
 
 	spinlock_t	lock;
 	struct sk_buff  *rx_buf_p;		/* receive buffer ptr */
@@ -129,7 +128,7 @@ static void  send_frame( struct net_device * );
 static int   upload_data( struct net_device *,
 			  unsigned, unsigned, unsigned, u32 );
 static void  download_data( struct net_device *, u32 * );
-static void  sbni_watchdog(struct timer_list *);
+static void  sbni_watchdog( unsigned long );
 static void  interpret_ack( struct net_device *, unsigned );
 static int   append_frame_to_pkt( struct net_device *, unsigned, u32 );
 static void  indicate_pkt( struct net_device * );
@@ -1030,10 +1029,11 @@ indicate_pkt( struct net_device  *dev )
  */
 
 static void
-sbni_watchdog(struct timer_list *t)
+sbni_watchdog( unsigned long  arg )
 {
-	struct net_local   *nl  = from_timer(nl, t, watchdog);
-	struct net_device  *dev = nl->watchdog_dev;
+	struct net_device  *dev = (struct net_device *) arg;
+	struct net_local   *nl  = netdev_priv(dev);
+	struct timer_list  *w   = &nl->watchdog; 
 	unsigned long	   flags;
 	unsigned char	   csr0;
 
@@ -1060,7 +1060,11 @@ sbni_watchdog(struct timer_list *t)
 
 	outb( csr0 | RC_CHK, dev->base_addr + CSR0 ); 
 
-	mod_timer(t, jiffies + SBNI_TIMEOUT);
+	init_timer( w );
+	w->expires	= jiffies + SBNI_TIMEOUT;
+	w->data		= arg;
+	w->function	= sbni_watchdog;
+	add_timer( w );
 
 	spin_unlock_irqrestore( &nl->lock, flags );
 }
@@ -1191,9 +1195,10 @@ handler_attached:
 	netif_start_queue( dev );
 
 	/* set timer watchdog */
-	nl->watchdog_dev = dev;
-	timer_setup(w, sbni_watchdog, 0);
+	init_timer( w );
 	w->expires	= jiffies + SBNI_TIMEOUT;
+	w->data		= (unsigned long) dev;
+	w->function	= sbni_watchdog;
 	add_timer( w );
    
 	spin_unlock( &nl->lock );

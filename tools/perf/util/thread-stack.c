@@ -36,7 +36,6 @@
  * @branch_count: the branch count when the entry was created
  * @cp: call path
  * @no_call: a 'call' was not seen
- * @trace_end: a 'call' but trace ended
  */
 struct thread_stack_entry {
 	u64 ret_addr;
@@ -45,7 +44,6 @@ struct thread_stack_entry {
 	u64 branch_count;
 	struct call_path *cp;
 	bool no_call;
-	bool trace_end;
 };
 
 /**
@@ -114,8 +112,7 @@ static struct thread_stack *thread_stack__new(struct thread *thread,
 	return ts;
 }
 
-static int thread_stack__push(struct thread_stack *ts, u64 ret_addr,
-			      bool trace_end)
+static int thread_stack__push(struct thread_stack *ts, u64 ret_addr)
 {
 	int err = 0;
 
@@ -127,7 +124,6 @@ static int thread_stack__push(struct thread_stack *ts, u64 ret_addr,
 		}
 	}
 
-	ts->stack[ts->cnt].trace_end = trace_end;
 	ts->stack[ts->cnt++].ret_addr = ret_addr;
 
 	return err;
@@ -151,18 +147,6 @@ static void thread_stack__pop(struct thread_stack *ts, u64 ret_addr)
 			ts->cnt = i;
 			return;
 		}
-	}
-}
-
-static void thread_stack__pop_trace_end(struct thread_stack *ts)
-{
-	size_t i;
-
-	for (i = ts->cnt; i; ) {
-		if (ts->stack[--i].trace_end)
-			ts->cnt = i;
-		else
-			return;
 	}
 }
 
@@ -270,19 +254,10 @@ int thread_stack__event(struct thread *thread, u32 flags, u64 from_ip,
 		ret_addr = from_ip + insn_len;
 		if (ret_addr == to_ip)
 			return 0; /* Zero-length calls are excluded */
-		return thread_stack__push(thread->ts, ret_addr,
-					  flags & PERF_IP_FLAG_TRACE_END);
-	} else if (flags & PERF_IP_FLAG_TRACE_BEGIN) {
-		/*
-		 * If the caller did not change the trace number (which would
-		 * have flushed the stack) then try to make sense of the stack.
-		 * Possibly, tracing began after returning to the current
-		 * address, so try to pop that. Also, do not expect a call made
-		 * when the trace ended, to return, so pop that.
-		 */
-		thread_stack__pop(thread->ts, to_ip);
-		thread_stack__pop_trace_end(thread->ts);
-	} else if ((flags & PERF_IP_FLAG_RETURN) && from_ip) {
+		return thread_stack__push(thread->ts, ret_addr);
+	} else if (flags & PERF_IP_FLAG_RETURN) {
+		if (!from_ip)
+			return 0;
 		thread_stack__pop(thread->ts, to_ip);
 	}
 
@@ -310,46 +285,20 @@ void thread_stack__free(struct thread *thread)
 	}
 }
 
-static inline u64 callchain_context(u64 ip, u64 kernel_start)
-{
-	return ip < kernel_start ? PERF_CONTEXT_USER : PERF_CONTEXT_KERNEL;
-}
-
 void thread_stack__sample(struct thread *thread, struct ip_callchain *chain,
-			  size_t sz, u64 ip, u64 kernel_start)
+			  size_t sz, u64 ip)
 {
-	u64 context = callchain_context(ip, kernel_start);
-	u64 last_context;
-	size_t i, j;
+	size_t i;
 
-	if (sz < 2) {
-		chain->nr = 0;
-		return;
-	}
+	if (!thread || !thread->ts)
+		chain->nr = 1;
+	else
+		chain->nr = min(sz, thread->ts->cnt + 1);
 
-	chain->ips[0] = context;
-	chain->ips[1] = ip;
+	chain->ips[0] = ip;
 
-	if (!thread || !thread->ts) {
-		chain->nr = 2;
-		return;
-	}
-
-	last_context = context;
-
-	for (i = 2, j = 1; i < sz && j <= thread->ts->cnt; i++, j++) {
-		ip = thread->ts->stack[thread->ts->cnt - j].ret_addr;
-		context = callchain_context(ip, kernel_start);
-		if (context != last_context) {
-			if (i >= sz - 1)
-				break;
-			chain->ips[i++] = context;
-			last_context = context;
-		}
-		chain->ips[i] = ip;
-	}
-
-	chain->nr = i;
+	for (i = 1; i < chain->nr; i++)
+		chain->ips[i] = thread->ts->stack[thread->ts->cnt - i].ret_addr;
 }
 
 struct call_return_processor *
@@ -383,7 +332,7 @@ void call_return_processor__free(struct call_return_processor *crp)
 
 static int thread_stack__push_cp(struct thread_stack *ts, u64 ret_addr,
 				 u64 timestamp, u64 ref, struct call_path *cp,
-				 bool no_call, bool trace_end)
+				 bool no_call)
 {
 	struct thread_stack_entry *tse;
 	int err;
@@ -401,7 +350,6 @@ static int thread_stack__push_cp(struct thread_stack *ts, u64 ret_addr,
 	tse->branch_count = ts->branch_count;
 	tse->cp = cp;
 	tse->no_call = no_call;
-	tse->trace_end = trace_end;
 
 	return 0;
 }
@@ -475,7 +423,7 @@ static int thread_stack__bottom(struct thread *thread, struct thread_stack *ts,
 		return -ENOMEM;
 
 	return thread_stack__push_cp(thread->ts, ip, sample->time, ref, cp,
-				     true, false);
+				     true);
 }
 
 static int thread_stack__no_call_return(struct thread *thread,
@@ -507,7 +455,7 @@ static int thread_stack__no_call_return(struct thread *thread,
 			if (!cp)
 				return -ENOMEM;
 			return thread_stack__push_cp(ts, 0, sample->time, ref,
-						     cp, true, false);
+						     cp, true);
 		}
 	} else if (thread_stack__in_kernel(ts) && sample->ip < ks) {
 		/* Return to userspace, so pop all kernel addresses */
@@ -532,7 +480,7 @@ static int thread_stack__no_call_return(struct thread *thread,
 		return -ENOMEM;
 
 	err = thread_stack__push_cp(ts, sample->addr, sample->time, ref, cp,
-				    true, false);
+				    true);
 	if (err)
 		return err;
 
@@ -552,7 +500,7 @@ static int thread_stack__trace_begin(struct thread *thread,
 
 	/* Pop trace end */
 	tse = &ts->stack[ts->cnt - 1];
-	if (tse->trace_end) {
+	if (tse->cp->sym == NULL && tse->cp->ip == 0) {
 		err = thread_stack__call_return(thread, ts, --ts->cnt,
 						timestamp, ref, false);
 		if (err)
@@ -581,7 +529,7 @@ static int thread_stack__trace_end(struct thread_stack *ts,
 	ret_addr = sample->ip + sample->insn_len;
 
 	return thread_stack__push_cp(ts, ret_addr, sample->time, ref, cp,
-				     false, true);
+				     false);
 }
 
 int thread_stack__process(struct thread *thread, struct comm *comm,
@@ -631,7 +579,6 @@ int thread_stack__process(struct thread *thread, struct comm *comm,
 	ts->last_time = sample->time;
 
 	if (sample->flags & PERF_IP_FLAG_CALL) {
-		bool trace_end = sample->flags & PERF_IP_FLAG_TRACE_END;
 		struct call_path_root *cpr = ts->crp->cpr;
 		struct call_path *cp;
 		u64 ret_addr;
@@ -649,7 +596,7 @@ int thread_stack__process(struct thread *thread, struct comm *comm,
 		if (!cp)
 			return -ENOMEM;
 		err = thread_stack__push_cp(ts, ret_addr, sample->time, ref,
-					    cp, false, trace_end);
+					    cp, false);
 	} else if (sample->flags & PERF_IP_FLAG_RETURN) {
 		if (!sample->ip || !sample->addr)
 			return 0;

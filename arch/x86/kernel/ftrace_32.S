@@ -8,7 +8,6 @@
 #include <asm/segment.h>
 #include <asm/export.h>
 #include <asm/ftrace.h>
-#include <asm/nospec-branch.h>
 
 #ifdef CC_USING_FENTRY
 # define function_hook	__fentry__
@@ -198,8 +197,7 @@ ftrace_stub:
 	movl	0x4(%ebp), %edx
 	subl	$MCOUNT_INSN_SIZE, %eax
 
-	movl	ftrace_trace_function, %ecx
-	CALL_NOSPEC %ecx
+	call	*ftrace_trace_function
 
 	popl	%edx
 	popl	%ecx
@@ -243,5 +241,5 @@ return_to_handler:
 	movl	%eax, %ecx
 	popl	%edx
 	popl	%eax
-	JMP_NOSPEC %ecx
+	jmp	*%ecx
 #endif

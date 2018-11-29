@@ -213,7 +213,7 @@ static void flush_smp_call_function_queue(bool warn_cpu_offline)
 	call_single_data_t *csd, *csd_next;
 	static bool warned;
 
-	lockdep_assert_irqs_disabled();
+	WARN_ON(!irqs_disabled());
 
 	head = this_cpu_ptr(&call_single_queue);
 	entry = llist_del_all(head);
@@ -584,8 +584,6 @@ void __init smp_init(void)
 		num_nodes, (num_nodes > 1 ? "s" : ""),
 		num_cpus,  (num_cpus  > 1 ? "s" : ""));
 
-	/* Final decision about SMT support */
-	cpu_smt_check_topology();
 	/* Any cleanup work */
 	smp_cpus_done(setup_max_cpus);
 }
@@ -669,9 +667,9 @@ EXPORT_SYMBOL(on_each_cpu_mask);
  * You must not call this function with disabled interrupts or
  * from a hardware interrupt handler or from a bottom half handler.
  */
-void on_each_cpu_cond_mask(bool (*cond_func)(int cpu, void *info),
+void on_each_cpu_cond(bool (*cond_func)(int cpu, void *info),
 			smp_call_func_t func, void *info, bool wait,
-			gfp_t gfp_flags, const struct cpumask *mask)
+			gfp_t gfp_flags)
 {
 	cpumask_var_t cpus;
 	int cpu, ret;
@@ -680,9 +678,9 @@ void on_each_cpu_cond_mask(bool (*cond_func)(int cpu, void *info),
 
 	if (likely(zalloc_cpumask_var(&cpus, (gfp_flags|__GFP_NOWARN)))) {
 		preempt_disable();
-		for_each_cpu(cpu, mask)
+		for_each_online_cpu(cpu)
 			if (cond_func(cpu, info))
-				__cpumask_set_cpu(cpu, cpus);
+				cpumask_set_cpu(cpu, cpus);
 		on_each_cpu_mask(cpus, func, info, wait);
 		preempt_enable();
 		free_cpumask_var(cpus);
@@ -692,7 +690,7 @@ void on_each_cpu_cond_mask(bool (*cond_func)(int cpu, void *info),
 		 * just have to IPI them one by one.
 		 */
 		preempt_disable();
-		for_each_cpu(cpu, mask)
+		for_each_online_cpu(cpu)
 			if (cond_func(cpu, info)) {
 				ret = smp_call_function_single(cpu, func,
 								info, wait);
@@ -700,15 +698,6 @@ void on_each_cpu_cond_mask(bool (*cond_func)(int cpu, void *info),
 			}
 		preempt_enable();
 	}
-}
-EXPORT_SYMBOL(on_each_cpu_cond_mask);
-
-void on_each_cpu_cond(bool (*cond_func)(int cpu, void *info),
-			smp_call_func_t func, void *info, bool wait,
-			gfp_t gfp_flags)
-{
-	on_each_cpu_cond_mask(cond_func, func, info, wait, gfp_flags,
-				cpu_online_mask);
 }
 EXPORT_SYMBOL(on_each_cpu_cond);
 

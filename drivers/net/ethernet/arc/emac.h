@@ -159,8 +159,6 @@ struct arc_emac_priv {
 	unsigned int link;
 	unsigned int duplex;
 	unsigned int speed;
-
-	unsigned int rx_missed_errors;
 };
 
 /**

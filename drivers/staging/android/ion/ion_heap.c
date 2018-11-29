@@ -1,8 +1,17 @@
-// SPDX-License-Identifier: GPL-2.0
 /*
  * drivers/staging/android/ion/ion_heap.c
  *
  * Copyright (C) 2011 Google, Inc.
+ *
+ * This software is licensed under the terms of the GNU General Public
+ * License version 2, as published by the Free Software Foundation, and
+ * may be copied, distributed, and modified under those terms.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
  */
 
 #include <linux/err.h>
@@ -25,12 +34,11 @@ void *ion_heap_map_kernel(struct ion_heap *heap,
 	pgprot_t pgprot;
 	struct sg_table *table = buffer->sg_table;
 	int npages = PAGE_ALIGN(buffer->size) / PAGE_SIZE;
-	struct page **pages = vmalloc(array_size(npages,
-						 sizeof(struct page *)));
+	struct page **pages = vmalloc(sizeof(struct page *) * npages);
 	struct page **tmp = pages;
 
 	if (!pages)
-		return ERR_PTR(-ENOMEM);
+		return NULL;
 
 	if (buffer->flags & ION_FLAG_CACHED)
 		pgprot = PAGE_KERNEL;
@@ -298,12 +306,11 @@ static unsigned long ion_heap_shrink_scan(struct shrinker *shrinker,
 	return freed;
 }
 
-int ion_heap_init_shrinker(struct ion_heap *heap)
+void ion_heap_init_shrinker(struct ion_heap *heap)
 {
 	heap->shrinker.count_objects = ion_heap_shrink_count;
 	heap->shrinker.scan_objects = ion_heap_shrink_scan;
 	heap->shrinker.seeks = DEFAULT_SEEKS;
 	heap->shrinker.batch = 0;
-
-	return register_shrinker(&heap->shrinker);
+	register_shrinker(&heap->shrinker);
 }

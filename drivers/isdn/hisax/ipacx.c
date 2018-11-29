@@ -35,7 +35,7 @@
 static void ph_command(struct IsdnCardState *cs, unsigned int command);
 static inline void cic_int(struct IsdnCardState *cs);
 static void dch_l2l1(struct PStack *st, int pr, void *arg);
-static void dbusy_timer_handler(struct timer_list *t);
+static void dbusy_timer_handler(struct IsdnCardState *cs);
 static void dch_empty_fifo(struct IsdnCardState *cs, int count);
 static void dch_fill_fifo(struct IsdnCardState *cs);
 static inline void dch_int(struct IsdnCardState *cs);
@@ -198,9 +198,8 @@ dch_l2l1(struct PStack *st, int pr, void *arg)
 //----------------------------------------------------------
 //----------------------------------------------------------
 static void
-dbusy_timer_handler(struct timer_list *t)
+dbusy_timer_handler(struct IsdnCardState *cs)
 {
-	struct IsdnCardState *cs = from_timer(cs, t, dbusytimer);
 	struct PStack *st;
 	int	rbchd, stard;
 
@@ -299,6 +298,7 @@ dch_fill_fifo(struct IsdnCardState *cs)
 		debugl1(cs, "dch_fill_fifo dbusytimer running");
 		del_timer(&cs->dbusytimer);
 	}
+	init_timer(&cs->dbusytimer);
 	cs->dbusytimer.expires = jiffies + ((DBUSY_TIMER_VALUE * HZ)/1000);
 	add_timer(&cs->dbusytimer);
 
@@ -424,7 +424,7 @@ dch_init(struct IsdnCardState *cs)
 
 	cs->setstack_d      = dch_setstack;
 
-	timer_setup(&cs->dbusytimer, dbusy_timer_handler, 0);
+	setup_timer(&cs->dbusytimer, (void *)dbusy_timer_handler, (long)cs);
 
 	cs->writeisac(cs, IPACX_TR_CONF0, 0x00);  // clear LDD
 	cs->writeisac(cs, IPACX_TR_CONF2, 0x00);  // enable transmitter

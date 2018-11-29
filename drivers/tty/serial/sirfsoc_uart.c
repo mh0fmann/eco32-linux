@@ -1,8 +1,9 @@
-// SPDX-License-Identifier: GPL-2.0+
 /*
  * Driver for CSR SiRFprimaII onboard UARTs.
  *
  * Copyright (c) 2011 Cambridge Silicon Radio Limited, a CSR plc group company.
+ *
+ * Licensed under GPLv2 or later.
  */
 
 #include <linux/module.h>
@@ -1283,11 +1284,6 @@ static int sirfsoc_uart_probe(struct platform_device *pdev)
 		goto err;
 	}
 	sirfport->port.line = of_alias_get_id(np, "serial");
-	if (sirfport->port.line >= ARRAY_SIZE(sirf_ports)) {
-		dev_err(&pdev->dev, "serial%d out of range\n",
-			sirfport->port.line);
-		return -EINVAL;
-	}
 	sirf_ports[sirfport->port.line] = sirfport;
 	sirfport->port.iotype = UPIO_MEM;
 	sirfport->port.flags = UPF_BOOT_AUTOCONF;

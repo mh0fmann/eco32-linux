@@ -31,7 +31,6 @@
 #include <mtd/mtd-abi.h>
 #include <asm/bootinfo.h>
 #include <asm/reboot.h>
-#include <asm/setup.h>
 #include <asm/mach-au1x00/au1000.h>
 #include <asm/mach-au1x00/gpio-au1000.h>
 #include <asm/mach-au1x00/au1xxx_eth.h>
@@ -59,7 +58,7 @@ void __init prom_init(void)
 	add_memory_region(0, memsize, BOOT_MEM_RAM);
 }
 
-void prom_putchar(char c)
+void prom_putchar(unsigned char c)
 {
 	alchemy_uart_putchar(AU1000_UART0_PHYS_ADDR, c);
 }
@@ -146,7 +145,7 @@ static struct platform_device mtx1_wdt = {
 	.resource = mtx1_wdt_res,
 };
 
-static const struct gpio_led default_leds[] = {
+static struct gpio_led default_leds[] = {
 	{
 		.name	= "mtx1:green",
 		.gpio = 211,

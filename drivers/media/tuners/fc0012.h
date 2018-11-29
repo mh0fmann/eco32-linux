@@ -17,7 +17,7 @@
 #ifndef _FC0012_H_
 #define _FC0012_H_
 
-#include <media/dvb_frontend.h>
+#include "dvb_frontend.h"
 #include "fc001x-common.h"
 
 struct fc0012_config {

@@ -257,7 +257,9 @@ __mesh_path_lookup_by_idx(struct mesh_table *tbl, int idx)
 	if (ret)
 		return NULL;
 
-	rhashtable_walk_start(&iter);
+	ret = rhashtable_walk_start(&iter);
+	if (ret && ret != -EAGAIN)
+		goto err;
 
 	while ((mpath = rhashtable_walk_next(&iter))) {
 		if (IS_ERR(mpath) && PTR_ERR(mpath) == -EAGAIN)
@@ -267,6 +269,7 @@ __mesh_path_lookup_by_idx(struct mesh_table *tbl, int idx)
 		if (i++ == idx)
 			break;
 	}
+err:
 	rhashtable_walk_stop(&iter);
 	rhashtable_walk_exit(&iter);
 
@@ -396,7 +399,8 @@ struct mesh_path *mesh_path_new(struct ieee80211_sub_if_data *sdata,
 	skb_queue_head_init(&new_mpath->frame_queue);
 	new_mpath->exp_time = jiffies;
 	spin_lock_init(&new_mpath->state_lock);
-	timer_setup(&new_mpath->timer, mesh_path_timer, 0);
+	setup_timer(&new_mpath->timer, mesh_path_timer,
+		    (unsigned long) new_mpath);
 
 	return new_mpath;
 }
@@ -510,7 +514,9 @@ void mesh_plink_broken(struct sta_info *sta)
 	if (ret)
 		return;
 
-	rhashtable_walk_start(&iter);
+	ret = rhashtable_walk_start(&iter);
+	if (ret && ret != -EAGAIN)
+		goto out;
 
 	while ((mpath = rhashtable_walk_next(&iter))) {
 		if (IS_ERR(mpath) && PTR_ERR(mpath) == -EAGAIN)
@@ -530,6 +536,7 @@ void mesh_plink_broken(struct sta_info *sta)
 				WLAN_REASON_MESH_PATH_DEST_UNREACHABLE, bcast);
 		}
 	}
+out:
 	rhashtable_walk_stop(&iter);
 	rhashtable_walk_exit(&iter);
 }
@@ -578,7 +585,9 @@ void mesh_path_flush_by_nexthop(struct sta_info *sta)
 	if (ret)
 		return;
 
-	rhashtable_walk_start(&iter);
+	ret = rhashtable_walk_start(&iter);
+	if (ret && ret != -EAGAIN)
+		goto out;
 
 	while ((mpath = rhashtable_walk_next(&iter))) {
 		if (IS_ERR(mpath) && PTR_ERR(mpath) == -EAGAIN)
@@ -589,7 +598,7 @@ void mesh_path_flush_by_nexthop(struct sta_info *sta)
 		if (rcu_access_pointer(mpath->next_hop) == sta)
 			__mesh_path_del(tbl, mpath);
 	}
-
+out:
 	rhashtable_walk_stop(&iter);
 	rhashtable_walk_exit(&iter);
 }
@@ -606,7 +615,9 @@ static void mpp_flush_by_proxy(struct ieee80211_sub_if_data *sdata,
 	if (ret)
 		return;
 
-	rhashtable_walk_start(&iter);
+	ret = rhashtable_walk_start(&iter);
+	if (ret && ret != -EAGAIN)
+		goto out;
 
 	while ((mpath = rhashtable_walk_next(&iter))) {
 		if (IS_ERR(mpath) && PTR_ERR(mpath) == -EAGAIN)
@@ -617,7 +628,7 @@ static void mpp_flush_by_proxy(struct ieee80211_sub_if_data *sdata,
 		if (ether_addr_equal(mpath->mpp, proxy))
 			__mesh_path_del(tbl, mpath);
 	}
-
+out:
 	rhashtable_walk_stop(&iter);
 	rhashtable_walk_exit(&iter);
 }
@@ -632,7 +643,9 @@ static void table_flush_by_iface(struct mesh_table *tbl)
 	if (ret)
 		return;
 
-	rhashtable_walk_start(&iter);
+	ret = rhashtable_walk_start(&iter);
+	if (ret && ret != -EAGAIN)
+		goto out;
 
 	while ((mpath = rhashtable_walk_next(&iter))) {
 		if (IS_ERR(mpath) && PTR_ERR(mpath) == -EAGAIN)
@@ -641,7 +654,7 @@ static void table_flush_by_iface(struct mesh_table *tbl)
 			break;
 		__mesh_path_del(tbl, mpath);
 	}
-
+out:
 	rhashtable_walk_stop(&iter);
 	rhashtable_walk_exit(&iter);
 }
@@ -861,7 +874,9 @@ void mesh_path_tbl_expire(struct ieee80211_sub_if_data *sdata,
 	if (ret)
 		return;
 
-	rhashtable_walk_start(&iter);
+	ret = rhashtable_walk_start(&iter);
+	if (ret && ret != -EAGAIN)
+		goto out;
 
 	while ((mpath = rhashtable_walk_next(&iter))) {
 		if (IS_ERR(mpath) && PTR_ERR(mpath) == -EAGAIN)
@@ -873,7 +888,7 @@ void mesh_path_tbl_expire(struct ieee80211_sub_if_data *sdata,
 		     time_after(jiffies, mpath->exp_time + MESH_PATH_EXPIRE))
 			__mesh_path_del(tbl, mpath);
 	}
-
+out:
 	rhashtable_walk_stop(&iter);
 	rhashtable_walk_exit(&iter);
 }

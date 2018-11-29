@@ -234,34 +234,6 @@ static inline void acomp_request_set_params(struct acomp_req *req,
 		req->flags |= CRYPTO_ACOMP_ALLOC_OUTPUT;
 }
 
-static inline void crypto_stat_compress(struct acomp_req *req, int ret)
-{
-#ifdef CONFIG_CRYPTO_STATS
-	struct crypto_acomp *tfm = crypto_acomp_reqtfm(req);
-
-	if (ret && ret != -EINPROGRESS && ret != -EBUSY) {
-		atomic_inc(&tfm->base.__crt_alg->compress_err_cnt);
-	} else {
-		atomic_inc(&tfm->base.__crt_alg->compress_cnt);
-		atomic64_add(req->slen, &tfm->base.__crt_alg->compress_tlen);
-	}
-#endif
-}
-
-static inline void crypto_stat_decompress(struct acomp_req *req, int ret)
-{
-#ifdef CONFIG_CRYPTO_STATS
-	struct crypto_acomp *tfm = crypto_acomp_reqtfm(req);
-
-	if (ret && ret != -EINPROGRESS && ret != -EBUSY) {
-		atomic_inc(&tfm->base.__crt_alg->compress_err_cnt);
-	} else {
-		atomic_inc(&tfm->base.__crt_alg->decompress_cnt);
-		atomic64_add(req->slen, &tfm->base.__crt_alg->decompress_tlen);
-	}
-#endif
-}
-
 /**
  * crypto_acomp_compress() -- Invoke asynchronous compress operation
  *
@@ -274,11 +246,8 @@ static inline void crypto_stat_decompress(struct acomp_req *req, int ret)
 static inline int crypto_acomp_compress(struct acomp_req *req)
 {
 	struct crypto_acomp *tfm = crypto_acomp_reqtfm(req);
-	int ret;
 
-	ret = tfm->compress(req);
-	crypto_stat_compress(req, ret);
-	return ret;
+	return tfm->compress(req);
 }
 
 /**
@@ -293,11 +262,8 @@ static inline int crypto_acomp_compress(struct acomp_req *req)
 static inline int crypto_acomp_decompress(struct acomp_req *req)
 {
 	struct crypto_acomp *tfm = crypto_acomp_reqtfm(req);
-	int ret;
 
-	ret = tfm->decompress(req);
-	crypto_stat_decompress(req, ret);
-	return ret;
+	return tfm->decompress(req);
 }
 
 #endif

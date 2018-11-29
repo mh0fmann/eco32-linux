@@ -252,7 +252,7 @@ void sym_set_cam_result_error(struct sym_hcb *np, struct sym_ccb *cp, int resid)
 		cam_status = sym_xerr_cam_status(DID_ERROR, cp->xerr_status);
 	}
 	scsi_set_resid(cmd, resid);
-	cmd->result = (drv_status << 24) | (cam_status << 16) | scsi_status;
+	cmd->result = (drv_status << 24) + (cam_status << 16) + scsi_status;
 }
 
 static int sym_scatter(struct sym_hcb *np, struct sym_ccb *cp, struct scsi_cmnd *cmd)
@@ -565,9 +565,9 @@ static irqreturn_t sym53c8xx_intr(int irq, void *dev_id)
 /*
  *  Linux entry point of the timer handler
  */
-static void sym53c8xx_timer(struct timer_list *t)
+static void sym53c8xx_timer(unsigned long npref)
 {
-	struct sym_hcb *np = from_timer(np, t, s.timer);
+	struct sym_hcb *np = (struct sym_hcb *)npref;
 	unsigned long flags;
 
 	spin_lock_irqsave(np->s.host->host_lock, flags);
@@ -1351,7 +1351,9 @@ static struct Scsi_Host *sym_attach(struct scsi_host_template *tpnt, int unit,
 	/*
 	 *  Start the timer daemon
 	 */
-	timer_setup(&np->s.timer, sym53c8xx_timer, 0);
+	init_timer(&np->s.timer);
+	np->s.timer.data     = (unsigned long) np;
+	np->s.timer.function = sym53c8xx_timer;
 	np->s.lasttime=0;
 	sym_timer (np);
 
@@ -1393,7 +1395,7 @@ static struct Scsi_Host *sym_attach(struct scsi_host_template *tpnt, int unit,
 		scsi_host_put(shost);
 
 	return NULL;
-}
+ }
 
 
 /*

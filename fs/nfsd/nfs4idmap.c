@@ -65,7 +65,6 @@ struct ent {
 	u32               id;
 	char              name[IDMAP_NAMESZ];
 	char              authname[IDMAP_NAMESZ];
-	struct rcu_head	  rcu_head;
 };
 
 /* Common entry handling */
@@ -90,7 +89,7 @@ static void
 ent_put(struct kref *ref)
 {
 	struct ent *map = container_of(ref, struct ent, h.ref);
-	kfree_rcu(map, rcu_head);
+	kfree(map);
 }
 
 static struct cache_head *
@@ -179,7 +178,7 @@ static struct ent *idtoname_lookup(struct cache_detail *, struct ent *);
 static struct ent *idtoname_update(struct cache_detail *, struct ent *,
 				   struct ent *);
 
-static const struct cache_detail idtoname_cache_template = {
+static struct cache_detail idtoname_cache_template = {
 	.owner		= THIS_MODULE,
 	.hash_size	= ENT_HASHMAX,
 	.name		= "nfs4.idtoname",
@@ -265,8 +264,8 @@ out:
 static struct ent *
 idtoname_lookup(struct cache_detail *cd, struct ent *item)
 {
-	struct cache_head *ch = sunrpc_cache_lookup_rcu(cd, &item->h,
-							idtoname_hash(item));
+	struct cache_head *ch = sunrpc_cache_lookup(cd, &item->h,
+						    idtoname_hash(item));
 	if (ch)
 		return container_of(ch, struct ent, h);
 	else
@@ -342,7 +341,7 @@ static struct ent *nametoid_update(struct cache_detail *, struct ent *,
 				   struct ent *);
 static int         nametoid_parse(struct cache_detail *, char *, int);
 
-static const struct cache_detail nametoid_cache_template = {
+static struct cache_detail nametoid_cache_template = {
 	.owner		= THIS_MODULE,
 	.hash_size	= ENT_HASHMAX,
 	.name		= "nfs4.nametoid",
@@ -423,8 +422,8 @@ out:
 static struct ent *
 nametoid_lookup(struct cache_detail *cd, struct ent *item)
 {
-	struct cache_head *ch = sunrpc_cache_lookup_rcu(cd, &item->h,
-							nametoid_hash(item));
+	struct cache_head *ch = sunrpc_cache_lookup(cd, &item->h,
+						    nametoid_hash(item));
 	if (ch)
 		return container_of(ch, struct ent, h);
 	else

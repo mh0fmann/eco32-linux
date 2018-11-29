@@ -112,8 +112,6 @@ struct hist_entry {
 
 	char			level;
 	u8			filtered;
-
-	u16			callchain_size;
 	union {
 		/*
 		 * Since perf diff only supports the stdio output, TUI
@@ -132,6 +130,7 @@ struct hist_entry {
 	};
 	char			*srcline;
 	char			*srcfile;
+	struct inline_node	*inline_node;
 	struct symbol		*parent;
 	struct branch_info	*branch_info;
 	struct hists		*hists;
@@ -152,11 +151,6 @@ struct hist_entry {
 	};
 	struct callchain_root	callchain[0]; /* must be last member */
 };
-
-static __pure inline bool hist_entry__has_callchains(struct hist_entry *he)
-{
-	return he->callchain_size != 0;
-}
 
 static inline bool hist_entry__has_pairs(struct hist_entry *he)
 {
@@ -193,13 +187,13 @@ static inline float hist_entry__get_percent_limit(struct hist_entry *he)
 static inline u64 cl_address(u64 address)
 {
 	/* return the cacheline of the address */
-	return (address & ~(cacheline_size() - 1));
+	return (address & ~(cacheline_size - 1));
 }
 
 static inline u64 cl_offset(u64 address)
 {
 	/* return the cacheline of the address */
-	return (address & (cacheline_size() - 1));
+	return (address & (cacheline_size - 1));
 }
 
 enum sort_mode {
@@ -227,7 +221,6 @@ enum sort_type {
 	SORT_TRANSACTION,
 	SORT_TRACE,
 	SORT_SYM_SIZE,
-	SORT_DSO_SIZE,
 	SORT_CGROUP_ID,
 
 	/* branch stack specific sort keys */
@@ -276,7 +269,7 @@ extern struct sort_entry sort_thread;
 extern struct list_head hist_entry__sort_list;
 
 struct perf_evlist;
-struct tep_handle;
+struct pevent;
 int setup_sorting(struct perf_evlist *evlist);
 int setup_output_field(void);
 void reset_output_field(void);
@@ -299,5 +292,5 @@ int64_t
 sort__daddr_cmp(struct hist_entry *left, struct hist_entry *right);
 int64_t
 sort__dcacheline_cmp(struct hist_entry *left, struct hist_entry *right);
-char *hist_entry__srcline(struct hist_entry *he);
+char *hist_entry__get_srcline(struct hist_entry *he);
 #endif	/* __PERF_SORT_H */

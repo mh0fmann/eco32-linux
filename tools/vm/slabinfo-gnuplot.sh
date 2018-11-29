@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 
 # Sergey Senozhatsky, 2015
 # sergey.senozhatsky.work@gmail.com

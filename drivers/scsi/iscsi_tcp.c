@@ -37,7 +37,6 @@
 #include <linux/kfifo.h>
 #include <linux/scatterlist.h>
 #include <linux/module.h>
-#include <linux/backing-dev.h>
 #include <net/tcp.h>
 #include <scsi/scsi_cmnd.h>
 #include <scsi/scsi_device.h>
@@ -308,7 +307,6 @@ static int iscsi_sw_tcp_xmit_segment(struct iscsi_tcp_conn *tcp_conn,
 
 /**
  * iscsi_sw_tcp_xmit - TCP transmit
- * @conn: iscsi connection
  **/
 static int iscsi_sw_tcp_xmit(struct iscsi_conn *conn)
 {
@@ -359,7 +357,6 @@ error:
 
 /**
  * iscsi_tcp_xmit_qlen - return the number of bytes queued for xmit
- * @conn: iscsi connection
  */
 static inline int iscsi_sw_tcp_xmit_qlen(struct iscsi_conn *conn)
 {
@@ -733,7 +730,7 @@ static int iscsi_sw_tcp_conn_get_param(struct iscsi_cls_conn *cls_conn,
 	struct iscsi_tcp_conn *tcp_conn = conn->dd_data;
 	struct iscsi_sw_tcp_conn *tcp_sw_conn = tcp_conn->dd_data;
 	struct sockaddr_in6 addr;
-	int rc;
+	int rc, len;
 
 	switch(param) {
 	case ISCSI_PARAM_CONN_PORT:
@@ -746,12 +743,12 @@ static int iscsi_sw_tcp_conn_get_param(struct iscsi_cls_conn *cls_conn,
 		}
 		if (param == ISCSI_PARAM_LOCAL_PORT)
 			rc = kernel_getsockname(tcp_sw_conn->sock,
-						(struct sockaddr *)&addr);
+						(struct sockaddr *)&addr, &len);
 		else
 			rc = kernel_getpeername(tcp_sw_conn->sock,
-						(struct sockaddr *)&addr);
+						(struct sockaddr *)&addr, &len);
 		spin_unlock_bh(&conn->session->frwd_lock);
-		if (rc < 0)
+		if (rc)
 			return rc;
 
 		return iscsi_conn_get_addr_param((struct sockaddr_storage *)
@@ -772,7 +769,7 @@ static int iscsi_sw_tcp_host_get_param(struct Scsi_Host *shost,
 	struct iscsi_tcp_conn *tcp_conn;
 	struct iscsi_sw_tcp_conn *tcp_sw_conn;
 	struct sockaddr_in6 addr;
-	int rc;
+	int rc, len;
 
 	switch (param) {
 	case ISCSI_HOST_PARAM_IPADDRESS:
@@ -794,14 +791,13 @@ static int iscsi_sw_tcp_host_get_param(struct Scsi_Host *shost,
 		}
 
 		rc = kernel_getsockname(tcp_sw_conn->sock,
-					(struct sockaddr *)&addr);
+					(struct sockaddr *)&addr, &len);
 		spin_unlock_bh(&session->frwd_lock);
-		if (rc < 0)
+		if (rc)
 			return rc;
 
 		return iscsi_conn_get_addr_param((struct sockaddr_storage *)
-						 &addr,
-						 (enum iscsi_param)param, buf);
+						 &addr, param, buf);
 	default:
 		return iscsi_host_get_param(shost, param, buf);
 	}
@@ -950,19 +946,13 @@ static umode_t iscsi_sw_tcp_attr_is_visible(int param_type, int param)
 
 static int iscsi_sw_tcp_slave_alloc(struct scsi_device *sdev)
 {
-	blk_queue_flag_set(QUEUE_FLAG_BIDI, sdev->request_queue);
+	set_bit(QUEUE_FLAG_BIDI, &sdev->request_queue->queue_flags);
 	return 0;
 }
 
 static int iscsi_sw_tcp_slave_configure(struct scsi_device *sdev)
 {
-	struct iscsi_sw_tcp_host *tcp_sw_host = iscsi_host_priv(sdev->host);
-	struct iscsi_session *session = tcp_sw_host->session;
-	struct iscsi_conn *conn = session->leadconn;
-
-	if (conn->datadgst_en)
-		sdev->request_queue->backing_dev_info->capabilities
-			|= BDI_CAP_STABLE_WRITES;
+	blk_queue_bounce_limit(sdev->request_queue, BLK_BOUNCE_ANY);
 	blk_queue_dma_alignment(sdev->request_queue, 0);
 	return 0;
 }

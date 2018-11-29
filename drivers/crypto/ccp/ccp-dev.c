@@ -292,12 +292,9 @@ int ccp_enqueue_cmd(struct ccp_cmd *cmd)
 	i = ccp->cmd_q_count;
 
 	if (ccp->cmd_count >= MAX_CMD_QLEN) {
-		if (cmd->flags & CCP_CMD_MAY_BACKLOG) {
-			ret = -EBUSY;
+		ret = -EBUSY;
+		if (cmd->flags & CCP_CMD_MAY_BACKLOG)
 			list_add_tail(&cmd->entry, &ccp->backlog);
-		} else {
-			ret = -ENOSPC;
-		}
 	} else {
 		ret = -EINPROGRESS;
 		ccp->cmd_count++;

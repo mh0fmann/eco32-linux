@@ -290,6 +290,7 @@ static const struct attribute_group ad9832_attribute_group = {
 
 static const struct iio_info ad9832_info = {
 	.attrs = &ad9832_attribute_group,
+	.driver_module = THIS_MODULE,
 };
 
 static int ad9832_probe(struct spi_device *spi)
@@ -454,6 +455,6 @@ static struct spi_driver ad9832_driver = {
 };
 module_spi_driver(ad9832_driver);
 
-MODULE_AUTHOR("Michael Hennerich <michael.hennerich@analog.com>");
+MODULE_AUTHOR("Michael Hennerich <hennerich@blackfin.uclinux.org>");
 MODULE_DESCRIPTION("Analog Devices AD9832/AD9835 DDS");
 MODULE_LICENSE("GPL v2");

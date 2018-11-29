@@ -282,9 +282,9 @@ static void raw3215_start_io(struct raw3215_info *raw)
 /*
  * Function to start a delayed output after RAW3215_TIMEOUT seconds
  */
-static void raw3215_timeout(struct timer_list *t)
+static void raw3215_timeout(unsigned long __data)
 {
-	struct raw3215_info *raw = from_timer(raw, t, timer);
+	struct raw3215_info *raw = (struct raw3215_info *) __data;
 	unsigned long flags;
 
 	spin_lock_irqsave(get_ccwdev_lock(raw->cdev), flags);
@@ -670,7 +670,7 @@ static struct raw3215_info *raw3215_alloc_info(void)
 		return NULL;
 	}
 
-	timer_setup(&info->timer, raw3215_timeout, 0);
+	setup_timer(&info->timer, raw3215_timeout, (unsigned long)info);
 	init_waitqueue_head(&info->empty_wait);
 	tasklet_init(&info->tlet, raw3215_wakeup, (unsigned long)info);
 	tty_port_init(&info->port);

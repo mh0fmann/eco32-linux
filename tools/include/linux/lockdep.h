@@ -30,11 +30,8 @@ struct task_struct {
 	struct held_lock held_locks[MAX_LOCK_DEPTH];
 	gfp_t lockdep_reclaim_gfp;
 	int pid;
-	int state;
 	char comm[17];
 };
-
-#define TASK_RUNNING 0
 
 extern struct task_struct *__curr(void);
 
@@ -51,7 +48,6 @@ static inline int debug_locks_off(void)
 #define printk(...) dprintf(STDOUT_FILENO, __VA_ARGS__)
 #define pr_err(format, ...) fprintf (stderr, format, ## __VA_ARGS__)
 #define pr_warn pr_err
-#define pr_cont pr_err
 
 #define list_del_rcu list_del
 

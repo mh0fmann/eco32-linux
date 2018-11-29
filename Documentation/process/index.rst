@@ -19,18 +19,13 @@ Below are the essential guides that every developer should read.
 .. toctree::
    :maxdepth: 1
 
-   license-rules
    howto
-   code-of-conduct
-   code-of-conduct-interpretation
+   code-of-conflict
    development-process
    submitting-patches
-   programming-language
    coding-style
-   maintainer-pgp-guide
    email-clients
    kernel-enforcement-statement
-   kernel-driver-statement
 
 Other guides to the community that are of interest to most developers are: 
 
@@ -44,7 +39,6 @@ Other guides to the community that are of interest to most developers are:
    stable-kernel-rules
    submit-checklist
    kernel-docs
-   deprecated
 
 These are some overall technical guides that have been put here for now for
 lack of a better place.
@@ -56,7 +50,6 @@ lack of a better place.
    adding-syscalls
    magic-number
    volatile-considered-harmful
-   clang-format
 
 .. only::  subproject and html
 

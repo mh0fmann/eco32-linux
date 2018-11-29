@@ -21,28 +21,33 @@
 unsigned int rxrpc_max_backlog __read_mostly = 10;
 
 /*
- * How long to wait before scheduling ACK generation after seeing a
- * packet with RXRPC_REQUEST_ACK set (in jiffies).
+ * Maximum lifetime of a call (in mx).
  */
-unsigned long rxrpc_requested_ack_delay = 1;
+unsigned int rxrpc_max_call_lifetime = 60 * 1000;
 
 /*
- * How long to wait before scheduling an ACK with subtype DELAY (in jiffies).
+ * How long to wait before scheduling ACK generation after seeing a
+ * packet with RXRPC_REQUEST_ACK set (in ms).
+ */
+unsigned int rxrpc_requested_ack_delay = 1;
+
+/*
+ * How long to wait before scheduling an ACK with subtype DELAY (in ms).
  *
  * We use this when we've received new data packets.  If those packets aren't
  * all consumed within this time we will send a DELAY ACK if an ACK was not
  * requested to let the sender know it doesn't need to resend.
  */
-unsigned long rxrpc_soft_ack_delay = HZ;
+unsigned int rxrpc_soft_ack_delay = 1 * 1000;
 
 /*
- * How long to wait before scheduling an ACK with subtype IDLE (in jiffies).
+ * How long to wait before scheduling an ACK with subtype IDLE (in ms).
  *
  * We use this when we've consumed some previously soft-ACK'd packets when
  * further packets aren't immediately received to decide when to send an IDLE
  * ACK let the other end know that it can free up its Tx buffer space.
  */
-unsigned long rxrpc_idle_ack_delay = HZ / 2;
+unsigned int rxrpc_idle_ack_delay = 0.5 * 1000;
 
 /*
  * Receive window size in packets.  This indicates the maximum number of
@@ -70,7 +75,7 @@ unsigned int rxrpc_rx_jumbo_max = 4;
 /*
  * Time till packet resend (in milliseconds).
  */
-unsigned long rxrpc_resend_timeout = 4 * HZ;
+unsigned int rxrpc_resend_timeout = 4 * 1000;
 
 const s8 rxrpc_ack_priority[] = {
 	[0]				= 0,

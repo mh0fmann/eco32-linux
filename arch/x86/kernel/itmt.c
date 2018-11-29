@@ -24,6 +24,7 @@
 #include <linux/cpumask.h>
 #include <linux/cpuset.h>
 #include <linux/mutex.h>
+#include <linux/sched.h>
 #include <linux/sysctl.h>
 #include <linux/nodemask.h>
 

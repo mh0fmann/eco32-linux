@@ -562,7 +562,7 @@ static void zynq_gpio_handle_bank_irq(struct zynq_gpio *gpio,
 				      unsigned long pending)
 {
 	unsigned int bank_offset = gpio->p_data->bank_min[bank_num];
-	struct irq_domain *irqdomain = gpio->chip.irq.domain;
+	struct irq_domain *irqdomain = gpio->chip.irqdomain;
 	int offset;
 
 	if (!pending)
@@ -665,8 +665,10 @@ static void zynq_gpio_restore_context(struct zynq_gpio *gpio)
 
 static int __maybe_unused zynq_gpio_suspend(struct device *dev)
 {
-	struct zynq_gpio *gpio = dev_get_drvdata(dev);
-	struct irq_data *data = irq_get_irq_data(gpio->irq);
+	struct platform_device *pdev = to_platform_device(dev);
+	int irq = platform_get_irq(pdev, 0);
+	struct irq_data *data = irq_get_irq_data(irq);
+	struct zynq_gpio *gpio = platform_get_drvdata(pdev);
 
 	if (!irqd_is_wakeup_set(data)) {
 		zynq_gpio_save_context(gpio);
@@ -678,8 +680,10 @@ static int __maybe_unused zynq_gpio_suspend(struct device *dev)
 
 static int __maybe_unused zynq_gpio_resume(struct device *dev)
 {
-	struct zynq_gpio *gpio = dev_get_drvdata(dev);
-	struct irq_data *data = irq_get_irq_data(gpio->irq);
+	struct platform_device *pdev = to_platform_device(dev);
+	int irq = platform_get_irq(pdev, 0);
+	struct irq_data *data = irq_get_irq_data(irq);
+	struct zynq_gpio *gpio = platform_get_drvdata(pdev);
 	int ret;
 
 	if (!irqd_is_wakeup_set(data)) {
@@ -827,7 +831,7 @@ static int zynq_gpio_probe(struct platform_device *pdev)
 	chip->free = zynq_gpio_free;
 	chip->direction_input = zynq_gpio_dir_in;
 	chip->direction_output = zynq_gpio_dir_out;
-	chip->base = of_alias_get_id(pdev->dev.of_node, "gpio");
+	chip->base = -1;
 	chip->ngpio = gpio->p_data->ngpio;
 
 	/* Retrieve GPIO clock */

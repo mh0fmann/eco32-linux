@@ -282,13 +282,13 @@ static int rv3029_eeprom_read(struct device *dev, u8 reg,
 static int rv3029_eeprom_write(struct device *dev, u8 reg,
 			       u8 const buf[], size_t len)
 {
-	int ret;
+	int ret, err;
 	size_t i;
 	u8 tmp;
 
-	ret = rv3029_eeprom_enter(dev);
-	if (ret < 0)
-		return ret;
+	err = rv3029_eeprom_enter(dev);
+	if (err < 0)
+		return err;
 
 	for (i = 0; i < len; i++, reg++) {
 		ret = rv3029_read_regs(dev, reg, &tmp, 1);
@@ -304,11 +304,11 @@ static int rv3029_eeprom_write(struct device *dev, u8 reg,
 			break;
 	}
 
-	ret = rv3029_eeprom_exit(dev);
-	if (ret < 0)
-		return ret;
+	err = rv3029_eeprom_exit(dev);
+	if (err < 0)
+		return err;
 
-	return 0;
+	return ret;
 }
 
 static int rv3029_eeprom_update_bits(struct device *dev,
@@ -876,8 +876,6 @@ static const struct i2c_device_id rv3029_id[] = {
 MODULE_DEVICE_TABLE(i2c, rv3029_id);
 
 static const struct of_device_id rv3029_of_match[] = {
-	{ .compatible = "microcrystal,rv3029" },
-	/* Backward compatibility only, do not use compatibles below: */
 	{ .compatible = "rv3029" },
 	{ .compatible = "rv3029c2" },
 	{ .compatible = "mc,rv3029c2" },

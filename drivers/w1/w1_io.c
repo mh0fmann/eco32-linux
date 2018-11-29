@@ -58,7 +58,7 @@ static u8 w1_read_bit(struct w1_master *dev);
  * @dev:	the master device
  * @bit:	0 - write a 0, 1 - write a 0 read the level
  */
-u8 w1_touch_bit(struct w1_master *dev, int bit)
+static u8 w1_touch_bit(struct w1_master *dev, int bit)
 {
 	if (dev->bus_master->touch_bit)
 		return dev->bus_master->touch_bit(dev->bus_master->data, bit);
@@ -69,7 +69,6 @@ u8 w1_touch_bit(struct w1_master *dev, int bit)
 		return 0;
 	}
 }
-EXPORT_SYMBOL_GPL(w1_touch_bit);
 
 /**
  * w1_write_bit() - Generates a write-0 or write-1 cycle.
@@ -194,7 +193,6 @@ static u8 w1_read_bit(struct w1_master *dev)
  *  bit 0 = id_bit
  *  bit 1 = comp_bit
  *  bit 2 = dir_taken
- *
  * If both bits 0 & 1 are set, the search should be restarted.
  *
  * Return:        bit fields - see above

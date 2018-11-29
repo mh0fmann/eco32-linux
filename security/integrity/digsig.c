@@ -18,7 +18,6 @@
 #include <linux/cred.h>
 #include <linux/key-type.h>
 #include <linux/digsig.h>
-#include <linux/vmalloc.h>
 #include <crypto/public_key.h>
 #include <keys/system_keyring.h>
 
@@ -26,7 +25,7 @@
 
 static struct key *keyring[INTEGRITY_KEYRING_MAX];
 
-static const char * const keyring_name[INTEGRITY_KEYRING_MAX] = {
+static const char *keyring_name[INTEGRITY_KEYRING_MAX] = {
 #ifndef CONFIG_INTEGRITY_TRUSTED_KEYRING
 	"_evm",
 	"_ima",
@@ -36,6 +35,12 @@ static const char * const keyring_name[INTEGRITY_KEYRING_MAX] = {
 #endif
 	"_module",
 };
+
+#ifdef CONFIG_INTEGRITY_TRUSTED_KEYRING
+static bool init_keyring __initdata = true;
+#else
+static bool init_keyring __initdata;
+#endif
 
 #ifdef CONFIG_IMA_KEYRINGS_PERMIT_SIGNED_BY_BUILTIN_OR_SECONDARY
 #define restrict_link_to_ima restrict_link_by_builtin_and_secondary_trusted
@@ -79,7 +84,7 @@ int __init integrity_init_keyring(const unsigned int id)
 	struct key_restriction *restriction;
 	int err = 0;
 
-	if (!IS_ENABLED(CONFIG_INTEGRITY_TRUSTED_KEYRING))
+	if (!init_keyring)
 		return 0;
 
 	restriction = kzalloc(sizeof(struct key_restriction), GFP_KERNEL);
@@ -107,25 +112,21 @@ int __init integrity_init_keyring(const unsigned int id)
 int __init integrity_load_x509(const unsigned int id, const char *path)
 {
 	key_ref_t key;
-	void *data;
-	loff_t size;
+	char *data;
 	int rc;
 
 	if (!keyring[id])
 		return -EINVAL;
 
-	rc = kernel_read_file_from_path(path, &data, &size, 0,
-					READING_X509_CERTIFICATE);
-	if (rc < 0) {
-		pr_err("Unable to open file: %s (%d)", path, rc);
+	rc = integrity_read_file(path, &data);
+	if (rc < 0)
 		return rc;
-	}
 
 	key = key_create_or_update(make_key_ref(keyring[id], 1),
 				   "asymmetric",
 				   NULL,
 				   data,
-				   size,
+				   rc,
 				   ((KEY_POS_ALL & ~KEY_POS_SETATTR) |
 				    KEY_USR_VIEW | KEY_USR_READ),
 				   KEY_ALLOC_NOT_IN_QUOTA);
@@ -138,6 +139,6 @@ int __init integrity_load_x509(const unsigned int id, const char *path)
 			  key_ref_to_ptr(key)->description, path);
 		key_ref_put(key);
 	}
-	vfree(data);
+	kfree(data);
 	return 0;
 }

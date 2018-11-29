@@ -18,7 +18,8 @@
 
 #include "rmnet_config.h"
 
-void rmnet_egress_handler(struct sk_buff *skb);
+void rmnet_egress_handler(struct sk_buff *skb,
+			  struct rmnet_endpoint *ep);
 
 rx_handler_result_t rmnet_rx_handler(struct sk_buff **pskb);
 

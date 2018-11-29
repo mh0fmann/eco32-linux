@@ -94,7 +94,6 @@ struct irq_desc {
 #endif
 #ifdef CONFIG_GENERIC_IRQ_DEBUGFS
 	struct dentry		*debugfs_file;
-	const char		*dev_name;
 #endif
 #ifdef CONFIG_SPARSE_IRQ
 	struct rcu_head		rcu;
@@ -143,6 +142,11 @@ static inline void *irq_desc_get_chip_data(struct irq_desc *desc)
 static inline void *irq_desc_get_handler_data(struct irq_desc *desc)
 {
 	return desc->irq_common_data.handler_data;
+}
+
+static inline struct msi_desc *irq_desc_get_msi_desc(struct irq_desc *desc)
+{
+	return desc->irq_common_data.msi_desc;
 }
 
 /*
@@ -225,7 +229,7 @@ irq_set_chip_handler_name_locked(struct irq_data *data, struct irq_chip *chip,
 	data->chip = chip;
 }
 
-static inline bool irq_balancing_disabled(unsigned int irq)
+static inline int irq_balancing_disabled(unsigned int irq)
 {
 	struct irq_desc *desc;
 
@@ -233,7 +237,7 @@ static inline bool irq_balancing_disabled(unsigned int irq)
 	return desc->status_use_accessors & IRQ_NO_BALANCING_MASK;
 }
 
-static inline bool irq_is_percpu(unsigned int irq)
+static inline int irq_is_percpu(unsigned int irq)
 {
 	struct irq_desc *desc;
 
@@ -241,24 +245,13 @@ static inline bool irq_is_percpu(unsigned int irq)
 	return desc->status_use_accessors & IRQ_PER_CPU;
 }
 
-static inline bool irq_is_percpu_devid(unsigned int irq)
-{
-	struct irq_desc *desc;
-
-	desc = irq_to_desc(irq);
-	return desc->status_use_accessors & IRQ_PER_CPU_DEVID;
-}
-
 static inline void
-irq_set_lockdep_class(unsigned int irq, struct lock_class_key *lock_class,
-		      struct lock_class_key *request_class)
+irq_set_lockdep_class(unsigned int irq, struct lock_class_key *class)
 {
 	struct irq_desc *desc = irq_to_desc(irq);
 
-	if (desc) {
-		lockdep_set_class(&desc->lock, lock_class);
-		lockdep_set_class(&desc->request_mutex, request_class);
-	}
+	if (desc)
+		lockdep_set_class(&desc->lock, class);
 }
 
 #ifdef CONFIG_IRQ_PREFLOW_FASTEOI

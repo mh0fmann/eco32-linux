@@ -16,7 +16,8 @@
 #else
 #include <asm/types.h>
 #endif
-#include <asm/asm-const.h>
+#include <asm/asm-compat.h>
+#include <asm/kdump.h>
 
 /*
  * On regular PPC32 page size is 4K (but we support 4K/16K/64K/256K pages
@@ -38,7 +39,6 @@
 
 #ifndef __ASSEMBLY__
 #ifdef CONFIG_HUGETLB_PAGE
-extern bool hugetlb_disabled;
 extern unsigned int HPAGE_SHIFT;
 #else
 #define HPAGE_SHIFT PAGE_SHIFT
@@ -126,15 +126,7 @@ extern long long virt_phys_offset;
 
 #ifdef CONFIG_FLATMEM
 #define ARCH_PFN_OFFSET		((unsigned long)(MEMORY_START >> PAGE_SHIFT))
-#ifndef __ASSEMBLY__
-extern unsigned long max_mapnr;
-static inline bool pfn_valid(unsigned long pfn)
-{
-	unsigned long min_pfn = ARCH_PFN_OFFSET;
-
-	return pfn >= min_pfn && pfn < max_mapnr;
-}
-#endif
+#define pfn_valid(pfn)		((pfn) >= ARCH_PFN_OFFSET && (pfn) < max_mapnr)
 #endif
 
 #define virt_to_pfn(kaddr)	(__pa(kaddr) >> PAGE_SHIFT)
@@ -352,6 +344,5 @@ typedef struct page *pgtable_t;
 
 #include <asm-generic/memory_model.h>
 #endif /* __ASSEMBLY__ */
-#include <asm/slice.h>
 
 #endif /* _ASM_POWERPC_PAGE_H */

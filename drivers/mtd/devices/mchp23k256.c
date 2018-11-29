@@ -68,7 +68,6 @@ static int mchp23k256_write(struct mtd_info *mtd, loff_t to, size_t len,
 	struct spi_transfer transfer[2] = {};
 	struct spi_message message;
 	unsigned char command[MAX_CMD_SIZE];
-	int ret;
 
 	spi_message_init(&message);
 
@@ -85,16 +84,12 @@ static int mchp23k256_write(struct mtd_info *mtd, loff_t to, size_t len,
 
 	mutex_lock(&flash->lock);
 
-	ret = spi_sync(flash->spi, &message);
-
-	mutex_unlock(&flash->lock);
-
-	if (ret)
-		return ret;
+	spi_sync(flash->spi, &message);
 
 	if (retlen && message.actual_length > sizeof(command))
 		*retlen += message.actual_length - sizeof(command);
 
+	mutex_unlock(&flash->lock);
 	return 0;
 }
 
@@ -105,7 +100,6 @@ static int mchp23k256_read(struct mtd_info *mtd, loff_t from, size_t len,
 	struct spi_transfer transfer[2] = {};
 	struct spi_message message;
 	unsigned char command[MAX_CMD_SIZE];
-	int ret;
 
 	spi_message_init(&message);
 
@@ -123,16 +117,12 @@ static int mchp23k256_read(struct mtd_info *mtd, loff_t from, size_t len,
 
 	mutex_lock(&flash->lock);
 
-	ret = spi_sync(flash->spi, &message);
-
-	mutex_unlock(&flash->lock);
-
-	if (ret)
-		return ret;
+	spi_sync(flash->spi, &message);
 
 	if (retlen && message.actual_length > sizeof(command))
 		*retlen += message.actual_length - sizeof(command);
 
+	mutex_unlock(&flash->lock);
 	return 0;
 }
 

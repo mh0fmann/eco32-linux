@@ -45,7 +45,7 @@ static int afs_xattr_get_cell(const struct xattr_handler *handler,
 	struct afs_cell *cell = vnode->volume->cell;
 	size_t namelen;
 
-	namelen = cell->name_len;
+	namelen = strlen(cell->name);
 	if (size == 0)
 		return namelen;
 	if (namelen > size)
@@ -72,7 +72,7 @@ static int afs_xattr_get_fid(const struct xattr_handler *handler,
 	char text[8 + 1 + 8 + 1 + 8 + 1];
 	size_t len;
 
-	len = sprintf(text, "%llx:%llx:%x",
+	len = sprintf(text, "%x:%x:%x",
 		      vnode->fid.vid, vnode->fid.vnode, vnode->fid.unique);
 	if (size == 0)
 		return len;
@@ -96,7 +96,7 @@ static int afs_xattr_get_volume(const struct xattr_handler *handler,
 			      void *buffer, size_t size)
 {
 	struct afs_vnode *vnode = AFS_FS_I(inode);
-	const char *volname = vnode->volume->name;
+	const char *volname = vnode->volume->vlocation->vldb.name;
 	size_t namelen;
 
 	namelen = strlen(volname);

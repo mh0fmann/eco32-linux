@@ -73,9 +73,9 @@ struct sco_pinfo {
 #define SCO_CONN_TIMEOUT	(HZ * 40)
 #define SCO_DISCONN_TIMEOUT	(HZ * 2)
 
-static void sco_sock_timeout(struct timer_list *t)
+static void sco_sock_timeout(unsigned long arg)
 {
-	struct sock *sk = from_timer(sk, t, sk_timer);
+	struct sock *sk = (struct sock *)arg;
 
 	BT_DBG("sock %p state %d", sk, sk->sk_state);
 
@@ -393,8 +393,7 @@ static void sco_sock_cleanup_listen(struct sock *parent)
  */
 static void sco_sock_kill(struct sock *sk)
 {
-	if (!sock_flag(sk, SOCK_ZAPPED) || sk->sk_socket ||
-	    sock_flag(sk, SOCK_DEAD))
+	if (!sock_flag(sk, SOCK_ZAPPED) || sk->sk_socket)
 		return;
 
 	BT_DBG("sk %p state %d", sk, sk->sk_state);
@@ -488,7 +487,7 @@ static struct sock *sco_sock_alloc(struct net *net, struct socket *sock,
 
 	sco_pi(sk)->setting = BT_VOICE_CVSD_16BIT;
 
-	timer_setup(&sk->sk_timer, sco_sock_timeout, 0);
+	setup_timer(&sk->sk_timer, sco_sock_timeout, (unsigned long)sk);
 
 	bt_sock_link(&sco_sk_list, sk);
 	return sk;
@@ -681,7 +680,7 @@ done:
 }
 
 static int sco_sock_getname(struct socket *sock, struct sockaddr *addr,
-			    int peer)
+			    int *len, int peer)
 {
 	struct sockaddr_sco *sa = (struct sockaddr_sco *) addr;
 	struct sock *sk = sock->sk;
@@ -689,13 +688,14 @@ static int sco_sock_getname(struct socket *sock, struct sockaddr *addr,
 	BT_DBG("sock %p, sk %p", sock, sk);
 
 	addr->sa_family = AF_BLUETOOTH;
+	*len = sizeof(struct sockaddr_sco);
 
 	if (peer)
 		bacpy(&sa->sco_bdaddr, &sco_pi(sk)->dst);
 	else
 		bacpy(&sa->sco_bdaddr, &sco_pi(sk)->src);
 
-	return sizeof(struct sockaddr_sco);
+	return 0;
 }
 
 static int sco_sock_sendmsg(struct socket *sock, struct msghdr *msg,

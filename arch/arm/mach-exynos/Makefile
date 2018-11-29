@@ -1,7 +1,9 @@
-# SPDX-License-Identifier: GPL-2.0
+# arch/arm/mach-exynos/Makefile
 #
 # Copyright (c) 2010-2011 Samsung Electronics Co., Ltd.
 #		http://www.samsung.com/
+#
+# Licensed under GPLv2
 
 ccflags-$(CONFIG_ARCH_MULTIPLATFORM) += -I$(srctree)/$(src)/include -I$(srctree)/arch/arm/plat-samsung/include
 

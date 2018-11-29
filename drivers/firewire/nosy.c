@@ -328,19 +328,19 @@ nosy_release(struct inode *inode, struct file *file)
 	return 0;
 }
 
-static __poll_t
+static unsigned int
 nosy_poll(struct file *file, poll_table *pt)
 {
 	struct client *client = file->private_data;
-	__poll_t ret = 0;
+	unsigned int ret = 0;
 
 	poll_wait(file, &client->buffer.wait, pt);
 
 	if (atomic_read(&client->buffer.size) > 0)
-		ret = EPOLLIN | EPOLLRDNORM;
+		ret = POLLIN | POLLRDNORM;
 
 	if (list_empty(&client->lynx->link))
-		ret |= EPOLLHUP;
+		ret |= POLLHUP;
 
 	return ret;
 }

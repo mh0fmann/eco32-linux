@@ -1,4 +1,3 @@
-/* SPDX-License-Identifier: GPL-2.0 */
 /*
  * kselftest.h:	kselftest framework return codes to include from
  *		selftests.
@@ -6,6 +5,7 @@
  * Copyright (c) 2014 Shuah Khan <shuahkh@osg.samsung.com>
  * Copyright (c) 2014 Samsung Electronics Co., Ltd.
  *
+ * This file is released under the GPLv2.
  */
 #ifndef __KSELFTEST_H
 #define __KSELFTEST_H
@@ -19,7 +19,8 @@
 #define KSFT_FAIL  1
 #define KSFT_XFAIL 2
 #define KSFT_XPASS 3
-#define KSFT_SKIP  4
+/* Treat skip as pass */
+#define KSFT_SKIP  KSFT_PASS
 
 /* counters */
 struct ksft_count {
@@ -56,8 +57,7 @@ static inline int ksft_get_error_cnt(void) { return ksft_cnt.ksft_error; }
 
 static inline void ksft_print_header(void)
 {
-	if (!(getenv("KSFT_TAP_LEVEL")))
-		printf("TAP version 13\n");
+	printf("TAP version 13\n");
 }
 
 static inline void ksft_print_cnts(void)

@@ -112,53 +112,50 @@ int dump_printf(const char *fmt, ...)
 	return ret;
 }
 
-static int trace_event_printer(enum binary_printer_ops op,
-			       unsigned int val, void *extra, FILE *fp)
+static void trace_event_printer(enum binary_printer_ops op,
+				unsigned int val, void *extra)
 {
 	const char *color = PERF_COLOR_BLUE;
 	union perf_event *event = (union perf_event *)extra;
 	unsigned char ch = (unsigned char)val;
-	int printed = 0;
 
 	switch (op) {
 	case BINARY_PRINT_DATA_BEGIN:
-		printed += fprintf(fp, ".");
-		printed += color_fprintf(fp, color, "\n. ... raw event: size %d bytes\n",
-					 event->header.size);
+		printf(".");
+		color_fprintf(stdout, color, "\n. ... raw event: size %d bytes\n",
+				event->header.size);
 		break;
 	case BINARY_PRINT_LINE_BEGIN:
-		printed += fprintf(fp, ".");
+		printf(".");
 		break;
 	case BINARY_PRINT_ADDR:
-		printed += color_fprintf(fp, color, "  %04x: ", val);
+		color_fprintf(stdout, color, "  %04x: ", val);
 		break;
 	case BINARY_PRINT_NUM_DATA:
-		printed += color_fprintf(fp, color, " %02x", val);
+		color_fprintf(stdout, color, " %02x", val);
 		break;
 	case BINARY_PRINT_NUM_PAD:
-		printed += color_fprintf(fp, color, "   ");
+		color_fprintf(stdout, color, "   ");
 		break;
 	case BINARY_PRINT_SEP:
-		printed += color_fprintf(fp, color, "  ");
+		color_fprintf(stdout, color, "  ");
 		break;
 	case BINARY_PRINT_CHAR_DATA:
-		printed += color_fprintf(fp, color, "%c",
+		color_fprintf(stdout, color, "%c",
 			      isprint(ch) ? ch : '.');
 		break;
 	case BINARY_PRINT_CHAR_PAD:
-		printed += color_fprintf(fp, color, " ");
+		color_fprintf(stdout, color, " ");
 		break;
 	case BINARY_PRINT_LINE_END:
-		printed += color_fprintf(fp, color, "\n");
+		color_fprintf(stdout, color, "\n");
 		break;
 	case BINARY_PRINT_DATA_END:
-		printed += fprintf(fp, "\n");
+		printf("\n");
 		break;
 	default:
 		break;
 	}
-
-	return printed;
 }
 
 void trace_event(union perf_event *event)
@@ -232,6 +229,7 @@ int perf_quiet_option(void)
 		var++;
 	}
 
+	quiet = true;
 	return 0;
 }
 

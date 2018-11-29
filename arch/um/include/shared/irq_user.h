@@ -7,7 +7,6 @@
 #define __IRQ_USER_H__
 
 #include <sysdep/ptrace.h>
-#include <stdbool.h>
 
 struct irq_fd {
 	struct irq_fd *next;
@@ -16,17 +15,10 @@ struct irq_fd {
 	int type;
 	int irq;
 	int events;
-	bool active;
-	bool pending;
-	bool purge;
+	int current_events;
 };
 
-#define IRQ_READ  0
-#define IRQ_WRITE 1
-#define IRQ_NONE 2
-#define MAX_IRQ_TYPE (IRQ_NONE + 1)
-
-
+enum { IRQ_READ, IRQ_WRITE };
 
 struct siginfo;
 extern void sigio_handler(int sig, struct siginfo *unused_si, struct uml_pt_regs *regs);

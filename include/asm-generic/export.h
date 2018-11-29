@@ -5,10 +5,12 @@
 #define KSYM_FUNC(x) x
 #endif
 #ifdef CONFIG_64BIT
+#define __put .quad
 #ifndef KSYM_ALIGN
 #define KSYM_ALIGN 8
 #endif
 #else
+#define __put .long
 #ifndef KSYM_ALIGN
 #define KSYM_ALIGN 4
 #endif
@@ -17,15 +19,11 @@
 #define KCRC_ALIGN 4
 #endif
 
-.macro __put, val, name
-#ifdef CONFIG_HAVE_ARCH_PREL32_RELOCATIONS
-	.long	\val - ., \name - .
-#elif defined(CONFIG_64BIT)
-	.quad	\val, \name
+#ifdef CONFIG_HAVE_UNDERSCORE_SYMBOL_PREFIX
+#define KSYM(name) _##name
 #else
-	.long	\val, \name
+#define KSYM(name) name
 #endif
-.endm
 
 /*
  * note on .section use: @progbits vs %progbits nastiness doesn't matter,
@@ -33,26 +31,30 @@
  */
 .macro ___EXPORT_SYMBOL name,val,sec
 #ifdef CONFIG_MODULES
-	.globl __ksymtab_\name
+	.globl KSYM(__ksymtab_\name)
 	.section ___ksymtab\sec+\name,"a"
 	.balign KSYM_ALIGN
-__ksymtab_\name:
-	__put \val, __kstrtab_\name
+KSYM(__ksymtab_\name):
+	__put \val, KSYM(__kstrtab_\name)
 	.previous
 	.section __ksymtab_strings,"a"
-__kstrtab_\name:
+KSYM(__kstrtab_\name):
+#ifdef CONFIG_HAVE_UNDERSCORE_SYMBOL_PREFIX
+	.asciz "_\name"
+#else
 	.asciz "\name"
+#endif
 	.previous
 #ifdef CONFIG_MODVERSIONS
 	.section ___kcrctab\sec+\name,"a"
 	.balign KCRC_ALIGN
-__kcrctab_\name:
+KSYM(__kcrctab_\name):
 #if defined(CONFIG_MODULE_REL_CRCS)
-	.long __crc_\name - .
+	.long KSYM(__crc_\name) - .
 #else
-	.long __crc_\name
+	.long KSYM(__crc_\name)
 #endif
-	.weak __crc_\name
+	.weak KSYM(__crc_\name)
 	.previous
 #endif
 #endif
@@ -82,12 +84,12 @@ __kcrctab_\name:
 #endif
 
 #define EXPORT_SYMBOL(name)					\
-	__EXPORT_SYMBOL(name, KSYM_FUNC(name),)
+	__EXPORT_SYMBOL(name, KSYM_FUNC(KSYM(name)),)
 #define EXPORT_SYMBOL_GPL(name) 				\
-	__EXPORT_SYMBOL(name, KSYM_FUNC(name), _gpl)
+	__EXPORT_SYMBOL(name, KSYM_FUNC(KSYM(name)), _gpl)
 #define EXPORT_DATA_SYMBOL(name)				\
-	__EXPORT_SYMBOL(name, name,)
+	__EXPORT_SYMBOL(name, KSYM(name),)
 #define EXPORT_DATA_SYMBOL_GPL(name)				\
-	__EXPORT_SYMBOL(name, name,_gpl)
+	__EXPORT_SYMBOL(name, KSYM(name),_gpl)
 
 #endif

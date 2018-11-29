@@ -16,18 +16,6 @@
 #include <linux/ceph/mdsmap.h>
 #include <linux/ceph/auth.h>
 
-/* The first 8 bits are reserved for old ceph releases */
-#define CEPHFS_FEATURE_MIMIC    8
-
-#define CEPHFS_FEATURES_ALL {           \
-  0, 1, 2, 3, 4, 5, 6, 7,		\
-  CEPHFS_FEATURE_MIMIC,                 \
-}
-
-#define CEPHFS_FEATURES_CLIENT_SUPPORTED CEPHFS_FEATURES_ALL
-#define CEPHFS_FEATURES_CLIENT_REQUIRED {}
-
-
 /*
  * Some lock dependencies:
  *
@@ -61,8 +49,6 @@ struct ceph_mds_reply_info_in {
 	char *inline_data;
 	u32 pool_ns_len;
 	char *pool_ns_data;
-	u64 max_bytes;
-	u64 max_files;
 };
 
 struct ceph_mds_reply_dir_entry {
@@ -241,7 +227,7 @@ struct ceph_mds_request {
 	int r_fmode;        /* file mode, if expecting cap */
 	kuid_t r_uid;
 	kgid_t r_gid;
-	struct timespec64 r_stamp;
+	struct timespec r_stamp;
 
 	/* for choosing which mds to send this request to */
 	int r_direct_mode;
@@ -325,8 +311,6 @@ struct ceph_mds_client {
 	atomic_t		num_sessions;
 	int                     max_sessions;  /* len of s_mds_sessions */
 	int                     stopping;      /* true if shutting down */
-
-	atomic64_t		quotarealms_count; /* # realms with quota */
 
 	/*
 	 * snap_rwsem will cover cap linkage into snaprealms, and
@@ -460,7 +444,4 @@ ceph_mdsc_open_export_target_session(struct ceph_mds_client *mdsc, int target);
 extern void ceph_mdsc_open_export_target_sessions(struct ceph_mds_client *mdsc,
 					  struct ceph_mds_session *session);
 
-extern int ceph_trim_caps(struct ceph_mds_client *mdsc,
-			  struct ceph_mds_session *session,
-			  int max_caps);
 #endif

@@ -54,6 +54,20 @@ enum {
 	SKL_DPCM_AUDIO_HDMI3_PB,
 };
 
+static inline struct snd_soc_dai *skl_get_codec_dai(struct snd_soc_card *card)
+{
+	struct snd_soc_pcm_runtime *rtd;
+
+	list_for_each_entry(rtd, &card->rtd_list, list) {
+
+		if (!strncmp(rtd->codec_dai->name, SKL_NUVOTON_CODEC_DAI,
+			     strlen(SKL_NUVOTON_CODEC_DAI)))
+			return rtd->codec_dai;
+	}
+
+	return NULL;
+}
+
 static int platform_clock_control(struct snd_soc_dapm_widget *w,
 	struct snd_kcontrol *k, int  event)
 {
@@ -62,7 +76,7 @@ static int platform_clock_control(struct snd_soc_dapm_widget *w,
 	struct snd_soc_dai *codec_dai;
 	int ret;
 
-	codec_dai = snd_soc_card_get_codec_dai(card, SKL_NUVOTON_CODEC_DAI);
+	codec_dai = skl_get_codec_dai(card);
 	if (!codec_dai) {
 		dev_err(card->dev, "Codec dai not found; Unable to set platform clock\n");
 		return -EIO;
@@ -157,7 +171,7 @@ static int skylake_ssp_fixup(struct snd_soc_pcm_runtime *rtd,
 
 	/* set SSP0 to 24 bit */
 	snd_mask_none(fmt);
-	snd_mask_set_format(fmt, SNDRV_PCM_FORMAT_S24_LE);
+	snd_mask_set(fmt, SNDRV_PCM_FORMAT_S24_LE);
 
 	return 0;
 }
@@ -165,7 +179,7 @@ static int skylake_ssp_fixup(struct snd_soc_pcm_runtime *rtd,
 static int skylake_nau8825_codec_init(struct snd_soc_pcm_runtime *rtd)
 {
 	int ret;
-	struct snd_soc_component *component = rtd->codec_dai->component;
+	struct snd_soc_codec *codec = rtd->codec;
 
 	/*
 	 * Headset buttons map to the google Reference headset.
@@ -180,7 +194,7 @@ static int skylake_nau8825_codec_init(struct snd_soc_pcm_runtime *rtd)
 		return ret;
 	}
 
-	nau8825_enable_jack_detect(component, &skylake_headset);
+	nau8825_enable_jack_detect(codec, &skylake_headset);
 
 	snd_soc_dapm_ignore_suspend(&rtd->card->dapm, "SoC DMIC");
 
@@ -592,12 +606,12 @@ static int skylake_card_late_probe(struct snd_soc_card *card)
 {
 	struct skl_nau8825_private *ctx = snd_soc_card_get_drvdata(card);
 	struct skl_hdmi_pcm *pcm;
-	struct snd_soc_component *component = NULL;
+	struct snd_soc_codec *codec = NULL;
 	int err, i = 0;
 	char jack_name[NAME_SIZE];
 
 	list_for_each_entry(pcm, &ctx->hdmi_pcm_list, head) {
-		component = pcm->codec_dai->component;
+		codec = pcm->codec_dai->codec;
 		snprintf(jack_name, sizeof(jack_name),
 			"HDMI/DP, pcm=%d Jack", pcm->device);
 		err = snd_soc_card_jack_new(card, jack_name,
@@ -616,10 +630,10 @@ static int skylake_card_late_probe(struct snd_soc_card *card)
 		i++;
 	}
 
-	if (!component)
+	if (!codec)
 		return -EINVAL;
 
-	return hdac_hdmi_jack_port_init(component, &card->dapm);
+	return hdac_hdmi_jack_port_init(codec, &card->dapm);
 }
 
 /* skylake audio machine driver for SPT + NAU88L25 */
@@ -643,7 +657,7 @@ static int skylake_audio_probe(struct platform_device *pdev)
 	struct skl_nau8825_private *ctx;
 	struct skl_machine_pdata *pdata;
 
-	ctx = devm_kzalloc(&pdev->dev, sizeof(*ctx), GFP_KERNEL);
+	ctx = devm_kzalloc(&pdev->dev, sizeof(*ctx), GFP_ATOMIC);
 	if (!ctx)
 		return -ENOMEM;
 

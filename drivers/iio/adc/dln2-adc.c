@@ -479,6 +479,7 @@ static const struct iio_info dln2_adc_info = {
 	.read_raw = dln2_adc_read_raw,
 	.write_raw = dln2_adc_write_raw,
 	.update_scan_mode = dln2_update_scan_mode,
+	.driver_module = THIS_MODULE,
 };
 
 static irqreturn_t dln2_adc_trigger_h(int irq, void *p)
@@ -603,6 +604,10 @@ static void dln2_adc_event(struct platform_device *pdev, u16 echo,
 	iio_trigger_poll(dln2->trig);
 }
 
+static const struct iio_trigger_ops dln2_adc_trigger_ops = {
+	.owner = THIS_MODULE,
+};
+
 static int dln2_adc_probe(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
@@ -660,6 +665,7 @@ static int dln2_adc_probe(struct platform_device *pdev)
 		dev_err(dev, "failed to allocate trigger\n");
 		return -ENOMEM;
 	}
+	dln2->trig->ops = &dln2_adc_trigger_ops;
 	iio_trigger_set_drvdata(dln2->trig, dln2);
 	devm_iio_trigger_register(dev, dln2->trig);
 	iio_trigger_set_immutable(indio_dev, dln2->trig);

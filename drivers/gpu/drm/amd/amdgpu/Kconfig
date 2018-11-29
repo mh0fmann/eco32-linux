@@ -41,5 +41,3 @@ config DRM_AMDGPU_GART_DEBUGFS
 	  pages. Uses more memory for housekeeping, enable only for debugging.
 
 source "drivers/gpu/drm/amd/acp/Kconfig"
-source "drivers/gpu/drm/amd/display/Kconfig"
-source "drivers/gpu/drm/amd/amdkfd/Kconfig"

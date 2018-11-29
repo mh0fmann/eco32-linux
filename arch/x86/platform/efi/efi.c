@@ -36,8 +36,9 @@
 #include <linux/efi.h>
 #include <linux/efi-bgrt.h>
 #include <linux/export.h>
-#include <linux/memblock.h>
+#include <linux/bootmem.h>
 #include <linux/slab.h>
+#include <linux/memblock.h>
 #include <linux/spinlock.h>
 #include <linux/uaccess.h>
 #include <linux/time.h>

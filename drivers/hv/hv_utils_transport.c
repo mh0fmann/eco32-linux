@@ -104,7 +104,7 @@ static ssize_t hvt_op_write(struct file *file, const char __user *buf,
 	return ret ? ret : count;
 }
 
-static __poll_t hvt_op_poll(struct file *file, poll_table *wait)
+static unsigned int hvt_op_poll(struct file *file, poll_table *wait)
 {
 	struct hvutil_transport *hvt;
 
@@ -113,10 +113,10 @@ static __poll_t hvt_op_poll(struct file *file, poll_table *wait)
 	poll_wait(file, &hvt->outmsg_q, wait);
 
 	if (hvt->mode == HVUTIL_TRANSPORT_DESTROY)
-		return EPOLLERR | EPOLLHUP;
+		return POLLERR | POLLHUP;
 
 	if (hvt->outmsg_len > 0)
-		return EPOLLIN | EPOLLRDNORM;
+		return POLLIN | POLLRDNORM;
 
 	return 0;
 }

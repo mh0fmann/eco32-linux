@@ -1,15 +1,20 @@
-// SPDX-License-Identifier: GPL-2.0+
-// kworld-plus-tv-analog.h - Keytable for kworld_plus_tv_analog Remote Controller
-//
-// keymap imported from ir-keymaps.c
-//
-// Copyright (c) 2010 by Mauro Carvalho Chehab
+/* kworld-plus-tv-analog.h - Keytable for kworld_plus_tv_analog Remote Controller
+ *
+ * keymap imported from ir-keymaps.c
+ *
+ * Copyright (c) 2010 by Mauro Carvalho Chehab
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ */
 
 #include <media/rc-map.h>
 #include <linux/module.h>
 
 /* Kworld Plus TV Analog Lite PCI IR
-   Mauro Carvalho Chehab <mchehab@kernel.org>
+   Mauro Carvalho Chehab <mchehab@infradead.org>
  */
 
 static struct rc_map_table kworld_plus_tv_analog[] = {

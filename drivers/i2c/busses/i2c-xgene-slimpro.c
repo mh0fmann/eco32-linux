@@ -129,11 +129,6 @@ struct slimpro_i2c_dev {
 #define to_slimpro_i2c_dev(cl)	\
 		container_of(cl, struct slimpro_i2c_dev, mbox_client)
 
-enum slimpro_i2c_version {
-	XGENE_SLIMPRO_I2C_V1 = 0,
-	XGENE_SLIMPRO_I2C_V2 = 1,
-};
-
 /*
  * This function tests and clears a bitmask then returns its old value
  */
@@ -481,15 +476,6 @@ static int xgene_slimpro_i2c_probe(struct platform_device *pdev)
 		}
 	} else {
 		struct acpi_pcct_hw_reduced *cppc_ss;
-		const struct acpi_device_id *acpi_id;
-		int version = XGENE_SLIMPRO_I2C_V1;
-
-		acpi_id = acpi_match_device(pdev->dev.driver->acpi_match_table,
-					    &pdev->dev);
-		if (!acpi_id)
-			return -EINVAL;
-
-		version = (int)acpi_id->driver_data;
 
 		if (device_property_read_u32(&pdev->dev, "pcc-channel",
 					     &ctx->mbox_idx))
@@ -528,16 +514,9 @@ static int xgene_slimpro_i2c_probe(struct platform_device *pdev)
 		 */
 		ctx->comm_base_addr = cppc_ss->base_address;
 		if (ctx->comm_base_addr) {
-			if (version == XGENE_SLIMPRO_I2C_V2)
-				ctx->pcc_comm_addr = memremap(
-							ctx->comm_base_addr,
-							cppc_ss->length,
-							MEMREMAP_WT);
-			else
-				ctx->pcc_comm_addr = memremap(
-							ctx->comm_base_addr,
-							cppc_ss->length,
-							MEMREMAP_WB);
+			ctx->pcc_comm_addr = memremap(ctx->comm_base_addr,
+						      cppc_ss->length,
+						      MEMREMAP_WB);
 		} else {
 			dev_err(&pdev->dev, "Failed to get PCC comm region\n");
 			rc = -ENOENT;
@@ -602,8 +581,7 @@ MODULE_DEVICE_TABLE(of, xgene_slimpro_i2c_dt_ids);
 
 #ifdef CONFIG_ACPI
 static const struct acpi_device_id xgene_slimpro_i2c_acpi_ids[] = {
-	{"APMC0D40", XGENE_SLIMPRO_I2C_V1},
-	{"APMC0D8B", XGENE_SLIMPRO_I2C_V2},
+	{"APMC0D40", 0},
 	{}
 };
 MODULE_DEVICE_TABLE(acpi, xgene_slimpro_i2c_acpi_ids);

@@ -21,6 +21,7 @@ Video Function Calls
     video-get-status
     video-get-frame-count
     video-get-pts
+    video-get-frame-rate
     video-get-event
     video-command
     video-try-command
@@ -30,6 +31,13 @@ Video Function Calls
     video-fast-forward
     video-slowmotion
     video-get-capabilities
+    video-set-id
     video-clear-buffer
     video-set-streamtype
     video-set-format
+    video-set-system
+    video-set-highlight
+    video-set-spu
+    video-set-spu-palette
+    video-get-navi
+    video-set-attributes

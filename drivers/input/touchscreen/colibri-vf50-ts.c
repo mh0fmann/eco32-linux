@@ -28,6 +28,7 @@
 #include <linux/types.h>
 
 #define DRIVER_NAME			"colibri-vf50-ts"
+#define DRV_VERSION			"1.0"
 
 #define VF_ADC_MAX			((1 << 12) - 1)
 
@@ -381,3 +382,4 @@ module_platform_driver(vf50_touch_driver);
 MODULE_AUTHOR("Sanchayan Maity");
 MODULE_DESCRIPTION("Colibri VF50 Touchscreen driver");
 MODULE_LICENSE("GPL");
+MODULE_VERSION(DRV_VERSION);

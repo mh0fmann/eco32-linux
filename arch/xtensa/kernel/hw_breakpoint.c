@@ -33,13 +33,14 @@ int hw_breakpoint_slots(int type)
 	}
 }
 
-int arch_check_bp_in_kernelspace(struct arch_hw_breakpoint *hw)
+int arch_check_bp_in_kernelspace(struct perf_event *bp)
 {
 	unsigned int len;
 	unsigned long va;
+	struct arch_hw_breakpoint *info = counter_arch_bp(bp);
 
-	va = hw->address;
-	len = hw->len;
+	va = info->address;
+	len = bp->attr.bp_len;
 
 	return (va >= TASK_SIZE) && ((va + len - 1) >= TASK_SIZE);
 }
@@ -47,39 +48,48 @@ int arch_check_bp_in_kernelspace(struct arch_hw_breakpoint *hw)
 /*
  * Construct an arch_hw_breakpoint from a perf_event.
  */
-int hw_breakpoint_arch_parse(struct perf_event *bp,
-			     const struct perf_event_attr *attr,
-			     struct arch_hw_breakpoint *hw)
+static int arch_build_bp_info(struct perf_event *bp)
 {
+	struct arch_hw_breakpoint *info = counter_arch_bp(bp);
+
 	/* Type */
-	switch (attr->bp_type) {
+	switch (bp->attr.bp_type) {
 	case HW_BREAKPOINT_X:
-		hw->type = XTENSA_BREAKPOINT_EXECUTE;
+		info->type = XTENSA_BREAKPOINT_EXECUTE;
 		break;
 	case HW_BREAKPOINT_R:
-		hw->type = XTENSA_BREAKPOINT_LOAD;
+		info->type = XTENSA_BREAKPOINT_LOAD;
 		break;
 	case HW_BREAKPOINT_W:
-		hw->type = XTENSA_BREAKPOINT_STORE;
+		info->type = XTENSA_BREAKPOINT_STORE;
 		break;
 	case HW_BREAKPOINT_RW:
-		hw->type = XTENSA_BREAKPOINT_LOAD | XTENSA_BREAKPOINT_STORE;
+		info->type = XTENSA_BREAKPOINT_LOAD | XTENSA_BREAKPOINT_STORE;
 		break;
 	default:
 		return -EINVAL;
 	}
 
 	/* Len */
-	hw->len = attr->bp_len;
-	if (hw->len < 1 || hw->len > 64 || !is_power_of_2(hw->len))
+	info->len = bp->attr.bp_len;
+	if (info->len < 1 || info->len > 64 || !is_power_of_2(info->len))
 		return -EINVAL;
 
 	/* Address */
-	hw->address = attr->bp_addr;
-	if (hw->address & (hw->len - 1))
+	info->address = bp->attr.bp_addr;
+	if (info->address & (info->len - 1))
 		return -EINVAL;
 
 	return 0;
+}
+
+int arch_validate_hwbkpt_settings(struct perf_event *bp)
+{
+	int ret;
+
+	/* Build the arch_hw_breakpoint. */
+	ret = arch_build_bp_info(bp);
+	return ret;
 }
 
 int hw_breakpoint_exceptions_notify(struct notifier_block *unused,

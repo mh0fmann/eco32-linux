@@ -54,8 +54,7 @@
 	compatible = "samtec,vining", "altr,socfpga-cyclone5", "altr,socfpga";
 
 	chosen {
-		bootargs = "earlyprintk";
-		stdout-path = "serial0:115200n8";
+		bootargs = "console=ttyS0,115200";
 	};
 
 	memory@0 {
@@ -162,7 +161,7 @@
 	};
 
 	at24@50 {
-		compatible = "atmel,24c01";
+		compatible = "at24,24c01";
 		pagesize = <8>;
 		reg = <0x50>;
 	};
@@ -214,7 +213,7 @@
 			#size-cells = <0>;
 			reg = <6>;
 			eeprom@51 {
-				compatible = "atmel,24c01";
+				compatible = "at,24c01";
 				pagesize = <8>;
 				reg = <0x51>;
 			};
@@ -225,7 +224,7 @@
 			#size-cells = <0>;
 			reg = <7>;
 			eeprom@51 {
-				compatible = "atmel,24c01";
+				compatible = "at,24c01";
 				pagesize = <8>;
 				reg = <0x51>;
 			};
@@ -238,7 +237,7 @@
 	clock-frequency = <100000>;
 
 	at24@50 {
-		compatible = "atmel,24c02";
+		compatible = "at24,24c02";
 		pagesize = <8>;
 		reg = <0x50>;
 	};

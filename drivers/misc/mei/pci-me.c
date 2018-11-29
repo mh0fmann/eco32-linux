@@ -98,11 +98,6 @@ static const struct pci_device_id mei_me_pci_tbl[] = {
 	{MEI_PCI_DEVICE(MEI_DEV_ID_KBP, MEI_ME_PCH8_CFG)},
 	{MEI_PCI_DEVICE(MEI_DEV_ID_KBP_2, MEI_ME_PCH8_CFG)},
 
-	{MEI_PCI_DEVICE(MEI_DEV_ID_CNP_LP, MEI_ME_PCH8_CFG)},
-	{MEI_PCI_DEVICE(MEI_DEV_ID_CNP_LP_4, MEI_ME_PCH8_CFG)},
-	{MEI_PCI_DEVICE(MEI_DEV_ID_CNP_H, MEI_ME_PCH8_CFG)},
-	{MEI_PCI_DEVICE(MEI_DEV_ID_CNP_H_4, MEI_ME_PCH8_CFG)},
-
 	/* required last entry */
 	{0, }
 };
@@ -230,7 +225,7 @@ static int mei_me_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 	 * MEI requires to resume from runtime suspend mode
 	 * in order to perform link reset flow upon system suspend.
 	 */
-	dev_pm_set_driver_flags(&pdev->dev, DPM_FLAG_NEVER_SKIP);
+	pdev->dev_flags |= PCI_DEV_FLAGS_NEEDS_RESUME;
 
 	/*
 	 * ME maps runtime suspend/resume to D0i states,
@@ -243,11 +238,8 @@ static int mei_me_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 	 */
 	mei_me_set_pm_domain(dev);
 
-	if (mei_pg_is_enabled(dev)) {
+	if (mei_pg_is_enabled(dev))
 		pm_runtime_put_noidle(&pdev->dev);
-		if (hw->d0i3_supported)
-			pm_runtime_allow(&pdev->dev);
-	}
 
 	dev_dbg(&pdev->dev, "initialization successful.\n");
 

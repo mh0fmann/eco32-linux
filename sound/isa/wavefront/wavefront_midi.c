@@ -349,10 +349,10 @@ static void snd_wavefront_midi_input_trigger(struct snd_rawmidi_substream *subst
 	spin_unlock_irqrestore (&midi->virtual, flags);
 }
 
-static void snd_wavefront_midi_output_timer(struct timer_list *t)
+static void snd_wavefront_midi_output_timer(unsigned long data)
 {
-	snd_wavefront_midi_t *midi = from_timer(midi, t, timer);
-	snd_wavefront_card_t *card = midi->timer_card;
+	snd_wavefront_card_t *card = (snd_wavefront_card_t *)data;
+	snd_wavefront_midi_t *midi = &card->wavefront.midi;
 	unsigned long flags;
 	
 	spin_lock_irqsave (&midi->virtual, flags);
@@ -383,9 +383,9 @@ static void snd_wavefront_midi_output_trigger(struct snd_rawmidi_substream *subs
 	if (up) {
 		if ((midi->mode[mpu] & MPU401_MODE_OUTPUT_TRIGGER) == 0) {
 			if (!midi->istimer) {
-				timer_setup(&midi->timer,
+				setup_timer(&midi->timer,
 					    snd_wavefront_midi_output_timer,
-					    0);
+					    (unsigned long) substream->rmidi->card->private_data);
 				mod_timer(&midi->timer, 1 + jiffies);
 			}
 			midi->istimer++;

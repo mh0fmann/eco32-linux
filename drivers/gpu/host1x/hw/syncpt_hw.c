@@ -96,48 +96,14 @@ static int syncpt_cpu_incr(struct host1x_syncpt *sp)
 	return 0;
 }
 
-/**
- * syncpt_assign_to_channel() - Assign syncpoint to channel
- * @sp: syncpoint
- * @ch: channel
- *
- * On chips with the syncpoint protection feature (Tegra186+), assign @sp to
- * @ch, preventing other channels from incrementing the syncpoints. If @ch is
- * NULL, unassigns the syncpoint.
- *
- * On older chips, do nothing.
- */
-static void syncpt_assign_to_channel(struct host1x_syncpt *sp,
-				  struct host1x_channel *ch)
+/* remove a wait pointed to by patch_addr */
+static int syncpt_patch_wait(struct host1x_syncpt *sp, void *patch_addr)
 {
-#if HOST1X_HW >= 6
-	struct host1x *host = sp->host;
+	u32 override = host1x_class_host_wait_syncpt(HOST1X_SYNCPT_RESERVED, 0);
 
-	if (!host->hv_regs)
-		return;
+	*((u32 *)patch_addr) = override;
 
-	host1x_sync_writel(host,
-			   HOST1X_SYNC_SYNCPT_CH_APP_CH(ch ? ch->id : 0xff),
-			   HOST1X_SYNC_SYNCPT_CH_APP(sp->id));
-#endif
-}
-
-/**
- * syncpt_enable_protection() - Enable syncpoint protection
- * @host: host1x instance
- *
- * On chips with the syncpoint protection feature (Tegra186+), enable this
- * feature. On older chips, do nothing.
- */
-static void syncpt_enable_protection(struct host1x *host)
-{
-#if HOST1X_HW >= 6
-	if (!host->hv_regs)
-		return;
-
-	host1x_hypervisor_writel(host, HOST1X_HV_SYNCPT_PROT_EN_CH_EN,
-				 HOST1X_HV_SYNCPT_PROT_EN);
-#endif
+	return 0;
 }
 
 static const struct host1x_syncpt_ops host1x_syncpt_ops = {
@@ -146,6 +112,5 @@ static const struct host1x_syncpt_ops host1x_syncpt_ops = {
 	.load_wait_base = syncpt_read_wait_base,
 	.load = syncpt_load,
 	.cpu_incr = syncpt_cpu_incr,
-	.assign_to_channel = syncpt_assign_to_channel,
-	.enable_protection = syncpt_enable_protection,
+	.patch_wait = syncpt_patch_wait,
 };

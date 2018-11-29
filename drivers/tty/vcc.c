@@ -361,12 +361,16 @@ done:
 	return rv;
 }
 
-static void vcc_rx_timer(struct timer_list *t)
+static void vcc_rx_timer(unsigned long index)
 {
-	struct vcc_port *port = from_timer(port, t, rx_timer);
 	struct vio_driver_state *vio;
+	struct vcc_port *port;
 	unsigned long flags;
 	int rv;
+
+	port = vcc_get_ne(index);
+	if (!port)
+		return;
 
 	spin_lock_irqsave(&port->lock, flags);
 	port->rx_timer.expires = 0;
@@ -387,13 +391,17 @@ done:
 	vcc_put(port, false);
 }
 
-static void vcc_tx_timer(struct timer_list *t)
+static void vcc_tx_timer(unsigned long index)
 {
-	struct vcc_port *port = from_timer(port, t, tx_timer);
+	struct vcc_port *port;
 	struct vio_vcc *pkt;
 	unsigned long flags;
 	int tosend = 0;
 	int rv;
+
+	port = vcc_get_ne(index);
+	if (!port)
+		return;
 
 	spin_lock_irqsave(&port->lock, flags);
 	port->tx_timer.expires = 0;
@@ -637,8 +645,13 @@ static int vcc_probe(struct vio_dev *vdev, const struct vio_device_id *id)
 	if (rv)
 		goto free_domain;
 
-	timer_setup(&port->rx_timer, vcc_rx_timer, 0);
-	timer_setup(&port->tx_timer, vcc_tx_timer, 0);
+	init_timer(&port->rx_timer);
+	port->rx_timer.function = vcc_rx_timer;
+	port->rx_timer.data = port->index;
+
+	init_timer(&port->tx_timer);
+	port->tx_timer.function = vcc_tx_timer;
+	port->tx_timer.data = port->index;
 
 	dev_set_drvdata(&vdev->dev, port);
 

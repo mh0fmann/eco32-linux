@@ -125,12 +125,12 @@ static int cn_test_want_notify(void)
 #endif
 
 static u32 cn_test_timer_counter;
-static void cn_test_timer_func(struct timer_list *unused)
+static void cn_test_timer_func(unsigned long __data)
 {
 	struct cn_msg *m;
 	char data[32];
 
-	pr_debug("%s: timer fired\n", __func__);
+	pr_debug("%s: timer fired with data %lu\n", __func__, __data);
 
 	m = kzalloc(sizeof(*m) + sizeof(data), GFP_ATOMIC);
 	if (m) {
@@ -168,7 +168,7 @@ static int cn_test_init(void)
 		goto err_out;
 	}
 
-	timer_setup(&cn_test_timer, cn_test_timer_func, 0);
+	setup_timer(&cn_test_timer, cn_test_timer_func, 0);
 	mod_timer(&cn_test_timer, jiffies + msecs_to_jiffies(1000));
 
 	pr_info("initialized with id={%u.%u}\n",

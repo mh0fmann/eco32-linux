@@ -1,4 +1,3 @@
-// SPDX-License-Identifier: GPL-2.0
 /*
  *    Virtual cpu timer based timer functions.
  *

@@ -229,18 +229,15 @@ g84_fifo_chan_func = {
 };
 
 int
-g84_fifo_chan_ctor(struct nv50_fifo *fifo, u64 vmm, u64 push,
+g84_fifo_chan_ctor(struct nv50_fifo *fifo, u64 vm, u64 push,
 		   const struct nvkm_oclass *oclass,
 		   struct nv50_fifo_chan *chan)
 {
 	struct nvkm_device *device = fifo->base.engine.subdev.device;
 	int ret;
 
-	if (!vmm)
-		return -EINVAL;
-
 	ret = nvkm_fifo_chan_ctor(&g84_fifo_chan_func, &fifo->base,
-				  0x10000, 0x1000, false, vmm, push,
+				  0x10000, 0x1000, false, vm, push,
 				  (1ULL << NVKM_ENGINE_BSP) |
 				  (1ULL << NVKM_ENGINE_CE0) |
 				  (1ULL << NVKM_ENGINE_CIPHER) |
@@ -280,5 +277,9 @@ g84_fifo_chan_ctor(struct nv50_fifo *fifo, u64 vmm, u64 push,
 	if (ret)
 		return ret;
 
-	return nvkm_ramht_new(device, 0x8000, 16, chan->base.inst, &chan->ramht);
+	ret = nvkm_ramht_new(device, 0x8000, 16, chan->base.inst, &chan->ramht);
+	if (ret)
+		return ret;
+
+	return nvkm_vm_ref(chan->base.vm, &chan->vm, chan->pgd);
 }

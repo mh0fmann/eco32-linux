@@ -343,7 +343,7 @@ static int mdio_read(void __iomem *ioaddr, int phy_id, int location);
 static void mdio_write(void __iomem *ioaddr, int phy_id, int location, int value);
 static int netdev_ioctl(struct net_device *dev, struct ifreq *rq, int cmd);
 static int yellowfin_open(struct net_device *dev);
-static void yellowfin_timer(struct timer_list *t);
+static void yellowfin_timer(unsigned long data);
 static void yellowfin_tx_timeout(struct net_device *dev);
 static int yellowfin_init_ring(struct net_device *dev);
 static netdev_tx_t yellowfin_start_xmit(struct sk_buff *skb,
@@ -632,8 +632,10 @@ static int yellowfin_open(struct net_device *dev)
 	}
 
 	/* Set the timer to check for link beat. */
-	timer_setup(&yp->timer, yellowfin_timer, 0);
+	init_timer(&yp->timer);
 	yp->timer.expires = jiffies + 3*HZ;
+	yp->timer.data = (unsigned long)dev;
+	yp->timer.function = yellowfin_timer;				/* timer handler */
 	add_timer(&yp->timer);
 out:
 	return rc;
@@ -643,10 +645,10 @@ err_free_irq:
 	goto out;
 }
 
-static void yellowfin_timer(struct timer_list *t)
+static void yellowfin_timer(unsigned long data)
 {
-	struct yellowfin_private *yp = from_timer(yp, t, timer);
-	struct net_device *dev = pci_get_drvdata(yp->pci_dev);
+	struct net_device *dev = (struct net_device *)data;
+	struct yellowfin_private *yp = netdev_priv(dev);
 	void __iomem *ioaddr = yp->base;
 	int next_tick = 60*HZ;
 

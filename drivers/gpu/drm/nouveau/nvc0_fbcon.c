@@ -25,7 +25,6 @@
 #include "nouveau_drv.h"
 #include "nouveau_dma.h"
 #include "nouveau_fbcon.h"
-#include "nouveau_vmm.h"
 
 int
 nvc0_fbcon_fillrect(struct fb_info *info, const struct fb_fillrect *rect)
@@ -240,8 +239,8 @@ nvc0_fbcon_accel_init(struct fb_info *info)
 	OUT_RING  (chan, info->fix.line_length);
 	OUT_RING  (chan, info->var.xres_virtual);
 	OUT_RING  (chan, info->var.yres_virtual);
-	OUT_RING  (chan, upper_32_bits(fb->vma->addr));
-	OUT_RING  (chan, lower_32_bits(fb->vma->addr));
+	OUT_RING  (chan, upper_32_bits(fb->vma.offset));
+	OUT_RING  (chan, lower_32_bits(fb->vma.offset));
 	BEGIN_NVC0(chan, NvSub2D, 0x0230, 10);
 	OUT_RING  (chan, format);
 	OUT_RING  (chan, 1);
@@ -251,8 +250,8 @@ nvc0_fbcon_accel_init(struct fb_info *info)
 	OUT_RING  (chan, info->fix.line_length);
 	OUT_RING  (chan, info->var.xres_virtual);
 	OUT_RING  (chan, info->var.yres_virtual);
-	OUT_RING  (chan, upper_32_bits(fb->vma->addr));
-	OUT_RING  (chan, lower_32_bits(fb->vma->addr));
+	OUT_RING  (chan, upper_32_bits(fb->vma.offset));
+	OUT_RING  (chan, lower_32_bits(fb->vma.offset));
 	FIRE_RING (chan);
 
 	return 0;

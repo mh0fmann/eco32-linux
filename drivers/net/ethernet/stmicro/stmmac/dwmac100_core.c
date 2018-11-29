@@ -25,27 +25,15 @@
 *******************************************************************************/
 
 #include <linux/crc32.h>
-#include <net/dsa.h>
 #include <asm/io.h>
-#include "stmmac.h"
 #include "dwmac100.h"
 
-static void dwmac100_core_init(struct mac_device_info *hw,
-			       struct net_device *dev)
+static void dwmac100_core_init(struct mac_device_info *hw, int mtu)
 {
 	void __iomem *ioaddr = hw->pcsr;
 	u32 value = readl(ioaddr + MAC_CONTROL);
 
-	value |= MAC_CORE_INIT;
-
-	/* Clear ASTP bit because Ethernet switch tagging formats such as
-	 * Broadcom tags can look like invalid LLC/SNAP packets and cause the
-	 * hardware to truncate packets on reception.
-	 */
-	if (netdev_uses_dsa(dev))
-		value &= ~MAC_CONTROL_ASTP;
-
-	writel(value, ioaddr + MAC_CONTROL);
+	writel((value | MAC_CORE_INIT), ioaddr + MAC_CONTROL);
 
 #ifdef STMMAC_VLAN_TAG_USED
 	writel(ETH_P_8021Q, ioaddr + MAC_VLAN1);
@@ -160,7 +148,7 @@ static void dwmac100_pmt(struct mac_device_info *hw, unsigned long mode)
 	return;
 }
 
-const struct stmmac_ops dwmac100_ops = {
+static const struct stmmac_ops dwmac100_ops = {
 	.core_init = dwmac100_core_init,
 	.set_mac = stmmac_set_mac,
 	.rx_ipc = dwmac100_rx_ipc_enable,
@@ -173,13 +161,20 @@ const struct stmmac_ops dwmac100_ops = {
 	.get_umac_addr = dwmac100_get_umac_addr,
 };
 
-int dwmac100_setup(struct stmmac_priv *priv)
+struct mac_device_info *dwmac100_setup(void __iomem *ioaddr, int *synopsys_id)
 {
-	struct mac_device_info *mac = priv->hw;
+	struct mac_device_info *mac;
 
-	dev_info(priv->device, "\tDWMAC100\n");
+	mac = kzalloc(sizeof(const struct mac_device_info), GFP_KERNEL);
+	if (!mac)
+		return NULL;
 
-	mac->pcsr = priv->ioaddr;
+	pr_info("\tDWMAC100\n");
+
+	mac->pcsr = ioaddr;
+	mac->mac = &dwmac100_ops;
+	mac->dma = &dwmac100_dma_ops;
+
 	mac->link.duplex = MAC_CONTROL_F;
 	mac->link.speed10 = 0;
 	mac->link.speed100 = 0;
@@ -194,5 +189,8 @@ int dwmac100_setup(struct stmmac_priv *priv)
 	mac->mii.clk_csr_shift = 2;
 	mac->mii.clk_csr_mask = GENMASK(5, 2);
 
-	return 0;
+	/* Synopsys Id is not available on old chips */
+	*synopsys_id = 0;
+
+	return mac;
 }

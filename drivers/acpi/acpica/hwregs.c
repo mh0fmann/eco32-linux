@@ -1,10 +1,46 @@
-// SPDX-License-Identifier: BSD-3-Clause OR GPL-2.0
 /*******************************************************************************
  *
  * Module Name: hwregs - Read/write access functions for the various ACPI
  *                       control and status registers.
  *
  ******************************************************************************/
+
+/*
+ * Copyright (C) 2000 - 2017, Intel Corp.
+ * All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions, and the following disclaimer,
+ *    without modification.
+ * 2. Redistributions in binary form must reproduce at minimum a disclaimer
+ *    substantially similar to the "NO WARRANTY" disclaimer below
+ *    ("Disclaimer") and any redistribution must be conditioned upon
+ *    including a substantially similar Disclaimer requirement for further
+ *    binary redistribution.
+ * 3. Neither the names of the above-listed copyright holders nor the names
+ *    of any contributors may be used to endorse or promote products derived
+ *    from this software without specific prior written permission.
+ *
+ * Alternatively, this software may be distributed under the terms of the
+ * GNU General Public License ("GPL") version 2 as published by the Free
+ * Software Foundation.
+ *
+ * NO WARRANTY
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+ * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+ * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTIBILITY AND FITNESS FOR
+ * A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+ * HOLDERS OR CONTRIBUTORS BE LIABLE FOR SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
+ * OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+ * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
+ * STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING
+ * IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGES.
+ */
 
 #include <acpi/acpi.h>
 #include "accommon.h"
@@ -184,15 +220,16 @@ acpi_hw_validate_register(struct acpi_generic_address *reg,
  *
  * RETURN:      Status
  *
- * DESCRIPTION: Read from either memory or IO space. This is a 64-bit max
- *              version of acpi_read.
+ * DESCRIPTION: Read from either memory or IO space. This is a 32-bit max
+ *              version of acpi_read, used internally since the overhead of
+ *              64-bit values is not needed.
  *
  * LIMITATIONS: <These limitations also apply to acpi_hw_write>
  *      space_ID must be system_memory or system_IO.
  *
  ******************************************************************************/
 
-acpi_status acpi_hw_read(u64 *value, struct acpi_generic_address *reg)
+acpi_status acpi_hw_read(u32 *value, struct acpi_generic_address *reg)
 {
 	u64 address;
 	u8 access_width;
@@ -207,17 +244,17 @@ acpi_status acpi_hw_read(u64 *value, struct acpi_generic_address *reg)
 
 	/* Validate contents of the GAS register */
 
-	status = acpi_hw_validate_register(reg, 64, &address);
+	status = acpi_hw_validate_register(reg, 32, &address);
 	if (ACPI_FAILURE(status)) {
 		return (status);
 	}
 
 	/*
-	 * Initialize entire 64-bit return value to zero, convert access_width
+	 * Initialize entire 32-bit return value to zero, convert access_width
 	 * into number of bits based
 	 */
 	*value = 0;
-	access_width = acpi_hw_get_access_bit_width(address, reg, 64);
+	access_width = acpi_hw_get_access_bit_width(address, reg, 32);
 	bit_width = reg->bit_offset + reg->bit_width;
 	bit_offset = reg->bit_offset;
 
@@ -228,7 +265,7 @@ acpi_status acpi_hw_read(u64 *value, struct acpi_generic_address *reg)
 	index = 0;
 	while (bit_width) {
 		if (bit_offset >= access_width) {
-			value64 = 0;
+			value32 = 0;
 			bit_offset -= access_width;
 		} else {
 			if (reg->space_id == ACPI_ADR_SPACE_SYSTEM_MEMORY) {
@@ -239,6 +276,7 @@ acpi_status acpi_hw_read(u64 *value, struct acpi_generic_address *reg)
 							ACPI_DIV_8
 							(access_width),
 							&value64, access_width);
+				value32 = (u32)value64;
 			} else {	/* ACPI_ADR_SPACE_SYSTEM_IO, validated earlier */
 
 				status = acpi_hw_read_port((acpi_io_address)
@@ -248,16 +286,15 @@ acpi_status acpi_hw_read(u64 *value, struct acpi_generic_address *reg)
 							   (access_width),
 							   &value32,
 							   access_width);
-				value64 = (u64)value32;
 			}
 		}
 
 		/*
 		 * Use offset style bit writes because "Index * AccessWidth" is
-		 * ensured to be less than 64-bits by acpi_hw_validate_register().
+		 * ensured to be less than 32-bits by acpi_hw_validate_register().
 		 */
 		ACPI_SET_BITS(value, index * access_width,
-			      ACPI_MASK_BITS_ABOVE_64(access_width), value64);
+			      ACPI_MASK_BITS_ABOVE_32(access_width), value32);
 
 		bit_width -=
 		    bit_width > access_width ? access_width : bit_width;
@@ -265,9 +302,8 @@ acpi_status acpi_hw_read(u64 *value, struct acpi_generic_address *reg)
 	}
 
 	ACPI_DEBUG_PRINT((ACPI_DB_IO,
-			  "Read:  %8.8X%8.8X width %2d from %8.8X%8.8X (%s)\n",
-			  ACPI_FORMAT_UINT64(*value), access_width,
-			  ACPI_FORMAT_UINT64(address),
+			  "Read:  %8.8X width %2d from %8.8X%8.8X (%s)\n",
+			  *value, access_width, ACPI_FORMAT_UINT64(address),
 			  acpi_ut_get_region_name(reg->space_id)));
 
 	return (status);
@@ -282,18 +318,20 @@ acpi_status acpi_hw_read(u64 *value, struct acpi_generic_address *reg)
  *
  * RETURN:      Status
  *
- * DESCRIPTION: Write to either memory or IO space. This is a 64-bit max
- *              version of acpi_write.
+ * DESCRIPTION: Write to either memory or IO space. This is a 32-bit max
+ *              version of acpi_write, used internally since the overhead of
+ *              64-bit values is not needed.
  *
  ******************************************************************************/
 
-acpi_status acpi_hw_write(u64 value, struct acpi_generic_address *reg)
+acpi_status acpi_hw_write(u32 value, struct acpi_generic_address *reg)
 {
 	u64 address;
 	u8 access_width;
 	u32 bit_width;
 	u8 bit_offset;
 	u64 value64;
+	u32 value32;
 	u8 index;
 	acpi_status status;
 
@@ -301,14 +339,14 @@ acpi_status acpi_hw_write(u64 value, struct acpi_generic_address *reg)
 
 	/* Validate contents of the GAS register */
 
-	status = acpi_hw_validate_register(reg, 64, &address);
+	status = acpi_hw_validate_register(reg, 32, &address);
 	if (ACPI_FAILURE(status)) {
 		return (status);
 	}
 
 	/* Convert access_width into number of bits based */
 
-	access_width = acpi_hw_get_access_bit_width(address, reg, 64);
+	access_width = acpi_hw_get_access_bit_width(address, reg, 32);
 	bit_width = reg->bit_offset + reg->bit_width;
 	bit_offset = reg->bit_offset;
 
@@ -320,15 +358,16 @@ acpi_status acpi_hw_write(u64 value, struct acpi_generic_address *reg)
 	while (bit_width) {
 		/*
 		 * Use offset style bit reads because "Index * AccessWidth" is
-		 * ensured to be less than 64-bits by acpi_hw_validate_register().
+		 * ensured to be less than 32-bits by acpi_hw_validate_register().
 		 */
-		value64 = ACPI_GET_BITS(&value, index * access_width,
-					ACPI_MASK_BITS_ABOVE_64(access_width));
+		value32 = ACPI_GET_BITS(&value, index * access_width,
+					ACPI_MASK_BITS_ABOVE_32(access_width));
 
 		if (bit_offset >= access_width) {
 			bit_offset -= access_width;
 		} else {
 			if (reg->space_id == ACPI_ADR_SPACE_SYSTEM_MEMORY) {
+				value64 = (u64)value32;
 				status =
 				    acpi_os_write_memory((acpi_physical_address)
 							 address +
@@ -343,7 +382,7 @@ acpi_status acpi_hw_write(u64 value, struct acpi_generic_address *reg)
 							    index *
 							    ACPI_DIV_8
 							    (access_width),
-							    (u32)value64,
+							    value32,
 							    access_width);
 			}
 		}
@@ -358,9 +397,8 @@ acpi_status acpi_hw_write(u64 value, struct acpi_generic_address *reg)
 	}
 
 	ACPI_DEBUG_PRINT((ACPI_DB_IO,
-			  "Wrote: %8.8X%8.8X width %2d   to %8.8X%8.8X (%s)\n",
-			  ACPI_FORMAT_UINT64(value), access_width,
-			  ACPI_FORMAT_UINT64(address),
+			  "Wrote: %8.8X width %2d   to %8.8X%8.8X (%s)\n",
+			  value, access_width, ACPI_FORMAT_UINT64(address),
 			  acpi_ut_get_region_name(reg->space_id)));
 
 	return (status);
@@ -390,14 +428,14 @@ acpi_status acpi_hw_clear_acpi_status(void)
 			  ACPI_BITMASK_ALL_FIXED_STATUS,
 			  ACPI_FORMAT_UINT64(acpi_gbl_xpm1a_status.address)));
 
-	lock_flags = acpi_os_acquire_raw_lock(acpi_gbl_hardware_lock);
+	lock_flags = acpi_os_acquire_lock(acpi_gbl_hardware_lock);
 
 	/* Clear the fixed events in PM1 A/B */
 
 	status = acpi_hw_register_write(ACPI_REGISTER_PM1_STATUS,
 					ACPI_BITMASK_ALL_FIXED_STATUS);
 
-	acpi_os_release_raw_lock(acpi_gbl_hardware_lock, lock_flags);
+	acpi_os_release_lock(acpi_gbl_hardware_lock, lock_flags);
 
 	if (ACPI_FAILURE(status)) {
 		goto exit;
@@ -488,7 +526,6 @@ acpi_status acpi_hw_write_pm1_control(u32 pm1a_control, u32 pm1b_control)
 acpi_status acpi_hw_register_read(u32 register_id, u32 *return_value)
 {
 	u32 value = 0;
-	u64 value64;
 	acpi_status status;
 
 	ACPI_FUNCTION_TRACE(hw_register_read);
@@ -527,19 +564,12 @@ acpi_status acpi_hw_register_read(u32 register_id, u32 *return_value)
 	case ACPI_REGISTER_PM2_CONTROL:	/* 8-bit access */
 
 		status =
-		    acpi_hw_read(&value64, &acpi_gbl_FADT.xpm2_control_block);
-		if (ACPI_SUCCESS(status)) {
-			value = (u32)value64;
-		}
+		    acpi_hw_read(&value, &acpi_gbl_FADT.xpm2_control_block);
 		break;
 
 	case ACPI_REGISTER_PM_TIMER:	/* 32-bit access */
 
-		status = acpi_hw_read(&value64, &acpi_gbl_FADT.xpm_timer_block);
-		if (ACPI_SUCCESS(status)) {
-			value = (u32)value64;
-		}
-
+		status = acpi_hw_read(&value, &acpi_gbl_FADT.xpm_timer_block);
 		break;
 
 	case ACPI_REGISTER_SMI_COMMAND_BLOCK:	/* 8-bit access */
@@ -556,7 +586,7 @@ acpi_status acpi_hw_register_read(u32 register_id, u32 *return_value)
 	}
 
 	if (ACPI_SUCCESS(status)) {
-		*return_value = (u32)value;
+		*return_value = value;
 	}
 
 	return_ACPI_STATUS(status);
@@ -592,7 +622,6 @@ acpi_status acpi_hw_register_write(u32 register_id, u32 value)
 {
 	acpi_status status;
 	u32 read_value;
-	u64 read_value64;
 
 	ACPI_FUNCTION_TRACE(hw_register_write);
 
@@ -656,12 +685,11 @@ acpi_status acpi_hw_register_write(u32 register_id, u32 value)
 		 * as per the ACPI spec.
 		 */
 		status =
-		    acpi_hw_read(&read_value64,
+		    acpi_hw_read(&read_value,
 				 &acpi_gbl_FADT.xpm2_control_block);
 		if (ACPI_FAILURE(status)) {
 			goto exit;
 		}
-		read_value = (u32)read_value64;
 
 		/* Insert the bits to be preserved */
 
@@ -717,25 +745,22 @@ acpi_hw_read_multiple(u32 *value,
 {
 	u32 value_a = 0;
 	u32 value_b = 0;
-	u64 value64;
 	acpi_status status;
 
 	/* The first register is always required */
 
-	status = acpi_hw_read(&value64, register_a);
+	status = acpi_hw_read(&value_a, register_a);
 	if (ACPI_FAILURE(status)) {
 		return (status);
 	}
-	value_a = (u32)value64;
 
 	/* Second register is optional */
 
 	if (register_b->address) {
-		status = acpi_hw_read(&value64, register_b);
+		status = acpi_hw_read(&value_b, register_b);
 		if (ACPI_FAILURE(status)) {
 			return (status);
 		}
-		value_b = (u32)value64;
 	}
 
 	/*

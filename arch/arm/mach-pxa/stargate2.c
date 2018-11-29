@@ -25,13 +25,12 @@
 #include <linux/mtd/plat-ram.h>
 #include <linux/mtd/partitions.h>
 
-#include <linux/platform_data/i2c-pxa.h>
+#include <linux/i2c/pxa-i2c.h>
 #include <linux/platform_data/pcf857x.h>
+#include <linux/platform_data/at24.h>
 #include <linux/smc91x.h>
-#include <linux/gpio/machine.h>
 #include <linux/gpio.h>
 #include <linux/leds.h>
-#include <linux/property.h>
 
 #include <asm/types.h>
 #include <asm/setup.h>
@@ -53,6 +52,7 @@
 #include <linux/spi/spi.h>
 #include <linux/spi/pxa2xx_spi.h>
 #include <linux/mfd/da903x.h>
+#include <linux/platform_data/sht15.h>
 
 #include "devices.h"
 #include "generic.h"
@@ -137,18 +137,17 @@ static unsigned long sg2_im2_unified_pin_config[] __initdata = {
 	GPIO10_GPIO, /* large basic connector pin 23 */
 };
 
-static struct gpiod_lookup_table sht15_gpiod_table = {
-	.dev_id = "sht15",
-	.table = {
-		/* FIXME: should this have |GPIO_OPEN_DRAIN set? */
-		GPIO_LOOKUP("gpio-pxa", 100, "data", GPIO_ACTIVE_HIGH),
-		GPIO_LOOKUP("gpio-pxa", 98, "clk", GPIO_ACTIVE_HIGH),
-	},
+static struct sht15_platform_data platform_data_sht15 = {
+	.gpio_data =  100,
+	.gpio_sck  =  98,
 };
 
 static struct platform_device sht15 = {
 	.name = "sht15",
 	.id = -1,
+	.dev = {
+		.platform_data = &platform_data_sht15,
+	},
 };
 
 static struct regulator_consumer_supply stargate2_sensor_3_con[] = {
@@ -609,7 +608,6 @@ static void __init imote2_init(void)
 
 	imote2_stargate2_init();
 
-	gpiod_add_lookup_table(&sht15_gpiod_table);
 	platform_add_devices(imote2_devices, ARRAY_SIZE(imote2_devices));
 
 	i2c_register_board_info(0, imote2_i2c_board_info,
@@ -795,9 +793,9 @@ static struct pcf857x_platform_data platform_data_pcf857x = {
 	.context = NULL,
 };
 
-static const struct property_entry pca9500_eeprom_properties[] = {
-	PROPERTY_ENTRY_U32("pagesize", 4),
-	{ }
+static struct at24_platform_data pca9500_eeprom_pdata = {
+	.byte_len = 256,
+	.page_size = 4,
 };
 
 /**
@@ -935,7 +933,7 @@ static struct i2c_board_info __initdata stargate2_i2c_board_info[] = {
 	}, {
 		.type = "24c02",
 		.addr = 0x57,
-		.properties = pca9500_eeprom_properties,
+		.platform_data = &pca9500_eeprom_pdata,
 	}, {
 		.type = "max1238",
 		.addr = 0x35,
@@ -990,7 +988,6 @@ static void __init stargate2_init(void)
 
 	imote2_stargate2_init();
 
-	gpiod_add_lookup_table(&sht15_gpiod_table);
 	platform_add_devices(ARRAY_AND_SIZE(stargate2_devices));
 
 	i2c_register_board_info(0, ARRAY_AND_SIZE(stargate2_i2c_board_info));

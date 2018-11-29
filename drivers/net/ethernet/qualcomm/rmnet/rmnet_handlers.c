@@ -1,4 +1,4 @@
-/* Copyright (c) 2013-2018, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2013-2017, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -15,8 +15,6 @@
 
 #include <linux/netdevice.h>
 #include <linux/netdev_features.h>
-#include <linux/if_arp.h>
-#include <net/sock.h>
 #include "rmnet_private.h"
 #include "rmnet_config.h"
 #include "rmnet_vnd.h"
@@ -45,94 +43,119 @@ static void rmnet_set_skb_proto(struct sk_buff *skb)
 
 /* Generic handler */
 
-static void
-rmnet_deliver_skb(struct sk_buff *skb)
+static rx_handler_result_t
+rmnet_bridge_handler(struct sk_buff *skb, struct rmnet_endpoint *ep)
 {
-	struct rmnet_priv *priv = netdev_priv(skb->dev);
+	if (!ep->egress_dev)
+		kfree_skb(skb);
+	else
+		rmnet_egress_handler(skb, ep);
 
-	skb_reset_transport_header(skb);
-	skb_reset_network_header(skb);
-	rmnet_vnd_rx_fixup(skb, skb->dev);
+	return RX_HANDLER_CONSUMED;
+}
 
-	skb->pkt_type = PACKET_HOST;
-	skb_set_mac_header(skb, 0);
-	gro_cells_receive(&priv->gro_cells, skb);
+static rx_handler_result_t
+rmnet_deliver_skb(struct sk_buff *skb, struct rmnet_endpoint *ep)
+{
+	switch (ep->rmnet_mode) {
+	case RMNET_EPMODE_NONE:
+		return RX_HANDLER_PASS;
+
+	case RMNET_EPMODE_BRIDGE:
+		return rmnet_bridge_handler(skb, ep);
+
+	case RMNET_EPMODE_VND:
+		skb_reset_transport_header(skb);
+		skb_reset_network_header(skb);
+		rmnet_vnd_rx_fixup(skb, skb->dev);
+
+		skb->pkt_type = PACKET_HOST;
+		skb_set_mac_header(skb, 0);
+		netif_receive_skb(skb);
+		return RX_HANDLER_CONSUMED;
+
+	default:
+		kfree_skb(skb);
+		return RX_HANDLER_CONSUMED;
+	}
+}
+
+static rx_handler_result_t
+rmnet_ingress_deliver_packet(struct sk_buff *skb,
+			     struct rmnet_port *port)
+{
+	if (!port) {
+		kfree_skb(skb);
+		return RX_HANDLER_CONSUMED;
+	}
+
+	skb->dev = port->local_ep.egress_dev;
+
+	return rmnet_deliver_skb(skb, &port->local_ep);
 }
 
 /* MAP handler */
 
-static void
+static rx_handler_result_t
 __rmnet_map_ingress_handler(struct sk_buff *skb,
 			    struct rmnet_port *port)
 {
 	struct rmnet_endpoint *ep;
-	u16 len, pad;
 	u8 mux_id;
+	u16 len;
 
 	if (RMNET_MAP_GET_CD_BIT(skb)) {
-		if (port->data_format & RMNET_FLAGS_INGRESS_MAP_COMMANDS)
+		if (port->ingress_data_format
+		    & RMNET_INGRESS_FORMAT_MAP_COMMANDS)
 			return rmnet_map_command(skb, port);
 
-		goto free_skb;
+		kfree_skb(skb);
+		return RX_HANDLER_CONSUMED;
 	}
 
 	mux_id = RMNET_MAP_GET_MUX_ID(skb);
-	pad = RMNET_MAP_GET_PAD(skb);
-	len = RMNET_MAP_GET_LENGTH(skb) - pad;
+	len = RMNET_MAP_GET_LENGTH(skb) - RMNET_MAP_GET_PAD(skb);
 
-	if (mux_id >= RMNET_MAX_LOGICAL_EP)
-		goto free_skb;
+	if (mux_id >= RMNET_MAX_LOGICAL_EP) {
+		kfree_skb(skb);
+		return RX_HANDLER_CONSUMED;
+	}
 
-	ep = rmnet_get_endpoint(port, mux_id);
-	if (!ep)
-		goto free_skb;
+	ep = &port->muxed_ep[mux_id];
 
-	skb->dev = ep->egress_dev;
+	if (port->ingress_data_format & RMNET_INGRESS_FORMAT_DEMUXING)
+		skb->dev = ep->egress_dev;
 
 	/* Subtract MAP header */
 	skb_pull(skb, sizeof(struct rmnet_map_header));
-	rmnet_set_skb_proto(skb);
-
-	if (port->data_format & RMNET_FLAGS_INGRESS_MAP_CKSUMV4) {
-		if (!rmnet_map_checksum_downlink_packet(skb, len + pad))
-			skb->ip_summed = CHECKSUM_UNNECESSARY;
-	}
-
 	skb_trim(skb, len);
-	rmnet_deliver_skb(skb);
-	return;
-
-free_skb:
-	kfree_skb(skb);
+	rmnet_set_skb_proto(skb);
+	return rmnet_deliver_skb(skb, ep);
 }
 
-static void
+static rx_handler_result_t
 rmnet_map_ingress_handler(struct sk_buff *skb,
 			  struct rmnet_port *port)
 {
 	struct sk_buff *skbn;
+	int rc;
 
-	if (skb->dev->type == ARPHRD_ETHER) {
-		if (pskb_expand_head(skb, ETH_HLEN, 0, GFP_ATOMIC)) {
-			kfree_skb(skb);
-			return;
-		}
-
-		skb_push(skb, ETH_HLEN);
-	}
-
-	if (port->data_format & RMNET_FLAGS_INGRESS_DEAGGREGATION) {
-		while ((skbn = rmnet_map_deaggregate(skb, port)) != NULL)
+	if (port->ingress_data_format & RMNET_INGRESS_FORMAT_DEAGGREGATION) {
+		while ((skbn = rmnet_map_deaggregate(skb)) != NULL)
 			__rmnet_map_ingress_handler(skbn, port);
 
 		consume_skb(skb);
+		rc = RX_HANDLER_CONSUMED;
 	} else {
-		__rmnet_map_ingress_handler(skb, port);
+		rc = __rmnet_map_ingress_handler(skb, port);
 	}
+
+	return rc;
 }
 
 static int rmnet_map_egress_handler(struct sk_buff *skb,
-				    struct rmnet_port *port, u8 mux_id,
+				    struct rmnet_port *port,
+				    struct rmnet_endpoint *ep,
 				    struct net_device *orig_dev)
 {
 	int required_headroom, additional_header_len;
@@ -141,37 +164,25 @@ static int rmnet_map_egress_handler(struct sk_buff *skb,
 	additional_header_len = 0;
 	required_headroom = sizeof(struct rmnet_map_header);
 
-	if (port->data_format & RMNET_FLAGS_EGRESS_MAP_CKSUMV4) {
-		additional_header_len = sizeof(struct rmnet_map_ul_csum_header);
-		required_headroom += additional_header_len;
-	}
-
 	if (skb_headroom(skb) < required_headroom) {
-		if (pskb_expand_head(skb, required_headroom, 0, GFP_ATOMIC))
-			return -ENOMEM;
+		if (pskb_expand_head(skb, required_headroom, 0, GFP_KERNEL))
+			return RMNET_MAP_CONSUMED;
 	}
-
-	if (port->data_format & RMNET_FLAGS_EGRESS_MAP_CKSUMV4)
-		rmnet_map_checksum_uplink_packet(skb, orig_dev);
 
 	map_header = rmnet_map_add_map_header(skb, additional_header_len, 0);
 	if (!map_header)
-		return -ENOMEM;
+		return RMNET_MAP_CONSUMED;
 
-	map_header->mux_id = mux_id;
+	if (port->egress_data_format & RMNET_EGRESS_FORMAT_MUXING) {
+		if (ep->mux_id == 0xff)
+			map_header->mux_id = 0;
+		else
+			map_header->mux_id = ep->mux_id;
+	}
 
 	skb->protocol = htons(ETH_P_MAP);
 
-	return 0;
-}
-
-static void
-rmnet_bridge_handler(struct sk_buff *skb, struct net_device *bridge_dev)
-{
-	if (bridge_dev) {
-		skb->dev = bridge_dev;
-		dev_queue_xmit(skb);
-	}
+	return RMNET_MAP_SUCCESS;
 }
 
 /* Ingress / Egress Entry Points */
@@ -182,63 +193,79 @@ rmnet_bridge_handler(struct sk_buff *skb, struct net_device *bridge_dev)
  */
 rx_handler_result_t rmnet_rx_handler(struct sk_buff **pskb)
 {
-	struct sk_buff *skb = *pskb;
 	struct rmnet_port *port;
+	struct sk_buff *skb = *pskb;
 	struct net_device *dev;
+	int rc;
 
 	if (!skb)
-		goto done;
-
-	if (skb->pkt_type == PACKET_LOOPBACK)
-		return RX_HANDLER_PASS;
+		return RX_HANDLER_CONSUMED;
 
 	dev = skb->dev;
 	port = rmnet_get_port(dev);
 
-	switch (port->rmnet_mode) {
-	case RMNET_EPMODE_VND:
-		rmnet_map_ingress_handler(skb, port);
-		break;
-	case RMNET_EPMODE_BRIDGE:
-		rmnet_bridge_handler(skb, port->bridge_ep);
-		break;
+	if (port->ingress_data_format & RMNET_INGRESS_FORMAT_MAP) {
+		rc = rmnet_map_ingress_handler(skb, port);
+	} else {
+		switch (ntohs(skb->protocol)) {
+		case ETH_P_MAP:
+			if (port->local_ep.rmnet_mode ==
+				RMNET_EPMODE_BRIDGE) {
+				rc = rmnet_ingress_deliver_packet(skb, port);
+			} else {
+				kfree_skb(skb);
+				rc = RX_HANDLER_CONSUMED;
+			}
+			break;
+
+		case ETH_P_IP:
+		case ETH_P_IPV6:
+			rc = rmnet_ingress_deliver_packet(skb, port);
+			break;
+
+		default:
+			rc = RX_HANDLER_PASS;
+		}
 	}
 
-done:
-	return RX_HANDLER_CONSUMED;
+	return rc;
 }
 
 /* Modifies packet as per logical endpoint configuration and egress data format
  * for egress device configured in logical endpoint. Packet is then transmitted
  * on the egress device.
  */
-void rmnet_egress_handler(struct sk_buff *skb)
+void rmnet_egress_handler(struct sk_buff *skb,
+			  struct rmnet_endpoint *ep)
 {
 	struct net_device *orig_dev;
 	struct rmnet_port *port;
-	struct rmnet_priv *priv;
-	u8 mux_id;
-
-	sk_pacing_shift_update(skb->sk, 8);
 
 	orig_dev = skb->dev;
-	priv = netdev_priv(orig_dev);
-	skb->dev = priv->real_dev;
-	mux_id = priv->mux_id;
+	skb->dev = ep->egress_dev;
 
 	port = rmnet_get_port(skb->dev);
-	if (!port)
-		goto drop;
+	if (!port) {
+		kfree_skb(skb);
+		return;
+	}
 
-	if (rmnet_map_egress_handler(skb, port, mux_id, orig_dev))
-		goto drop;
+	if (port->egress_data_format & RMNET_EGRESS_FORMAT_MAP) {
+		switch (rmnet_map_egress_handler(skb, port, ep, orig_dev)) {
+		case RMNET_MAP_CONSUMED:
+			return;
 
-	rmnet_vnd_tx_fixup(skb, orig_dev);
+		case RMNET_MAP_SUCCESS:
+			break;
+
+		default:
+			kfree_skb(skb);
+			return;
+		}
+	}
+
+	if (ep->rmnet_mode == RMNET_EPMODE_VND)
+		rmnet_vnd_tx_fixup(skb, orig_dev);
 
 	dev_queue_xmit(skb);
-	return;
-
-drop:
-	this_cpu_inc(priv->pcpu_stats->stats.tx_drops);
-	kfree_skb(skb);
 }

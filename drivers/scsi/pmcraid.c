@@ -348,7 +348,7 @@ static void pmcraid_init_cmdblk(struct pmcraid_cmd *cmd, int index)
 	cmd->sense_buffer = NULL;
 	cmd->sense_buffer_dma = 0;
 	cmd->dma_handle = 0;
-	timer_setup(&cmd->timer, NULL, 0);
+	init_timer(&cmd->timer);
 }
 
 /**
@@ -557,9 +557,8 @@ static void pmcraid_reset_type(struct pmcraid_instance *pinstance)
 
 static void pmcraid_ioa_reset(struct pmcraid_cmd *);
 
-static void pmcraid_bist_done(struct timer_list *t)
+static void pmcraid_bist_done(struct pmcraid_cmd *cmd)
 {
-	struct pmcraid_cmd *cmd = from_timer(cmd, t, timer);
 	struct pmcraid_instance *pinstance = cmd->drv_inst;
 	unsigned long lock_flags;
 	int rc;
@@ -573,6 +572,9 @@ static void pmcraid_bist_done(struct timer_list *t)
 		pmcraid_info("BIST not complete, waiting another 2 secs\n");
 		cmd->timer.expires = jiffies + cmd->time_left;
 		cmd->time_left = 0;
+		cmd->timer.data = (unsigned long)cmd;
+		cmd->timer.function =
+			(void (*)(unsigned long))pmcraid_bist_done;
 		add_timer(&cmd->timer);
 	} else {
 		cmd->time_left = 0;
@@ -603,8 +605,9 @@ static void pmcraid_start_bist(struct pmcraid_cmd *cmd)
 		      doorbells, intrs);
 
 	cmd->time_left = msecs_to_jiffies(PMCRAID_BIST_TIMEOUT);
+	cmd->timer.data = (unsigned long)cmd;
 	cmd->timer.expires = jiffies + msecs_to_jiffies(PMCRAID_BIST_TIMEOUT);
-	cmd->timer.function = pmcraid_bist_done;
+	cmd->timer.function = (void (*)(unsigned long))pmcraid_bist_done;
 	add_timer(&cmd->timer);
 }
 
@@ -614,9 +617,8 @@ static void pmcraid_start_bist(struct pmcraid_cmd *cmd)
  * Return value
  *  None
  */
-static void pmcraid_reset_alert_done(struct timer_list *t)
+static void pmcraid_reset_alert_done(struct pmcraid_cmd *cmd)
 {
-	struct pmcraid_cmd *cmd = from_timer(cmd, t, timer);
 	struct pmcraid_instance *pinstance = cmd->drv_inst;
 	u32 status = ioread32(pinstance->ioa_status);
 	unsigned long lock_flags;
@@ -635,8 +637,10 @@ static void pmcraid_reset_alert_done(struct timer_list *t)
 		pmcraid_info("critical op is not yet reset waiting again\n");
 		/* restart timer if some more time is available to wait */
 		cmd->time_left -= PMCRAID_CHECK_FOR_RESET_TIMEOUT;
+		cmd->timer.data = (unsigned long)cmd;
 		cmd->timer.expires = jiffies + PMCRAID_CHECK_FOR_RESET_TIMEOUT;
-		cmd->timer.function = pmcraid_reset_alert_done;
+		cmd->timer.function =
+			(void (*)(unsigned long))pmcraid_reset_alert_done;
 		add_timer(&cmd->timer);
 	}
 }
@@ -672,8 +676,10 @@ static void pmcraid_reset_alert(struct pmcraid_cmd *cmd)
 		 * bit to be reset.
 		 */
 		cmd->time_left = PMCRAID_RESET_TIMEOUT;
+		cmd->timer.data = (unsigned long)cmd;
 		cmd->timer.expires = jiffies + PMCRAID_CHECK_FOR_RESET_TIMEOUT;
-		cmd->timer.function = pmcraid_reset_alert_done;
+		cmd->timer.function =
+			(void (*)(unsigned long))pmcraid_reset_alert_done;
 		add_timer(&cmd->timer);
 
 		iowrite32(DOORBELL_IOA_RESET_ALERT,
@@ -698,9 +704,8 @@ static void pmcraid_reset_alert(struct pmcraid_cmd *cmd)
  * Return value:
  *   None
  */
-static void pmcraid_timeout_handler(struct timer_list *t)
+static void pmcraid_timeout_handler(struct pmcraid_cmd *cmd)
 {
-	struct pmcraid_cmd *cmd = from_timer(cmd, t, timer);
 	struct pmcraid_instance *pinstance = cmd->drv_inst;
 	unsigned long lock_flags;
 
@@ -914,7 +919,7 @@ static void pmcraid_send_cmd(
 	struct pmcraid_cmd *cmd,
 	void (*cmd_done) (struct pmcraid_cmd *),
 	unsigned long timeout,
-	void (*timeout_func) (struct timer_list *)
+	void (*timeout_func) (struct pmcraid_cmd *)
 )
 {
 	/* initialize done function */
@@ -922,8 +927,9 @@ static void pmcraid_send_cmd(
 
 	if (timeout_func) {
 		/* setup timeout handler */
+		cmd->timer.data = (unsigned long)cmd;
 		cmd->timer.expires = jiffies + timeout;
-		cmd->timer.function = timeout_func;
+		cmd->timer.function = (void (*)(unsigned long))timeout_func;
 		add_timer(&cmd->timer);
 	}
 
@@ -1025,7 +1031,7 @@ static void pmcraid_get_fwversion_done(struct pmcraid_cmd *cmd)
 static void pmcraid_get_fwversion(struct pmcraid_cmd *cmd)
 {
 	struct pmcraid_ioarcb *ioarcb = &cmd->ioa_cb->ioarcb;
-	struct pmcraid_ioadl_desc *ioadl;
+	struct pmcraid_ioadl_desc *ioadl = ioarcb->add_data.u.ioadl;
 	struct pmcraid_instance *pinstance = cmd->drv_inst;
 	u16 data_size = sizeof(struct pmcraid_inquiry_data);
 
@@ -1949,9 +1955,10 @@ static void pmcraid_soft_reset(struct pmcraid_cmd *cmd)
 	 * would re-initiate a reset
 	 */
 	cmd->cmd_done = pmcraid_ioa_reset;
+	cmd->timer.data = (unsigned long)cmd;
 	cmd->timer.expires = jiffies +
 			     msecs_to_jiffies(PMCRAID_TRANSOP_TIMEOUT);
-	cmd->timer.function = pmcraid_timeout_handler;
+	cmd->timer.function = (void (*)(unsigned long))pmcraid_timeout_handler;
 
 	if (!timer_pending(&cmd->timer))
 		add_timer(&cmd->timer);
@@ -3175,7 +3182,7 @@ static int pmcraid_build_ioadl(
 
 	struct scsi_cmnd *scsi_cmd = cmd->scsi_cmd;
 	struct pmcraid_ioarcb *ioarcb = &(cmd->ioa_cb->ioarcb);
-	struct pmcraid_ioadl_desc *ioadl;
+	struct pmcraid_ioadl_desc *ioadl = ioarcb->add_data.u.ioadl;
 
 	u32 length = scsi_bufflen(scsi_cmd);
 
@@ -3225,7 +3232,12 @@ static int pmcraid_build_ioadl(
  */
 static void pmcraid_free_sglist(struct pmcraid_sglist *sglist)
 {
-	sgl_free_order(sglist->scatterlist, sglist->order);
+	int i;
+
+	for (i = 0; i < sglist->num_sg; i++)
+		__free_pages(sg_page(&(sglist->scatterlist[i])),
+			     sglist->order);
+
 	kfree(sglist);
 }
 
@@ -3242,20 +3254,50 @@ static void pmcraid_free_sglist(struct pmcraid_sglist *sglist)
 static struct pmcraid_sglist *pmcraid_alloc_sglist(int buflen)
 {
 	struct pmcraid_sglist *sglist;
+	struct scatterlist *scatterlist;
+	struct page *page;
+	int num_elem, i, j;
 	int sg_size;
 	int order;
+	int bsize_elem;
 
 	sg_size = buflen / (PMCRAID_MAX_IOADLS - 1);
 	order = (sg_size > 0) ? get_order(sg_size) : 0;
+	bsize_elem = PAGE_SIZE * (1 << order);
+
+	/* Determine the actual number of sg entries needed */
+	if (buflen % bsize_elem)
+		num_elem = (buflen / bsize_elem) + 1;
+	else
+		num_elem = buflen / bsize_elem;
 
 	/* Allocate a scatter/gather list for the DMA */
-	sglist = kzalloc(sizeof(struct pmcraid_sglist), GFP_KERNEL);
+	sglist = kzalloc(sizeof(struct pmcraid_sglist) +
+			 (sizeof(struct scatterlist) * (num_elem - 1)),
+			 GFP_KERNEL);
+
 	if (sglist == NULL)
 		return NULL;
 
+	scatterlist = sglist->scatterlist;
+	sg_init_table(scatterlist, num_elem);
 	sglist->order = order;
-	sgl_alloc_order(buflen, order, false,
-			GFP_KERNEL | GFP_DMA | __GFP_ZERO, &sglist->num_sg);
+	sglist->num_sg = num_elem;
+	sg_size = buflen;
+
+	for (i = 0; i < num_elem; i++) {
+		page = alloc_pages(GFP_KERNEL|GFP_DMA|__GFP_ZERO, order);
+		if (!page) {
+			for (j = i - 1; j >= 0; j--)
+				__free_pages(sg_page(&scatterlist[j]), order);
+			kfree(sglist);
+			return NULL;
+		}
+
+		sg_set_page(&scatterlist[i], page,
+			sg_size < bsize_elem ? sg_size : bsize_elem, 0);
+		sg_size -= bsize_elem;
+	}
 
 	return sglist;
 }
@@ -4873,9 +4915,8 @@ static int pmcraid_allocate_config_buffers(struct pmcraid_instance *pinstance)
 	int i;
 
 	pinstance->res_entries =
-			kcalloc(PMCRAID_MAX_RESOURCES,
-				sizeof(struct pmcraid_resource_entry),
-				GFP_KERNEL);
+			kzalloc(sizeof(struct pmcraid_resource_entry) *
+				PMCRAID_MAX_RESOURCES, GFP_KERNEL);
 
 	if (NULL == pinstance->res_entries) {
 		pmcraid_err("failed to allocate memory for resource table\n");
@@ -5182,7 +5223,7 @@ static unsigned short pmcraid_get_minor(void)
 {
 	int minor;
 
-	minor = find_first_zero_bit(pmcraid_minor, PMCRAID_MAX_ADAPTERS);
+	minor = find_first_zero_bit(pmcraid_minor, sizeof(pmcraid_minor));
 	__set_bit(minor, pmcraid_minor);
 	return minor;
 }
@@ -5458,7 +5499,7 @@ static void pmcraid_set_timestamp(struct pmcraid_cmd *cmd)
 	struct pmcraid_instance *pinstance = cmd->drv_inst;
 	struct pmcraid_ioarcb *ioarcb = &cmd->ioa_cb->ioarcb;
 	__be32 time_stamp_len = cpu_to_be32(PMCRAID_TIMESTAMP_LEN);
-	struct pmcraid_ioadl_desc *ioadl;
+	struct pmcraid_ioadl_desc *ioadl = ioarcb->add_data.u.ioadl;
 	u64 timestamp;
 
 	timestamp = ktime_get_real_seconds() * 1000;
@@ -5631,7 +5672,7 @@ static void pmcraid_init_res_table(struct pmcraid_cmd *cmd)
 static void pmcraid_querycfg(struct pmcraid_cmd *cmd)
 {
 	struct pmcraid_ioarcb *ioarcb = &cmd->ioa_cb->ioarcb;
-	struct pmcraid_ioadl_desc *ioadl;
+	struct pmcraid_ioadl_desc *ioadl = ioarcb->add_data.u.ioadl;
 	struct pmcraid_instance *pinstance = cmd->drv_inst;
 	__be32 cfg_table_size = cpu_to_be32(sizeof(struct pmcraid_config_table));
 

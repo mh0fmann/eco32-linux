@@ -339,7 +339,7 @@ int fix_alignment(struct pt_regs *regs)
 	if (r < 0)
 		return -EINVAL;
 
-	type = GETTYPE(op.type);
+	type = op.type & INSTR_TYPE_MASK;
 	if (!OP_IS_LOAD_STORE(type)) {
 		if (op.type != CACHEOP + DCBZ)
 			return -EINVAL;

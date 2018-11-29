@@ -530,11 +530,8 @@ void tipc_mon_prep(struct net *net, void *data, int *dlen,
 	u16 gen = mon->dom_gen;
 	u16 len;
 
-	/* Send invalid record if not active */
-	if (!tipc_mon_is_active(net, mon)) {
-		dom->len = 0;
+	if (!tipc_mon_is_active(net, mon))
 		return;
-	}
 
 	/* Send only a dummy record with ack if peer has acked our last sent */
 	if (likely(state->acked_gen == gen)) {
@@ -562,12 +559,6 @@ void tipc_mon_get_state(struct net *net, u32 addr,
 	struct tipc_monitor *mon = tipc_monitor(net, bearer_id);
 	struct tipc_peer *peer;
 
-	if (!tipc_mon_is_active(net, mon)) {
-		state->probing = false;
-		state->monitoring = true;
-		return;
-	}
-
 	/* Used cached state if table has not changed */
 	if (!state->probing &&
 	    (state->list_gen == mon->list_gen) &&
@@ -587,9 +578,9 @@ void tipc_mon_get_state(struct net *net, u32 addr,
 	read_unlock_bh(&mon->lock);
 }
 
-static void mon_timeout(struct timer_list *t)
+static void mon_timeout(unsigned long m)
 {
-	struct tipc_monitor *mon = from_timer(mon, t, timer);
+	struct tipc_monitor *mon = (void *)m;
 	struct tipc_peer *self;
 	int best_member_cnt = dom_size(mon->peer_cnt) - 1;
 
@@ -632,7 +623,7 @@ int tipc_mon_create(struct net *net, int bearer_id)
 	self->is_up = true;
 	self->is_head = true;
 	INIT_LIST_HEAD(&self->list);
-	timer_setup(&mon->timer, mon_timeout, 0);
+	setup_timer(&mon->timer, mon_timeout, (unsigned long)mon);
 	mon->timer_intv = msecs_to_jiffies(MON_TIMEOUT + (tn->random & 0xffff));
 	mod_timer(&mon->timer, jiffies + mon->timer_intv);
 	return 0;
@@ -642,13 +633,9 @@ void tipc_mon_delete(struct net *net, int bearer_id)
 {
 	struct tipc_net *tn = tipc_net(net);
 	struct tipc_monitor *mon = tipc_monitor(net, bearer_id);
-	struct tipc_peer *self;
+	struct tipc_peer *self = get_self(net, bearer_id);
 	struct tipc_peer *peer, *tmp;
 
-	if (!mon)
-		return;
-
-	self = get_self(net, bearer_id);
 	write_lock_bh(&mon->lock);
 	tn->monitors[bearer_id] = NULL;
 	list_for_each_entry_safe(peer, tmp, &self->list, list) {
@@ -684,8 +671,7 @@ int tipc_nl_monitor_get_threshold(struct net *net)
 	return tn->mon_threshold;
 }
 
-static int __tipc_nl_add_monitor_peer(struct tipc_peer *peer,
-				      struct tipc_nl_msg *msg)
+int __tipc_nl_add_monitor_peer(struct tipc_peer *peer, struct tipc_nl_msg *msg)
 {
 	struct tipc_mon_domain *dom = peer->domain;
 	struct nlattr *attrs;
@@ -778,7 +764,7 @@ int __tipc_nl_add_monitor(struct net *net, struct tipc_nl_msg *msg,
 
 	ret = tipc_bearer_get_name(net, bearer_name, bearer_id);
 	if (ret || !mon)
-		return 0;
+		return -EINVAL;
 
 	hdr = genlmsg_put(msg->skb, msg->portid, msg->seq, &tipc_genl_family,
 			  NLM_F_MULTI, TIPC_NL_MON_GET);

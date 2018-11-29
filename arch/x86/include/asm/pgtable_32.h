@@ -32,7 +32,6 @@ extern pmd_t initial_pg_pmd[];
 static inline void pgtable_cache_init(void) { }
 static inline void check_pgt_cache(void) { }
 void paging_init(void);
-void sync_initial_page_table(void);
 
 /*
  * Define this if things work differently on an i386 and an i486:
@@ -62,7 +61,7 @@ void sync_initial_page_table(void);
 #define kpte_clear_flush(ptep, vaddr)		\
 do {						\
 	pte_clear(&init_mm, (vaddr), (ptep));	\
-	__flush_tlb_one_kernel((vaddr));		\
+	__flush_tlb_one((vaddr));		\
 } while (0)
 
 #endif /* !__ASSEMBLY__ */

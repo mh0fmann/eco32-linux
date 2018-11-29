@@ -26,7 +26,6 @@
 #include <linux/if_pppox.h>
 #include <linux/ppp_defs.h>
 #include <linux/netfilter_bridge.h>
-#include <uapi/linux/netfilter_bridge.h>
 #include <linux/netfilter_ipv4.h>
 #include <linux/netfilter_ipv6.h>
 #include <linux/netfilter_arp.h>
@@ -215,7 +214,7 @@ static int br_validate_ipv4(struct net *net, struct sk_buff *skb)
 
 	iph = ip_hdr(skb);
 	if (unlikely(ip_fast_csum((u8 *)iph, iph->ihl)))
-		goto csum_error;
+		goto inhdr_error;
 
 	len = ntohs(iph->tot_len);
 	if (skb->len < len) {
@@ -237,8 +236,6 @@ static int br_validate_ipv4(struct net *net, struct sk_buff *skb)
 	 */
 	return 0;
 
-csum_error:
-	__IP_INC_STATS(net, IPSTATS_MIB_CSUMERRORS);
 inhdr_error:
 	__IP_INC_STATS(net, IPSTATS_MIB_INHDRERRORS);
 drop:
@@ -487,15 +484,14 @@ static unsigned int br_nf_pre_routing(void *priv,
 	br = p->br;
 
 	if (IS_IPV6(skb) || IS_VLAN_IPV6(skb) || IS_PPPOE_IPV6(skb)) {
-		if (!brnf_call_ip6tables &&
-		    !br_opt_get(br, BROPT_NF_CALL_IP6TABLES))
+		if (!brnf_call_ip6tables && !br->nf_call_ip6tables)
 			return NF_ACCEPT;
 
 		nf_bridge_pull_encap_header_rcsum(skb);
 		return br_nf_pre_routing_ipv6(priv, skb, state);
 	}
 
-	if (!brnf_call_iptables && !br_opt_get(br, BROPT_NF_CALL_IPTABLES))
+	if (!brnf_call_iptables && !br->nf_call_iptables)
 		return NF_ACCEPT;
 
 	if (!IS_IP(skb) && !IS_VLAN_IP(skb) && !IS_PPPOE_IP(skb))
@@ -637,7 +633,7 @@ static unsigned int br_nf_forward_arp(void *priv,
 		return NF_ACCEPT;
 	br = p->br;
 
-	if (!brnf_call_arptables && !br_opt_get(br, BROPT_NF_CALL_ARPTABLES))
+	if (!brnf_call_arptables && !br->nf_call_arptables)
 		return NF_ACCEPT;
 
 	if (!IS_ARP(skb)) {
@@ -836,8 +832,7 @@ static unsigned int ip_sabotage_in(void *priv,
 				   struct sk_buff *skb,
 				   const struct nf_hook_state *state)
 {
-	if (skb->nf_bridge && !skb->nf_bridge->in_prerouting &&
-	    !netif_is_l3_master(skb->dev)) {
+	if (skb->nf_bridge && !skb->nf_bridge->in_prerouting) {
 		state->okfn(state->net, state->sk, skb);
 		return NF_STOLEN;
 	}
@@ -996,7 +991,7 @@ int br_nf_hook_thresh(unsigned int hook, struct net *net,
 	unsigned int i;
 	int ret;
 
-	e = rcu_dereference(net->nf.hooks_bridge[hook]);
+	e = rcu_dereference(net->nf.hooks[NFPROTO_BRIDGE][hook]);
 	if (!e)
 		return okfn(net, sk, skb);
 

@@ -50,15 +50,15 @@ static inline const char *printk_skip_headers(const char *buffer)
 /* We show everything that is MORE important than this.. */
 #define CONSOLE_LOGLEVEL_SILENT  0 /* Mum's the word */
 #define CONSOLE_LOGLEVEL_MIN	 1 /* Minimum loglevel we let people use */
+#define CONSOLE_LOGLEVEL_QUIET	 4 /* Shhh ..., when booted with "quiet" */
 #define CONSOLE_LOGLEVEL_DEBUG	10 /* issue debug messages */
 #define CONSOLE_LOGLEVEL_MOTORMOUTH 15	/* You can't shut this one up */
 
 /*
- * Default used to be hard-coded at 7, quiet used to be hardcoded at 4,
- * we're now allowing both to be set from kernel config.
+ * Default used to be hard-coded at 7, we're now allowing it to be set from
+ * kernel config.
  */
 #define CONSOLE_LOGLEVEL_DEFAULT CONFIG_CONSOLE_LOGLEVEL_DEFAULT
-#define CONSOLE_LOGLEVEL_QUIET	 CONFIG_CONSOLE_LOGLEVEL_QUIET
 
 extern int console_printk[];
 
@@ -132,8 +132,10 @@ struct va_format {
  */
 #define no_printk(fmt, ...)				\
 ({							\
-	if (0)						\
-		printk(fmt, ##__VA_ARGS__);		\
+	do {						\
+		if (0)					\
+			printk(fmt, ##__VA_ARGS__);	\
+	} while (0);					\
 	0;						\
 })
 
@@ -148,13 +150,9 @@ void early_printk(const char *s, ...) { }
 #ifdef CONFIG_PRINTK_NMI
 extern void printk_nmi_enter(void);
 extern void printk_nmi_exit(void);
-extern void printk_nmi_direct_enter(void);
-extern void printk_nmi_direct_exit(void);
 #else
 static inline void printk_nmi_enter(void) { }
 static inline void printk_nmi_exit(void) { }
-static inline void printk_nmi_direct_enter(void) { }
-static inline void printk_nmi_direct_exit(void) { }
 #endif /* PRINTK_NMI */
 
 #ifdef CONFIG_PRINTK
@@ -191,6 +189,7 @@ extern bool printk_timed_ratelimit(unsigned long *caller_jiffies,
 
 extern int printk_delay_msec;
 extern int dmesg_restrict;
+extern int kptr_restrict;
 
 extern int
 devkmsg_sysctl_set_loglvl(struct ctl_table *table, int write, void __user *buf,
@@ -205,7 +204,6 @@ void __init setup_log_buf(int early);
 __printf(1, 2) void dump_stack_set_arch_desc(const char *fmt, ...);
 void dump_stack_print_info(const char *log_lvl);
 void show_regs_print_info(const char *log_lvl);
-extern asmlinkage void dump_stack(void) __cold;
 extern void printk_safe_init(void);
 extern void printk_safe_flush(void);
 extern void printk_safe_flush_on_panic(void);
@@ -269,10 +267,6 @@ static inline void show_regs_print_info(const char *log_lvl)
 {
 }
 
-static inline asmlinkage void dump_stack(void)
-{
-}
-
 static inline void printk_safe_init(void)
 {
 }
@@ -286,7 +280,7 @@ static inline void printk_safe_flush_on_panic(void)
 }
 #endif
 
-extern int kptr_restrict;
+extern asmlinkage void dump_stack(void) __cold;
 
 #ifndef pr_fmt
 #define pr_fmt(fmt) fmt

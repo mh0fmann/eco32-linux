@@ -195,7 +195,6 @@ static int ksz_spi_remove(struct spi_device *spi)
 
 static const struct of_device_id ksz_dt_ids[] = {
 	{ .compatible = "microchip,ksz9477" },
-	{ .compatible = "microchip,ksz9897" },
 	{},
 };
 MODULE_DEVICE_TABLE(of, ksz_dt_ids);

@@ -161,7 +161,6 @@ enum rk3x_i2c_state {
 };
 
 /**
- * struct rk3x_i2c_soc_data:
  * @grf_offset: offset inside the grf regmap for setting the i2c type
  * @calc_timings: Callback function for i2c timing information calculated
  */
@@ -195,7 +194,7 @@ struct rk3x_i2c_soc_data {
 struct rk3x_i2c {
 	struct i2c_adapter adap;
 	struct device *dev;
-	const struct rk3x_i2c_soc_data *soc_data;
+	struct rk3x_i2c_soc_data *soc_data;
 
 	/* Hardware resources */
 	void __iomem *regs;
@@ -1165,27 +1164,27 @@ static const struct rk3x_i2c_soc_data rk3399_soc_data = {
 static const struct of_device_id rk3x_i2c_match[] = {
 	{
 		.compatible = "rockchip,rv1108-i2c",
-		.data = &rv1108_soc_data
+		.data = (void *)&rv1108_soc_data
 	},
 	{
 		.compatible = "rockchip,rk3066-i2c",
-		.data = &rk3066_soc_data
+		.data = (void *)&rk3066_soc_data
 	},
 	{
 		.compatible = "rockchip,rk3188-i2c",
-		.data = &rk3188_soc_data
+		.data = (void *)&rk3188_soc_data
 	},
 	{
 		.compatible = "rockchip,rk3228-i2c",
-		.data = &rk3228_soc_data
+		.data = (void *)&rk3228_soc_data
 	},
 	{
 		.compatible = "rockchip,rk3288-i2c",
-		.data = &rk3288_soc_data
+		.data = (void *)&rk3288_soc_data
 	},
 	{
 		.compatible = "rockchip,rk3399-i2c",
-		.data = &rk3399_soc_data
+		.data = (void *)&rk3399_soc_data
 	},
 	{},
 };
@@ -1208,7 +1207,7 @@ static int rk3x_i2c_probe(struct platform_device *pdev)
 		return -ENOMEM;
 
 	match = of_match_node(rk3x_i2c_match, np);
-	i2c->soc_data = match->data;
+	i2c->soc_data = (struct rk3x_i2c_soc_data *)match->data;
 
 	/* use common interface to get I2C timing properties */
 	i2c_parse_fw_timings(&pdev->dev, &i2c->t, true);
@@ -1325,6 +1324,8 @@ static int rk3x_i2c_probe(struct platform_device *pdev)
 	ret = i2c_add_adapter(&i2c->adap);
 	if (ret < 0)
 		goto err_clk_notifier;
+
+	dev_info(&pdev->dev, "Initialized RK3xxx I2C bus at %p\n", i2c->regs);
 
 	return 0;
 

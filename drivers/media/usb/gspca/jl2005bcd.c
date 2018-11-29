@@ -149,8 +149,7 @@ static int jl2005c_start_new_frame(struct gspca_dev *gspca_dev)
 			return retval;
 		i++;
 	}
-	gspca_dbg(gspca_dev, D_FRAM, "frame_brightness is 0x%02x\n",
-		  gspca_dev->usb_buf[0]);
+	PDEBUG(D_FRAM, "frame_brightness is 0x%02x", gspca_dev->usb_buf[0]);
 	return retval;
 }
 
@@ -177,11 +176,10 @@ static int jl2005c_get_firmware_id(struct gspca_dev *gspca_dev)
 	int retval = -1;
 	unsigned char regs_to_read[] = {0x57, 0x02, 0x03, 0x5d, 0x5e, 0x5f};
 
-	gspca_dbg(gspca_dev, D_PROBE, "Running jl2005c_get_firmware_id\n");
+	PDEBUG(D_PROBE, "Running jl2005c_get_firmware_id");
 	/* Read the first ID byte once for warmup */
 	retval = jl2005c_read_reg(gspca_dev, regs_to_read[0]);
-	gspca_dbg(gspca_dev, D_PROBE, "response is %02x\n",
-		  gspca_dev->usb_buf[0]);
+	PDEBUG(D_PROBE, "response is %02x", gspca_dev->usb_buf[0]);
 	if (retval < 0)
 		return retval;
 	/* Now actually get the ID string */
@@ -191,13 +189,13 @@ static int jl2005c_get_firmware_id(struct gspca_dev *gspca_dev)
 			return retval;
 		sd->firmware_id[i] = gspca_dev->usb_buf[0];
 	}
-	gspca_dbg(gspca_dev, D_PROBE, "firmware ID is %02x%02x%02x%02x%02x%02x\n",
-		  sd->firmware_id[0],
-		  sd->firmware_id[1],
-		  sd->firmware_id[2],
-		  sd->firmware_id[3],
-		  sd->firmware_id[4],
-		  sd->firmware_id[5]);
+	PDEBUG(D_PROBE, "firmware ID is %02x%02x%02x%02x%02x%02x",
+						sd->firmware_id[0],
+						sd->firmware_id[1],
+						sd->firmware_id[2],
+						sd->firmware_id[3],
+						sd->firmware_id[4],
+						sd->firmware_id[5]);
 	return 0;
 }
 
@@ -321,7 +319,7 @@ static void jl2005c_dostream(struct work_struct *work)
 	int ret;
 	u8 *buffer;
 
-	buffer = kmalloc(JL2005C_MAX_TRANSFER, GFP_KERNEL);
+	buffer = kmalloc(JL2005C_MAX_TRANSFER, GFP_KERNEL | GFP_DMA);
 	if (!buffer) {
 		pr_err("Couldn't allocate USB buffer\n");
 		goto quit_stream;
@@ -343,9 +341,9 @@ static void jl2005c_dostream(struct work_struct *work)
 				usb_rcvbulkpipe(gspca_dev->dev, 0x82),
 				buffer, JL2005C_MAX_TRANSFER, &act_len,
 				JL2005C_DATA_TIMEOUT);
-			gspca_dbg(gspca_dev, D_PACK,
-				  "Got %d bytes out of %d for header\n",
-				  act_len, JL2005C_MAX_TRANSFER);
+			PDEBUG(D_PACK,
+				"Got %d bytes out of %d for header",
+					act_len, JL2005C_MAX_TRANSFER);
 			if (ret < 0 || act_len < JL2005C_MAX_TRANSFER)
 				goto quit_stream;
 			/* Check whether we actually got the first blodk */
@@ -356,8 +354,7 @@ static void jl2005c_dostream(struct work_struct *work)
 			/* total size to fetch is byte 7, times blocksize
 			 * of which we already got act_len */
 			bytes_left = buffer[0x07] * dev->block_size - act_len;
-			gspca_dbg(gspca_dev, D_PACK, "bytes_left = 0x%x\n",
-				  bytes_left);
+			PDEBUG(D_PACK, "bytes_left = 0x%x", bytes_left);
 			/* We keep the header. It has other information, too.*/
 			packet_type = FIRST_PACKET;
 			gspca_frame_add(gspca_dev, packet_type,
@@ -373,9 +370,9 @@ static void jl2005c_dostream(struct work_struct *work)
 				JL2005C_DATA_TIMEOUT);
 			if (ret < 0 || act_len < data_len)
 				goto quit_stream;
-			gspca_dbg(gspca_dev, D_PACK,
-				  "Got %d bytes out of %d for frame\n",
-				  data_len, bytes_left);
+			PDEBUG(D_PACK,
+				"Got %d bytes out of %d for frame",
+						data_len, bytes_left);
 			bytes_left -= data_len;
 			if (bytes_left == 0) {
 				packet_type = LAST_PACKET;
@@ -452,19 +449,19 @@ static int sd_start(struct gspca_dev *gspca_dev)
 
 	switch (gspca_dev->pixfmt.width) {
 	case 640:
-		gspca_dbg(gspca_dev, D_STREAM, "Start streaming at vga resolution\n");
+		PDEBUG(D_STREAM, "Start streaming at vga resolution");
 		jl2005c_stream_start_vga_lg(gspca_dev);
 		break;
 	case 320:
-		gspca_dbg(gspca_dev, D_STREAM, "Start streaming at qvga resolution\n");
+		PDEBUG(D_STREAM, "Start streaming at qvga resolution");
 		jl2005c_stream_start_vga_small(gspca_dev);
 		break;
 	case 352:
-		gspca_dbg(gspca_dev, D_STREAM, "Start streaming at cif resolution\n");
+		PDEBUG(D_STREAM, "Start streaming at cif resolution");
 		jl2005c_stream_start_cif_lg(gspca_dev);
 		break;
 	case 176:
-		gspca_dbg(gspca_dev, D_STREAM, "Start streaming at qcif resolution\n");
+		PDEBUG(D_STREAM, "Start streaming at qcif resolution");
 		jl2005c_stream_start_cif_small(gspca_dev);
 		break;
 	default:

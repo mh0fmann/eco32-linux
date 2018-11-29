@@ -207,7 +207,6 @@ modehdlc(struct BCState *bcs, int mode, int bc)
 		bcs->mode = 1;
 		bcs->channel = bc;
 		bc = 0;
-		/* fall through */
 	case (L1_MODE_NULL):
 		if (bcs->mode == L1_MODE_NULL)
 			return;
@@ -806,7 +805,7 @@ static int avm_pnp_setup(struct IsdnCardState *cs)
 			cs->hw.avm.cfg_reg =
 				pnp_port_start(pnp_avm_d, 0);
 			cs->irq = pnp_irq(pnp_avm_d, 0);
-			if (cs->irq == -1) {
+			if (!cs->irq) {
 				printk(KERN_ERR "FritzPnP:No IRQ\n");
 				return (0);
 			}

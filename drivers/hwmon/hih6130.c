@@ -37,7 +37,7 @@
 
 /**
  * struct hih6130 - HIH-6130 device specific data
- * @client: pointer to I2C client device
+ * @hwmon_dev: device registered with hwmon
  * @lock: mutex to protect measurement values
  * @valid: only false before first measurement is taken
  * @last_update: time of last update (jiffies)

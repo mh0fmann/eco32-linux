@@ -15,7 +15,7 @@
 #define CREATE_TRACE_POINTS
 #include <trace/events/page_isolation.h>
 
-static int set_migratetype_isolate(struct page *page, int migratetype,
+static int set_migratetype_isolate(struct page *page,
 				bool skip_hwpoisoned_pages)
 {
 	struct zone *zone;
@@ -27,14 +27,6 @@ static int set_migratetype_isolate(struct page *page, int migratetype,
 	zone = page_zone(page);
 
 	spin_lock_irqsave(&zone->lock, flags);
-
-	/*
-	 * We assume the caller intended to SET migrate type to isolate.
-	 * If it is already set, then someone else must have raced and
-	 * set it before us.  Return -EBUSY
-	 */
-	if (is_migrate_isolate_page(page))
-		goto out;
 
 	pfn = page_to_pfn(page);
 	arg.start_pfn = pfn;
@@ -60,7 +52,7 @@ static int set_migratetype_isolate(struct page *page, int migratetype,
 	 * FIXME: Now, memory hotplug doesn't call shrink_slab() by itself.
 	 * We just check MOVABLE pages.
 	 */
-	if (!has_unmovable_pages(zone, page, arg.pages_found, migratetype,
+	if (!has_unmovable_pages(zone, page, arg.pages_found,
 				 skip_hwpoisoned_pages))
 		ret = 0;
 
@@ -72,14 +64,14 @@ static int set_migratetype_isolate(struct page *page, int migratetype,
 out:
 	if (!ret) {
 		unsigned long nr_pages;
-		int mt = get_pageblock_migratetype(page);
+		int migratetype = get_pageblock_migratetype(page);
 
 		set_pageblock_migratetype(page, MIGRATE_ISOLATE);
 		zone->nr_isolate_pageblock++;
 		nr_pages = move_freepages_block(zone, page, MIGRATE_ISOLATE,
 									NULL);
 
-		__mod_zone_freepage_state(zone, -nr_pages, mt);
+		__mod_zone_freepage_state(zone, -nr_pages, migratetype);
 	}
 
 	spin_unlock_irqrestore(&zone->lock, flags);
@@ -174,15 +166,7 @@ __first_valid_page(unsigned long pfn, unsigned long nr_pages)
  * future will not be allocated again.
  *
  * start_pfn/end_pfn must be aligned to pageblock_order.
- * Return 0 on success and -EBUSY if any part of range cannot be isolated.
- *
- * There is no high level synchronization mechanism that prevents two threads
- * from trying to isolate overlapping ranges.  If this happens, one thread
- * will notice pageblocks in the overlapping range already set to isolate.
- * This happens in set_migratetype_isolate, and set_migratetype_isolate
- * returns an error.  We then clean up by restoring the migration type on
- * pageblocks we may have modified and return -EBUSY to caller.  This
- * prevents two threads from simultaneously working on overlapping ranges.
+ * Returns 0 on success and -EBUSY if any part of range cannot be isolated.
  */
 int start_isolate_page_range(unsigned long start_pfn, unsigned long end_pfn,
 			     unsigned migratetype, bool skip_hwpoisoned_pages)
@@ -199,7 +183,7 @@ int start_isolate_page_range(unsigned long start_pfn, unsigned long end_pfn,
 	     pfn += pageblock_nr_pages) {
 		page = __first_valid_page(pfn, pageblock_nr_pages);
 		if (page &&
-		    set_migratetype_isolate(page, migratetype, skip_hwpoisoned_pages)) {
+		    set_migratetype_isolate(page, skip_hwpoisoned_pages)) {
 			undo_pfn = pfn;
 			goto undo;
 		}
@@ -309,7 +293,8 @@ int test_pages_isolated(unsigned long start_pfn, unsigned long end_pfn,
 	return pfn < end_pfn ? -EBUSY : 0;
 }
 
-struct page *alloc_migrate_target(struct page *page, unsigned long private)
+struct page *alloc_migrate_target(struct page *page, unsigned long private,
+				  int **resultp)
 {
 	return new_page_nodemask(page, numa_node_id(), &node_states[N_MEMORY]);
 }

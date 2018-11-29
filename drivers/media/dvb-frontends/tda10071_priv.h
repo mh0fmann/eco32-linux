@@ -21,7 +21,7 @@
 #ifndef TDA10071_PRIV
 #define TDA10071_PRIV
 
-#include <media/dvb_frontend.h>
+#include "dvb_frontend.h"
 #include "tda10071.h"
 #include <linux/firmware.h>
 #include <linux/regmap.h>

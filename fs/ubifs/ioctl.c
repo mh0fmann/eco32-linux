@@ -38,8 +38,7 @@ void ubifs_set_inode_flags(struct inode *inode)
 {
 	unsigned int flags = ubifs_inode(inode)->flags;
 
-	inode->i_flags &= ~(S_SYNC | S_APPEND | S_IMMUTABLE | S_DIRSYNC |
-			    S_ENCRYPTED);
+	inode->i_flags &= ~(S_SYNC | S_APPEND | S_IMMUTABLE | S_DIRSYNC);
 	if (flags & UBIFS_SYNC_FL)
 		inode->i_flags |= S_SYNC;
 	if (flags & UBIFS_APPEND_FL)
@@ -48,8 +47,6 @@ void ubifs_set_inode_flags(struct inode *inode)
 		inode->i_flags |= S_IMMUTABLE;
 	if (flags & UBIFS_DIRSYNC_FL)
 		inode->i_flags |= S_DIRSYNC;
-	if (flags & UBIFS_CRYPT_FL)
-		inode->i_flags |= S_ENCRYPTED;
 }
 
 /*

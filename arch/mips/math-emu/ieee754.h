@@ -165,12 +165,11 @@ struct _ieee754_csr {
 };
 #define ieee754_csr (*(struct _ieee754_csr *)(&current->thread.fpu.fcr31))
 
-static inline unsigned int ieee754_getrm(void)
+static inline unsigned ieee754_getrm(void)
 {
 	return (ieee754_csr.rm);
 }
-
-static inline unsigned int ieee754_setrm(unsigned int rm)
+static inline unsigned ieee754_setrm(unsigned rm)
 {
 	return (ieee754_csr.rm = rm);
 }
@@ -178,14 +177,14 @@ static inline unsigned int ieee754_setrm(unsigned int rm)
 /*
  * get current exceptions
  */
-static inline unsigned int ieee754_getcx(void)
+static inline unsigned ieee754_getcx(void)
 {
 	return (ieee754_csr.cx);
 }
 
 /* test for current exception condition
  */
-static inline int ieee754_cxtest(unsigned int n)
+static inline int ieee754_cxtest(unsigned n)
 {
 	return (ieee754_csr.cx & n);
 }
@@ -193,21 +192,21 @@ static inline int ieee754_cxtest(unsigned int n)
 /*
  * get sticky exceptions
  */
-static inline unsigned int ieee754_getsx(void)
+static inline unsigned ieee754_getsx(void)
 {
 	return (ieee754_csr.sx);
 }
 
 /* clear sticky conditions
 */
-static inline unsigned int ieee754_clrsx(void)
+static inline unsigned ieee754_clrsx(void)
 {
 	return (ieee754_csr.sx = 0);
 }
 
 /* test for sticky exception condition
  */
-static inline int ieee754_sxtest(unsigned int n)
+static inline int ieee754_sxtest(unsigned n)
 {
 	return (ieee754_csr.sx & n);
 }

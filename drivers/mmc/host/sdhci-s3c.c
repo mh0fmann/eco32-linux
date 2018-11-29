@@ -655,8 +655,10 @@ static int sdhci_s3c_probe(struct platform_device *pdev)
 		goto err_req_regs;
 
 	ret = sdhci_add_host(host);
-	if (ret)
+	if (ret) {
+		dev_err(dev, "sdhci_add_host() failed\n");
 		goto err_req_regs;
+	}
 
 #ifdef CONFIG_PM
 	if (pdata->cd_type != S3C_SDHCI_CD_INTERNAL)
@@ -759,24 +761,32 @@ static const struct dev_pm_ops sdhci_s3c_pmops = {
 			   NULL)
 };
 
+#if defined(CONFIG_CPU_EXYNOS4210) || defined(CONFIG_SOC_EXYNOS4212)
+static struct sdhci_s3c_drv_data exynos4_sdhci_drv_data = {
+	.no_divider = true,
+};
+#define EXYNOS4_SDHCI_DRV_DATA ((kernel_ulong_t)&exynos4_sdhci_drv_data)
+#else
+#define EXYNOS4_SDHCI_DRV_DATA ((kernel_ulong_t)NULL)
+#endif
+
 static const struct platform_device_id sdhci_s3c_driver_ids[] = {
 	{
 		.name		= "s3c-sdhci",
 		.driver_data	= (kernel_ulong_t)NULL,
+	}, {
+		.name		= "exynos4-sdhci",
+		.driver_data	= EXYNOS4_SDHCI_DRV_DATA,
 	},
 	{ }
 };
 MODULE_DEVICE_TABLE(platform, sdhci_s3c_driver_ids);
 
 #ifdef CONFIG_OF
-static struct sdhci_s3c_drv_data exynos4_sdhci_drv_data = {
-	.no_divider = true,
-};
-
 static const struct of_device_id sdhci_s3c_dt_match[] = {
 	{ .compatible = "samsung,s3c6410-sdhci", },
 	{ .compatible = "samsung,exynos4210-sdhci",
-		.data = &exynos4_sdhci_drv_data },
+		.data = (void *)EXYNOS4_SDHCI_DRV_DATA },
 	{},
 };
 MODULE_DEVICE_TABLE(of, sdhci_s3c_dt_match);

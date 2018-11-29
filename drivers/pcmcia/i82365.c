@@ -875,7 +875,7 @@ static irqreturn_t pcic_interrupt(int irq, void *dev)
     return IRQ_RETVAL(handled);
 } /* pcic_interrupt */
 
-static void pcic_interrupt_wrapper(struct timer_list *unused)
+static void pcic_interrupt_wrapper(u_long data)
 {
     pcic_interrupt(0, NULL);
     poll_timer.expires = jiffies + poll_interval;
@@ -1289,7 +1289,9 @@ static int __init init_i82365(void)
 
     /* Finally, schedule a polling interrupt */
     if (poll_interval != 0) {
-	timer_setup(&poll_timer, pcic_interrupt_wrapper, 0);
+	poll_timer.function = pcic_interrupt_wrapper;
+	poll_timer.data = 0;
+	init_timer(&poll_timer);
     	poll_timer.expires = jiffies + poll_interval;
 	add_timer(&poll_timer);
     }

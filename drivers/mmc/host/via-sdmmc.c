@@ -932,12 +932,12 @@ out:
 	return result;
 }
 
-static void via_sdc_timeout(struct timer_list *t)
+static void via_sdc_timeout(unsigned long ulongdata)
 {
 	struct via_crdr_mmc_host *sdhost;
 	unsigned long flags;
 
-	sdhost = from_timer(sdhost, t, timer);
+	sdhost = (struct via_crdr_mmc_host *)ulongdata;
 
 	spin_lock_irqsave(&sdhost->lock, flags);
 
@@ -1036,7 +1036,9 @@ static void via_init_mmc_host(struct via_crdr_mmc_host *host)
 	u32 lenreg;
 	u32 status;
 
-	timer_setup(&host->timer, via_sdc_timeout, 0);
+	init_timer(&host->timer);
+	host->timer.data = (unsigned long)host;
+	host->timer.function = via_sdc_timeout;
 
 	spin_lock_init(&host->lock);
 

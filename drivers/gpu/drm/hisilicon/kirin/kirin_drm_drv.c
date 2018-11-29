@@ -22,7 +22,6 @@
 #include <drm/drmP.h>
 #include <drm/drm_gem_cma_helper.h>
 #include <drm/drm_fb_cma_helper.h>
-#include <drm/drm_gem_framebuffer_helper.h>
 #include <drm/drm_atomic_helper.h>
 #include <drm/drm_crtc_helper.h>
 #include <drm/drm_of.h>
@@ -57,7 +56,7 @@ static void kirin_fbdev_output_poll_changed(struct drm_device *dev)
 }
 
 static const struct drm_mode_config_funcs kirin_drm_mode_config_funcs = {
-	.fb_create = drm_gem_fb_create,
+	.fb_create = drm_fb_cma_create,
 	.output_poll_changed = kirin_fbdev_output_poll_changed,
 	.atomic_check = drm_atomic_helper_check,
 	.atomic_commit = drm_atomic_helper_commit,
@@ -193,7 +192,7 @@ static int kirin_drm_bind(struct device *dev)
 
 	ret = kirin_drm_kms_init(drm_dev);
 	if (ret)
-		goto err_drm_dev_put;
+		goto err_drm_dev_unref;
 
 	ret = drm_dev_register(drm_dev, 0);
 	if (ret)
@@ -203,8 +202,8 @@ static int kirin_drm_bind(struct device *dev)
 
 err_kms_cleanup:
 	kirin_drm_kms_cleanup(drm_dev);
-err_drm_dev_put:
-	drm_dev_put(drm_dev);
+err_drm_dev_unref:
+	drm_dev_unref(drm_dev);
 
 	return ret;
 }
@@ -215,7 +214,7 @@ static void kirin_drm_unbind(struct device *dev)
 
 	drm_dev_unregister(drm_dev);
 	kirin_drm_kms_cleanup(drm_dev);
-	drm_dev_put(drm_dev);
+	drm_dev_unref(drm_dev);
 }
 
 static const struct component_master_ops kirin_drm_ops = {
@@ -237,8 +236,8 @@ static int kirin_drm_platform_probe(struct platform_device *pdev)
 	}
 
 	remote = of_graph_get_remote_node(np, 0, 0);
-	if (!remote)
-		return -ENODEV;
+	if (IS_ERR(remote))
+		return PTR_ERR(remote);
 
 	drm_of_component_match_add(dev, &match, compare_of, remote);
 	of_node_put(remote);

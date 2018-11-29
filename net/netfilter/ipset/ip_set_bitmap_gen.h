@@ -37,11 +37,11 @@
 #define get_ext(set, map, id)	((map)->extensions + ((set)->dsize * (id)))
 
 static void
-mtype_gc_init(struct ip_set *set, void (*gc)(struct timer_list *t))
+mtype_gc_init(struct ip_set *set, void (*gc)(unsigned long ul_set))
 {
 	struct mtype *map = set->data;
 
-	timer_setup(&map->gc, gc, 0);
+	setup_timer(&map->gc, gc, (unsigned long)set);
 	mod_timer(&map->gc, jiffies + IPSET_GC_PERIOD(set->timeout) * HZ);
 }
 
@@ -127,7 +127,14 @@ mtype_test(struct ip_set *set, void *value, const struct ip_set_ext *ext,
 
 	if (ret <= 0)
 		return ret;
-	return ip_set_match_extensions(set, ext, mext, flags, x);
+	if (SET_WITH_TIMEOUT(set) &&
+	    ip_set_timeout_expired(ext_timeout(x, set)))
+		return 0;
+	if (SET_WITH_COUNTER(set))
+		ip_set_update_counter(ext_counter(x, set), ext, mext, flags);
+	if (SET_WITH_SKBINFO(set))
+		ip_set_get_skbinfo(ext_skbinfo(x, set), ext, mext, flags);
+	return 1;
 }
 
 static int
@@ -220,7 +227,6 @@ mtype_list(const struct ip_set *set,
 	rcu_read_lock();
 	for (; cb->args[IPSET_CB_ARG0] < map->elements;
 	     cb->args[IPSET_CB_ARG0]++) {
-		cond_resched_rcu();
 		id = cb->args[IPSET_CB_ARG0];
 		x = get_ext(set, map, id);
 		if (!test_bit(id, map->members) ||
@@ -266,10 +272,10 @@ out:
 }
 
 static void
-mtype_gc(struct timer_list *t)
+mtype_gc(unsigned long ul_set)
 {
-	struct mtype *map = from_timer(map, t, gc);
-	struct ip_set *set = map->set;
+	struct ip_set *set = (struct ip_set *)ul_set;
+	struct mtype *map = set->data;
 	void *x;
 	u32 id;
 

@@ -1,8 +1,15 @@
-// SPDX-License-Identifier: GPL-2.0
-// Copyright (c) 2014 Samsung Electronics Co., Ltd.
-//		http://www.samsung.com
-//
-// Based on arch/arm/mach-vexpress/dcscb.c
+/*
+ * Copyright (c) 2014 Samsung Electronics Co., Ltd.
+ *		http://www.samsung.com
+ *
+ * arch/arm/mach-exynos/mcpm-exynos.c
+ *
+ * Based on arch/arm/mach-vexpress/dcscb.c
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation.
+ */
 
 #include <linux/arm-cci.h>
 #include <linux/delay.h>

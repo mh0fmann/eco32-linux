@@ -28,6 +28,9 @@
 #include <linux/regulator/machine.h>
 #include <linux/mfd/tps65218.h>
 
+enum tps65218_regulators { DCDC1, DCDC2, DCDC3, DCDC4,
+			   DCDC5, DCDC6, LDO1, LS3 };
+
 #define TPS65218_REGULATOR(_name, _of, _id, _type, _ops, _n, _vr, _vm, _er, \
 			   _em, _cr, _cm, _lr, _nlr, _delay, _fuv, _sr, _sm) \
 	{							\
@@ -151,7 +154,7 @@ static int tps65218_pmic_set_suspend_disable(struct regulator_dev *dev)
 
 	if (!tps->strobes[rid]) {
 		if (rid == TPS65218_DCDC_3)
-			tps->strobes[rid] = 3;
+			tps->info[rid]->strobe = 3;
 		else
 			return -EINVAL;
 	}
@@ -324,11 +327,8 @@ static int tps65218_regulator_probe(struct platform_device *pdev)
 	config.regmap = tps->regmap;
 
 	/* Allocate memory for strobes */
-	tps->strobes = devm_kcalloc(&pdev->dev,
-				    TPS65218_NUM_REGULATOR, sizeof(u8),
-				    GFP_KERNEL);
-	if (!tps->strobes)
-		return -ENOMEM;
+	tps->strobes = devm_kzalloc(&pdev->dev, sizeof(u8) *
+				    TPS65218_NUM_REGULATOR, GFP_KERNEL);
 
 	for (i = 0; i < ARRAY_SIZE(regulators); i++) {
 		rdev = devm_regulator_register(&pdev->dev, &regulators[i],

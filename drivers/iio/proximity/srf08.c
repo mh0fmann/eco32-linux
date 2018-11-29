@@ -436,6 +436,7 @@ static const struct iio_chan_spec srf08_channels[] = {
 static const struct iio_info srf08_info = {
 	.read_raw = srf08_read_raw,
 	.attrs = &srf08_attribute_group,
+	.driver_module = THIS_MODULE,
 };
 
 /*
@@ -444,6 +445,7 @@ static const struct iio_info srf08_info = {
  */
 static const struct iio_info srf02_info = {
 	.read_raw = srf08_read_raw,
+	.driver_module = THIS_MODULE,
 };
 
 static int srf08_probe(struct i2c_client *client,

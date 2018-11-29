@@ -19,7 +19,8 @@
 #include <linux/mmc/host.h>
 #include <linux/module.h>
 #include <linux/mtd/mtd.h>
-#include <linux/mtd/platnand.h>
+#include <linux/mtd/rawnand.h>
+#include <linux/mtd/partitions.h>
 #include <linux/platform_device.h>
 #include <linux/smsc911x.h>
 #include <linux/wm97xx.h>
@@ -148,10 +149,11 @@ static void __init db1300_gpio_config(void)
 
 /**********************************************************************/
 
-static void au1300_nand_cmd_ctrl(struct nand_chip *this, int cmd,
+static void au1300_nand_cmd_ctrl(struct mtd_info *mtd, int cmd,
 				 unsigned int ctrl)
 {
-	unsigned long ioaddr = (unsigned long)this->legacy.IO_ADDR_W;
+	struct nand_chip *this = mtd_to_nand(mtd);
+	unsigned long ioaddr = (unsigned long)this->IO_ADDR_W;
 
 	ioaddr &= 0xffffff00;
 
@@ -163,14 +165,14 @@ static void au1300_nand_cmd_ctrl(struct nand_chip *this, int cmd,
 		/* assume we want to r/w real data  by default */
 		ioaddr += MEM_STNAND_DATA;
 	}
-	this->legacy.IO_ADDR_R = this->legacy.IO_ADDR_W = (void __iomem *)ioaddr;
+	this->IO_ADDR_R = this->IO_ADDR_W = (void __iomem *)ioaddr;
 	if (cmd != NAND_CMD_NONE) {
-		__raw_writeb(cmd, this->legacy.IO_ADDR_W);
+		__raw_writeb(cmd, this->IO_ADDR_W);
 		wmb();
 	}
 }
 
-static int au1300_nand_device_ready(struct nand_chip *this)
+static int au1300_nand_device_ready(struct mtd_info *mtd)
 {
 	return alchemy_rdsmem(AU1000_MEM_STSTAT) & 1;
 }

@@ -13,7 +13,6 @@
  */
 
 #include <crypto/aes.h>
-#include <crypto/gcm.h>
 #include "mtk-platform.h"
 
 #define AES_QUEUE_SIZE		512
@@ -136,6 +135,11 @@ struct mtk_aes_gcm_ctx {
 	size_t textlen;
 
 	struct crypto_skcipher *ctr;
+};
+
+struct mtk_aes_gcm_setkey_result {
+	int err;
+	struct completion completion;
 };
 
 struct mtk_aes_drv {
@@ -924,17 +928,23 @@ static int mtk_aes_gcm_start(struct mtk_cryp *cryp, struct mtk_aes_rec *aes)
 static int mtk_aes_gcm_crypt(struct aead_request *req, u64 mode)
 {
 	struct mtk_aes_base_ctx *ctx = crypto_aead_ctx(crypto_aead_reqtfm(req));
-	struct mtk_aes_gcm_ctx *gctx = mtk_aes_gcm_ctx_cast(ctx);
 	struct mtk_aes_reqctx *rctx = aead_request_ctx(req);
-
-	/* Empty messages are not supported yet */
-	if (!gctx->textlen && !req->assoclen)
-		return -EINVAL;
 
 	rctx->mode = AES_FLAGS_GCM | mode;
 
 	return mtk_aes_handle_queue(ctx->cryp, !!(mode & AES_FLAGS_ENCRYPT),
 				    &req->base);
+}
+
+static void mtk_gcm_setkey_done(struct crypto_async_request *req, int err)
+{
+	struct mtk_aes_gcm_setkey_result *result = req->data;
+
+	if (err == -EINPROGRESS)
+		return;
+
+	result->err = err;
+	complete(&result->completion);
 }
 
 /*
@@ -952,7 +962,7 @@ static int mtk_aes_gcm_setkey(struct crypto_aead *aead, const u8 *key,
 		u32 hash[4];
 		u8 iv[8];
 
-		struct crypto_wait wait;
+		struct mtk_aes_gcm_setkey_result result;
 
 		struct scatterlist sg[1];
 		struct skcipher_request req;
@@ -992,17 +1002,22 @@ static int mtk_aes_gcm_setkey(struct crypto_aead *aead, const u8 *key,
 	if (!data)
 		return -ENOMEM;
 
-	crypto_init_wait(&data->wait);
+	init_completion(&data->result.completion);
 	sg_init_one(data->sg, &data->hash, AES_BLOCK_SIZE);
 	skcipher_request_set_tfm(&data->req, ctr);
 	skcipher_request_set_callback(&data->req, CRYPTO_TFM_REQ_MAY_SLEEP |
 				      CRYPTO_TFM_REQ_MAY_BACKLOG,
-				      crypto_req_done, &data->wait);
+				      mtk_gcm_setkey_done, &data->result);
 	skcipher_request_set_crypt(&data->req, data->sg, data->sg,
 				   AES_BLOCK_SIZE, data->iv);
 
-	err = crypto_wait_req(crypto_skcipher_encrypt(&data->req),
-			      &data->wait);
+	err = crypto_skcipher_encrypt(&data->req);
+	if (err == -EINPROGRESS || err == -EBUSY) {
+		err = wait_for_completion_interruptible(
+			&data->result.completion);
+		if (!err)
+			err = data->result.err;
+	}
 	if (err)
 		goto out;
 
@@ -1083,7 +1098,7 @@ static struct aead_alg aes_gcm_alg = {
 	.decrypt	= mtk_aes_gcm_decrypt,
 	.init		= mtk_aes_gcm_init,
 	.exit		= mtk_aes_gcm_exit,
-	.ivsize		= GCM_AES_IV_SIZE,
+	.ivsize		= 12,
 	.maxauthsize	= AES_BLOCK_SIZE,
 
 	.base = {

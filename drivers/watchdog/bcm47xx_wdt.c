@@ -1,4 +1,3 @@
-// SPDX-License-Identifier: GPL-2.0+
 /*
  *  Watchdog driver for Broadcom BCM47XX
  *
@@ -6,6 +5,10 @@
  *  Copyright (C) 2009 Matthieu CASTET <castet.matthieu@free.fr>
  *  Copyright (C) 2012-2013 Hauke Mehrtens <hauke@hauke-m.de>
  *
+ *  This program is free software; you can redistribute it and/or
+ *  modify it under the terms of the GNU General Public License
+ *  as published by the Free Software Foundation; either version
+ *  2 of the License, or (at your option) any later version.
  */
 
 #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
@@ -103,9 +106,9 @@ static const struct watchdog_ops bcm47xx_wdt_hard_ops = {
 	.restart        = bcm47xx_wdt_restart,
 };
 
-static void bcm47xx_wdt_soft_timer_tick(struct timer_list *t)
+static void bcm47xx_wdt_soft_timer_tick(unsigned long data)
 {
-	struct bcm47xx_wdt *wdt = from_timer(wdt, t, soft_timer);
+	struct bcm47xx_wdt *wdt = (struct bcm47xx_wdt *)data;
 	u32 next_tick = min(wdt->wdd.timeout * 1000, wdt->max_timer_ms);
 
 	if (!atomic_dec_and_test(&wdt->soft_ticks)) {
@@ -130,7 +133,7 @@ static int bcm47xx_wdt_soft_start(struct watchdog_device *wdd)
 	struct bcm47xx_wdt *wdt = bcm47xx_wdt_get(wdd);
 
 	bcm47xx_wdt_soft_keepalive(wdd);
-	bcm47xx_wdt_soft_timer_tick(&wdt->soft_timer);
+	bcm47xx_wdt_soft_timer_tick((unsigned long)wdt);
 
 	return 0;
 }
@@ -187,7 +190,8 @@ static int bcm47xx_wdt_probe(struct platform_device *pdev)
 
 	if (soft) {
 		wdt->wdd.ops = &bcm47xx_wdt_soft_ops;
-		timer_setup(&wdt->soft_timer, bcm47xx_wdt_soft_timer_tick, 0);
+		setup_timer(&wdt->soft_timer, bcm47xx_wdt_soft_timer_tick,
+			    (long unsigned int)wdt);
 	} else {
 		wdt->wdd.ops = &bcm47xx_wdt_hard_ops;
 	}

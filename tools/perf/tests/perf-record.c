@@ -141,7 +141,7 @@ int test__PERF_RECORD(struct test *test __maybe_unused, int subtest __maybe_unus
 	 * fds in the same CPU to be injected in the same mmap ring buffer
 	 * (using ioctl(PERF_EVENT_IOC_SET_OUTPUT)).
 	 */
-	err = perf_evlist__mmap(evlist, opts.mmap_pages);
+	err = perf_evlist__mmap(evlist, opts.mmap_pages, false);
 	if (err < 0) {
 		pr_debug("perf_evlist__mmap: %s\n",
 			 str_error_r(errno, sbuf, sizeof(sbuf)));
@@ -164,13 +164,8 @@ int test__PERF_RECORD(struct test *test __maybe_unused, int subtest __maybe_unus
 
 		for (i = 0; i < evlist->nr_mmaps; i++) {
 			union perf_event *event;
-			struct perf_mmap *md;
 
-			md = &evlist->mmap[i];
-			if (perf_mmap__read_init(md) < 0)
-				continue;
-
-			while ((event = perf_mmap__read_event(md)) != NULL) {
+			while ((event = perf_evlist__mmap_read(evlist, i)) != NULL) {
 				const u32 type = event->header.type;
 				const char *name = perf_event__name(type);
 
@@ -271,9 +266,8 @@ int test__PERF_RECORD(struct test *test __maybe_unused, int subtest __maybe_unus
 					++errs;
 				}
 
-				perf_mmap__consume(md);
+				perf_evlist__mmap_consume(evlist, i);
 			}
-			perf_mmap__read_done(md);
 		}
 
 		/*

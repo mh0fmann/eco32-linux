@@ -1,4 +1,3 @@
-// SPDX-License-Identifier: GPL-2.0
 /*
  *    Time of day based timer functions.
  *
@@ -221,22 +220,17 @@ void read_persistent_clock64(struct timespec64 *ts)
 	ext_to_timespec64(clk, ts);
 }
 
-void __init read_persistent_wall_and_boot_offset(struct timespec64 *wall_time,
-						 struct timespec64 *boot_offset)
+void read_boot_clock64(struct timespec64 *ts)
 {
 	unsigned char clk[STORE_CLOCK_EXT_SIZE];
-	struct timespec64 boot_time;
 	__u64 delta;
 
 	delta = initial_leap_seconds + TOD_UNIX_EPOCH;
-	memcpy(clk, tod_clock_base, STORE_CLOCK_EXT_SIZE);
-	*(__u64 *)&clk[1] -= delta;
-	if (*(__u64 *)&clk[1] > delta)
+	memcpy(clk, tod_clock_base, 16);
+	*(__u64 *) &clk[1] -= delta;
+	if (*(__u64 *) &clk[1] > delta)
 		clk[0]--;
-	ext_to_timespec64(clk, &boot_time);
-
-	read_persistent_clock64(wall_time);
-	*boot_offset = timespec64_sub(*wall_time, boot_time);
+	ext_to_timespec64(clk, ts);
 }
 
 static u64 read_tod_clock(struct clocksource *cs)
@@ -529,7 +523,7 @@ static void __init stp_reset(void)
 	}
 }
 
-static void stp_timeout(struct timer_list *unused)
+static void stp_timeout(unsigned long dummy)
 {
 	queue_work(time_sync_wq, &stp_work);
 }
@@ -538,7 +532,7 @@ static int __init stp_init(void)
 {
 	if (!test_bit(CLOCK_SYNC_HAS_STP, &clock_sync_flags))
 		return 0;
-	timer_setup(&stp_timer, stp_timeout, 0);
+	setup_timer(&stp_timer, stp_timeout, 0UL);
 	time_init_wq();
 	if (!stp_online)
 		return 0;

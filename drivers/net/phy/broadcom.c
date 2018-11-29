@@ -43,19 +43,11 @@ static int bcm54210e_config_init(struct phy_device *phydev)
 	val &= ~BCM54810_SHD_CLK_CTL_GTXCLK_EN;
 	bcm_phy_write_shadow(phydev, BCM54810_SHD_CLK_CTL, val);
 
-	if (phydev->dev_flags & PHY_BRCM_EN_MASTER_MODE) {
-		val = phy_read(phydev, MII_CTRL1000);
-		val |= CTL1000_AS_MASTER | CTL1000_ENABLE_MASTER;
-		phy_write(phydev, MII_CTRL1000, val);
-	}
-
 	return 0;
 }
 
 static int bcm54612e_config_init(struct phy_device *phydev)
 {
-	int reg;
-
 	/* Clear TX internal delay unless requested. */
 	if ((phydev->interface != PHY_INTERFACE_MODE_RGMII_ID) &&
 	    (phydev->interface != PHY_INTERFACE_MODE_RGMII_TXID)) {
@@ -67,6 +59,8 @@ static int bcm54612e_config_init(struct phy_device *phydev)
 	/* Clear RX internal delay unless requested. */
 	if ((phydev->interface != PHY_INTERFACE_MODE_RGMII_ID) &&
 	    (phydev->interface != PHY_INTERFACE_MODE_RGMII_RXID)) {
+		u16 reg;
+
 		reg = bcm54xx_auxctl_read(phydev,
 					  MII_BCM54XX_AUXCTL_SHDWSEL_MISC);
 		/* Disable RXD to RXC delay (default set) */
@@ -77,22 +71,10 @@ static int bcm54612e_config_init(struct phy_device *phydev)
 				     MII_BCM54XX_AUXCTL_MISC_WREN | reg);
 	}
 
-	/* Enable CLK125 MUX on LED4 if ref clock is enabled. */
-	if (!(phydev->dev_flags & PHY_BRCM_RX_REFCLK_UNUSED)) {
-		int err;
-
-		reg = bcm_phy_read_exp(phydev, BCM54612E_EXP_SPARE0);
-		err = bcm_phy_write_exp(phydev, BCM54612E_EXP_SPARE0,
-					BCM54612E_LED4_CLK125OUT_EN | reg);
-
-		if (err < 0)
-			return err;
-	}
-
 	return 0;
 }
 
-static int bcm54xx_config_clock_delay(struct phy_device *phydev)
+static int bcm5481x_config(struct phy_device *phydev)
 {
 	int rc, val;
 
@@ -429,7 +411,7 @@ static int bcm5481_config_aneg(struct phy_device *phydev)
 	ret = genphy_config_aneg(phydev);
 
 	/* Then we can set up the delay. */
-	bcm54xx_config_clock_delay(phydev);
+	bcm5481x_config(phydev);
 
 	if (of_property_read_bool(np, "enet-phy-lane-swap")) {
 		/* Lane Swap - Undocumented register...magic! */
@@ -438,19 +420,6 @@ static int bcm5481_config_aneg(struct phy_device *phydev)
 		if (ret < 0)
 			return ret;
 	}
-
-	return ret;
-}
-
-static int bcm54616s_config_aneg(struct phy_device *phydev)
-{
-	int ret;
-
-	/* Aneg firsly. */
-	ret = genphy_config_aneg(phydev);
-
-	/* Then we can set up the delay. */
-	bcm54xx_config_clock_delay(phydev);
 
 	return ret;
 }
@@ -565,37 +534,6 @@ static int brcm_fet_config_intr(struct phy_device *phydev)
 	return err;
 }
 
-struct bcm53xx_phy_priv {
-	u64	*stats;
-};
-
-static int bcm53xx_phy_probe(struct phy_device *phydev)
-{
-	struct bcm53xx_phy_priv *priv;
-
-	priv = devm_kzalloc(&phydev->mdio.dev, sizeof(*priv), GFP_KERNEL);
-	if (!priv)
-		return -ENOMEM;
-
-	phydev->priv = priv;
-
-	priv->stats = devm_kcalloc(&phydev->mdio.dev,
-				   bcm_phy_get_sset_count(phydev), sizeof(u64),
-				   GFP_KERNEL);
-	if (!priv->stats)
-		return -ENOMEM;
-
-	return 0;
-}
-
-static void bcm53xx_phy_get_stats(struct phy_device *phydev,
-				  struct ethtool_stats *stats, u64 *data)
-{
-	struct bcm53xx_phy_priv *priv = phydev->priv;
-
-	bcm_phy_get_stats(phydev, priv->stats, stats, data);
-}
-
 static struct phy_driver broadcom_drivers[] = {
 {
 	.phy_id		= PHY_ID_BCM5411,
@@ -604,6 +542,8 @@ static struct phy_driver broadcom_drivers[] = {
 	.features	= PHY_GBIT_FEATURES,
 	.flags		= PHY_HAS_INTERRUPT,
 	.config_init	= bcm54xx_config_init,
+	.config_aneg	= genphy_config_aneg,
+	.read_status	= genphy_read_status,
 	.ack_interrupt	= bcm_phy_ack_intr,
 	.config_intr	= bcm_phy_config_intr,
 }, {
@@ -613,6 +553,8 @@ static struct phy_driver broadcom_drivers[] = {
 	.features	= PHY_GBIT_FEATURES,
 	.flags		= PHY_HAS_INTERRUPT,
 	.config_init	= bcm54xx_config_init,
+	.config_aneg	= genphy_config_aneg,
+	.read_status	= genphy_read_status,
 	.ack_interrupt	= bcm_phy_ack_intr,
 	.config_intr	= bcm_phy_config_intr,
 }, {
@@ -622,6 +564,8 @@ static struct phy_driver broadcom_drivers[] = {
 	.features	= PHY_GBIT_FEATURES,
 	.flags		= PHY_HAS_INTERRUPT,
 	.config_init	= bcm54xx_config_init,
+	.config_aneg	= genphy_config_aneg,
+	.read_status	= genphy_read_status,
 	.ack_interrupt	= bcm_phy_ack_intr,
 	.config_intr	= bcm_phy_config_intr,
 }, {
@@ -631,6 +575,8 @@ static struct phy_driver broadcom_drivers[] = {
 	.features	= PHY_GBIT_FEATURES,
 	.flags		= PHY_HAS_INTERRUPT,
 	.config_init	= bcm54xx_config_init,
+	.config_aneg	= genphy_config_aneg,
+	.read_status	= genphy_read_status,
 	.ack_interrupt	= bcm_phy_ack_intr,
 	.config_intr	= bcm_phy_config_intr,
 }, {
@@ -640,6 +586,8 @@ static struct phy_driver broadcom_drivers[] = {
 	.features	= PHY_GBIT_FEATURES,
 	.flags		= PHY_HAS_INTERRUPT,
 	.config_init	= bcm54xx_config_init,
+	.config_aneg	= genphy_config_aneg,
+	.read_status	= genphy_read_status,
 	.ack_interrupt	= bcm_phy_ack_intr,
 	.config_intr	= bcm_phy_config_intr,
 }, {
@@ -649,7 +597,8 @@ static struct phy_driver broadcom_drivers[] = {
 	.features	= PHY_GBIT_FEATURES,
 	.flags		= PHY_HAS_INTERRUPT,
 	.config_init	= bcm54xx_config_init,
-	.config_aneg	= bcm54616s_config_aneg,
+	.config_aneg	= genphy_config_aneg,
+	.read_status	= genphy_read_status,
 	.ack_interrupt	= bcm_phy_ack_intr,
 	.config_intr	= bcm_phy_config_intr,
 }, {
@@ -659,6 +608,8 @@ static struct phy_driver broadcom_drivers[] = {
 	.features	= PHY_GBIT_FEATURES,
 	.flags		= PHY_HAS_INTERRUPT,
 	.config_init	= bcm54xx_config_init,
+	.config_aneg	= genphy_config_aneg,
+	.read_status	= genphy_read_status,
 	.ack_interrupt	= bcm_phy_ack_intr,
 	.config_intr	= bcm_phy_config_intr,
 }, {
@@ -669,6 +620,7 @@ static struct phy_driver broadcom_drivers[] = {
 	.flags		= PHY_HAS_INTERRUPT,
 	.config_init	= bcm54xx_config_init,
 	.config_aneg	= bcm5481_config_aneg,
+	.read_status	= genphy_read_status,
 	.ack_interrupt	= bcm_phy_ack_intr,
 	.config_intr	= bcm_phy_config_intr,
 }, {
@@ -679,6 +631,7 @@ static struct phy_driver broadcom_drivers[] = {
 	.flags          = PHY_HAS_INTERRUPT,
 	.config_init    = bcm54xx_config_init,
 	.config_aneg    = bcm5481_config_aneg,
+	.read_status    = genphy_read_status,
 	.ack_interrupt  = bcm_phy_ack_intr,
 	.config_intr    = bcm_phy_config_intr,
 }, {
@@ -688,6 +641,7 @@ static struct phy_driver broadcom_drivers[] = {
 	.features	= PHY_GBIT_FEATURES,
 	.flags		= PHY_HAS_INTERRUPT,
 	.config_init	= bcm5482_config_init,
+	.config_aneg	= genphy_config_aneg,
 	.read_status	= bcm5482_read_status,
 	.ack_interrupt	= bcm_phy_ack_intr,
 	.config_intr	= bcm_phy_config_intr,
@@ -698,6 +652,8 @@ static struct phy_driver broadcom_drivers[] = {
 	.features	= PHY_GBIT_FEATURES,
 	.flags		= PHY_HAS_INTERRUPT,
 	.config_init	= bcm54xx_config_init,
+	.config_aneg	= genphy_config_aneg,
+	.read_status	= genphy_read_status,
 	.ack_interrupt	= bcm_phy_ack_intr,
 	.config_intr	= bcm_phy_config_intr,
 }, {
@@ -707,6 +663,8 @@ static struct phy_driver broadcom_drivers[] = {
 	.features	= PHY_GBIT_FEATURES,
 	.flags		= PHY_HAS_INTERRUPT,
 	.config_init	= bcm54xx_config_init,
+	.config_aneg	= genphy_config_aneg,
+	.read_status	= genphy_read_status,
 	.ack_interrupt	= bcm_phy_ack_intr,
 	.config_intr	= bcm_phy_config_intr,
 }, {
@@ -716,6 +674,8 @@ static struct phy_driver broadcom_drivers[] = {
 	.features	= PHY_GBIT_FEATURES,
 	.flags		= PHY_HAS_INTERRUPT,
 	.config_init	= bcm54xx_config_init,
+	.config_aneg	= genphy_config_aneg,
+	.read_status	= genphy_read_status,
 	.ack_interrupt	= bcm_phy_ack_intr,
 	.config_intr	= bcm_phy_config_intr,
 }, {
@@ -725,6 +685,8 @@ static struct phy_driver broadcom_drivers[] = {
 	.features	= PHY_BASIC_FEATURES,
 	.flags		= PHY_HAS_INTERRUPT,
 	.config_init	= brcm_fet_config_init,
+	.config_aneg	= genphy_config_aneg,
+	.read_status	= genphy_read_status,
 	.ack_interrupt	= brcm_fet_ack_interrupt,
 	.config_intr	= brcm_fet_config_intr,
 }, {
@@ -734,27 +696,10 @@ static struct phy_driver broadcom_drivers[] = {
 	.features	= PHY_BASIC_FEATURES,
 	.flags		= PHY_HAS_INTERRUPT,
 	.config_init	= brcm_fet_config_init,
+	.config_aneg	= genphy_config_aneg,
+	.read_status	= genphy_read_status,
 	.ack_interrupt	= brcm_fet_ack_interrupt,
 	.config_intr	= brcm_fet_config_intr,
-}, {
-	.phy_id		= PHY_ID_BCM5395,
-	.phy_id_mask	= 0xfffffff0,
-	.name		= "Broadcom BCM5395",
-	.flags		= PHY_IS_INTERNAL,
-	.features	= PHY_GBIT_FEATURES,
-	.get_sset_count	= bcm_phy_get_sset_count,
-	.get_strings	= bcm_phy_get_strings,
-	.get_stats	= bcm53xx_phy_get_stats,
-	.probe		= bcm53xx_phy_probe,
-}, {
-	.phy_id         = PHY_ID_BCM89610,
-	.phy_id_mask    = 0xfffffff0,
-	.name           = "Broadcom BCM89610",
-	.features       = PHY_GBIT_FEATURES,
-	.flags          = PHY_HAS_INTERRUPT,
-	.config_init    = bcm54xx_config_init,
-	.ack_interrupt  = bcm_phy_ack_intr,
-	.config_intr    = bcm_phy_config_intr,
 } };
 
 module_phy_driver(broadcom_drivers);
@@ -775,8 +720,6 @@ static struct mdio_device_id __maybe_unused broadcom_tbl[] = {
 	{ PHY_ID_BCM57780, 0xfffffff0 },
 	{ PHY_ID_BCMAC131, 0xfffffff0 },
 	{ PHY_ID_BCM5241, 0xfffffff0 },
-	{ PHY_ID_BCM5395, 0xfffffff0 },
-	{ PHY_ID_BCM89610, 0xfffffff0 },
 	{ }
 };
 

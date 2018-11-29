@@ -48,7 +48,6 @@
  * @bypass_bit: the index of the bypass bit in the PLL control register
  * @enable_bit: the index of the enable bit in the PLL control register
  * @stable_bit: the index of the stable bit in the PLL control register
- * @no_bypass_bit: if set, the PLL has no bypass functionality
  */
 struct ingenic_cgu_pll_info {
 	unsigned reg;
@@ -59,7 +58,6 @@ struct ingenic_cgu_pll_info {
 	u8 bypass_bit;
 	u8 enable_bit;
 	u8 stable_bit;
-	bool no_bypass_bit;
 };
 
 /**
@@ -111,14 +109,10 @@ struct ingenic_cgu_fixdiv_info {
  * struct ingenic_cgu_gate_info - information about a clock gate
  * @reg: offset of the gate control register within the CGU
  * @bit: offset of the bit in the register that controls the gate
- * @clear_to_gate: if set, the clock is gated when the bit is cleared
- * @delay_us: delay in microseconds after which the clock is considered stable
  */
 struct ingenic_cgu_gate_info {
 	unsigned reg;
 	u8 bit;
-	bool clear_to_gate;
-	u16 delay_us;
 };
 
 /**
@@ -126,7 +120,7 @@ struct ingenic_cgu_gate_info {
  * @clk_ops: custom clock operation callbacks
  */
 struct ingenic_cgu_custom_info {
-	const struct clk_ops *clk_ops;
+	struct clk_ops *clk_ops;
 };
 
 /**
@@ -194,7 +188,7 @@ struct ingenic_cgu {
 
 /**
  * struct ingenic_clk - private data for a clock
- * @hw: see Documentation/driver-api/clk.rst
+ * @hw: see Documentation/clk.txt
  * @cgu: a pointer to the CGU data
  * @idx: the index of this clock in cgu->clock_info
  */

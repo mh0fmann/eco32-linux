@@ -201,4 +201,3 @@ anslcd_exit(void)
 
 module_init(anslcd_init);
 module_exit(anslcd_exit);
-MODULE_LICENSE("GPL v2");

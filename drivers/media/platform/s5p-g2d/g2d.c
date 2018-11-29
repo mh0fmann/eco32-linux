@@ -142,8 +142,6 @@ static const struct vb2_ops g2d_qops = {
 	.queue_setup	= g2d_queue_setup,
 	.buf_prepare	= g2d_buf_prepare,
 	.buf_queue	= g2d_buf_queue,
-	.wait_prepare	= vb2_ops_wait_prepare,
-	.wait_finish	= vb2_ops_wait_finish,
 };
 
 static int queue_init(void *priv, struct vb2_queue *src_vq,
@@ -483,6 +481,19 @@ static int vidioc_s_crop(struct file *file, void *prv, const struct v4l2_crop *c
 	return 0;
 }
 
+static void job_abort(void *prv)
+{
+	struct g2d_ctx *ctx = prv;
+	struct g2d_dev *dev = ctx->dev;
+
+	if (dev->curr == NULL) /* No job currently running */
+		return;
+
+	wait_event_timeout(dev->irq_queue,
+			   dev->curr == NULL,
+			   msecs_to_jiffies(G2D_TIMEOUT));
+}
+
 static void device_run(void *prv)
 {
 	struct g2d_ctx *ctx = prv;
@@ -552,6 +563,7 @@ static irqreturn_t g2d_isr(int irq, void *prv)
 	v4l2_m2m_job_finish(dev->m2m_dev, ctx->fh.m2m_ctx);
 
 	dev->curr = NULL;
+	wake_up(&dev->irq_queue);
 	return IRQ_HANDLED;
 }
 
@@ -601,6 +613,7 @@ static const struct video_device g2d_videodev = {
 
 static const struct v4l2_m2m_ops g2d_m2m_ops = {
 	.device_run	= device_run,
+	.job_abort	= job_abort,
 };
 
 static const struct of_device_id exynos_g2d_match[];
@@ -620,6 +633,7 @@ static int g2d_probe(struct platform_device *pdev)
 	spin_lock_init(&dev->ctrl_lock);
 	mutex_init(&dev->mutex);
 	atomic_set(&dev->num_inst, 0);
+	init_waitqueue_head(&dev->irq_queue);
 
 	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 
@@ -688,6 +702,7 @@ static int g2d_probe(struct platform_device *pdev)
 		goto rel_vdev;
 	}
 	video_set_drvdata(vfd, dev);
+	snprintf(vfd->name, sizeof(vfd->name), "%s", g2d_videodev.name);
 	dev->vfd = vfd;
 	v4l2_info(&dev->v4l2_dev, "device registered as /dev/video%d\n",
 								vfd->num);

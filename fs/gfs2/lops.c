@@ -18,7 +18,6 @@
 #include <linux/fs.h>
 #include <linux/list_sort.h>
 
-#include "dir.h"
 #include "gfs2.h"
 #include "incore.h"
 #include "inode.h"
@@ -49,7 +48,7 @@ void gfs2_pin(struct gfs2_sbd *sdp, struct buffer_head *bh)
 	if (test_set_buffer_pinned(bh))
 		gfs2_assert_withdraw(sdp, 0);
 	if (!buffer_uptodate(bh))
-		gfs2_io_error_bh_wd(sdp, bh);
+		gfs2_io_error_bh(sdp, bh);
 	bd = bh->b_private;
 	/* If this buffer is in the AIL and it has already been written
 	 * to in-place disk block, remove it from the AIL.
@@ -81,7 +80,7 @@ static void maybe_release_space(struct gfs2_bufdata *bd)
 	if (sdp->sd_args.ar_discard)
 		gfs2_rgrp_send_discards(sdp, rgd->rd_data0, bd->bd_bh, bi, 1, NULL);
 	memcpy(bi->bi_clone + bi->bi_offset,
-	       bd->bd_bh->b_data + bi->bi_offset, bi->bi_bytes);
+	       bd->bd_bh->b_data + bi->bi_offset, bi->bi_len);
 	clear_bit(GBF_FULL, &bi->bi_flags);
 	rgd->rd_free_clone = rgd->rd_free;
 	rgd->rd_extfail_pt = rgd->rd_free;
@@ -139,7 +138,7 @@ static void gfs2_log_incr_head(struct gfs2_sbd *sdp)
 		sdp->sd_log_flush_head = 0;
 }
 
-u64 gfs2_log_bmap(struct gfs2_sbd *sdp)
+static u64 gfs2_log_bmap(struct gfs2_sbd *sdp)
 {
 	unsigned int lbn = sdp->sd_log_flush_head;
 	struct gfs2_journal_extent *je;
@@ -162,7 +161,7 @@ u64 gfs2_log_bmap(struct gfs2_sbd *sdp)
  * @bvec: The bio_vec
  * @error: The i/o status
  *
- * This finds the relevant buffers and unlocks them and sets the
+ * This finds the relavent buffers and unlocks then and sets the
  * error flag according to the status of the i/o request. This is
  * used when the log is writing data which has an in-place version
  * that is pinned in the pagecache.
@@ -307,22 +306,23 @@ static struct bio *gfs2_log_get_bio(struct gfs2_sbd *sdp, u64 blkno)
 	return gfs2_log_alloc_bio(sdp, blkno);
 }
 
+
 /**
  * gfs2_log_write - write to log
  * @sdp: the filesystem
  * @page: the page to write
  * @size: the size of the data to write
  * @offset: the offset within the page 
- * @blkno: block number of the log entry
  *
  * Try and add the page segment to the current bio. If that fails,
  * submit the current bio to the device and create a new one, and
  * then add the page segment to that.
  */
 
-void gfs2_log_write(struct gfs2_sbd *sdp, struct page *page,
-		    unsigned size, unsigned offset, u64 blkno)
+static void gfs2_log_write(struct gfs2_sbd *sdp, struct page *page,
+			   unsigned size, unsigned offset)
 {
+	u64 blkno = gfs2_log_bmap(sdp);
 	struct bio *bio;
 	int ret;
 
@@ -348,8 +348,7 @@ void gfs2_log_write(struct gfs2_sbd *sdp, struct page *page,
 
 static void gfs2_log_write_bh(struct gfs2_sbd *sdp, struct buffer_head *bh)
 {
-	gfs2_log_write(sdp, bh->b_page, bh->b_size, bh_offset(bh),
-		       gfs2_log_bmap(sdp));
+	gfs2_log_write(sdp, bh->b_page, bh->b_size, bh_offset(bh));
 }
 
 /**
@@ -366,8 +365,7 @@ static void gfs2_log_write_bh(struct gfs2_sbd *sdp, struct buffer_head *bh)
 void gfs2_log_write_page(struct gfs2_sbd *sdp, struct page *page)
 {
 	struct super_block *sb = sdp->sd_vfs;
-	gfs2_log_write(sdp, page, sb->s_blocksize, 0,
-		       gfs2_log_bmap(sdp));
+	gfs2_log_write(sdp, page, sb->s_blocksize, 0);
 }
 
 static struct page *gfs2_get_log_desc(struct gfs2_sbd *sdp, u32 ld_type,

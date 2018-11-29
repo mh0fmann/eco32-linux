@@ -266,7 +266,7 @@ int stress_hash_map_lookup(struct pt_regs *ctx)
 	return 0;
 }
 
-SEC("kprobe/sys_getppid")
+SEC("kprobe/sys_getpgrp")
 int stress_array_map_lookup(struct pt_regs *ctx)
 {
 	u32 key = 1, i;

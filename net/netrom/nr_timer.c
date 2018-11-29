@@ -29,23 +29,24 @@
 #include <linux/interrupt.h>
 #include <net/netrom.h>
 
-static void nr_heartbeat_expiry(struct timer_list *);
-static void nr_t1timer_expiry(struct timer_list *);
-static void nr_t2timer_expiry(struct timer_list *);
-static void nr_t4timer_expiry(struct timer_list *);
-static void nr_idletimer_expiry(struct timer_list *);
+static void nr_heartbeat_expiry(unsigned long);
+static void nr_t1timer_expiry(unsigned long);
+static void nr_t2timer_expiry(unsigned long);
+static void nr_t4timer_expiry(unsigned long);
+static void nr_idletimer_expiry(unsigned long);
 
 void nr_init_timers(struct sock *sk)
 {
 	struct nr_sock *nr = nr_sk(sk);
 
-	timer_setup(&nr->t1timer, nr_t1timer_expiry, 0);
-	timer_setup(&nr->t2timer, nr_t2timer_expiry, 0);
-	timer_setup(&nr->t4timer, nr_t4timer_expiry, 0);
-	timer_setup(&nr->idletimer, nr_idletimer_expiry, 0);
+	setup_timer(&nr->t1timer, nr_t1timer_expiry, (unsigned long)sk);
+	setup_timer(&nr->t2timer, nr_t2timer_expiry, (unsigned long)sk);
+	setup_timer(&nr->t4timer, nr_t4timer_expiry, (unsigned long)sk);
+	setup_timer(&nr->idletimer, nr_idletimer_expiry, (unsigned long)sk);
 
 	/* initialized by sock_init_data */
-	sk->sk_timer.function = nr_heartbeat_expiry;
+	sk->sk_timer.data     = (unsigned long)sk;
+	sk->sk_timer.function = &nr_heartbeat_expiry;
 }
 
 void nr_start_t1timer(struct sock *sk)
@@ -112,9 +113,9 @@ int nr_t1timer_running(struct sock *sk)
 	return timer_pending(&nr_sk(sk)->t1timer);
 }
 
-static void nr_heartbeat_expiry(struct timer_list *t)
+static void nr_heartbeat_expiry(unsigned long param)
 {
-	struct sock *sk = from_timer(sk, t, sk_timer);
+	struct sock *sk = (struct sock *)param;
 	struct nr_sock *nr = nr_sk(sk);
 
 	bh_lock_sock(sk);
@@ -151,10 +152,10 @@ static void nr_heartbeat_expiry(struct timer_list *t)
 	bh_unlock_sock(sk);
 }
 
-static void nr_t2timer_expiry(struct timer_list *t)
+static void nr_t2timer_expiry(unsigned long param)
 {
-	struct nr_sock *nr = from_timer(nr, t, t2timer);
-	struct sock *sk = &nr->sock;
+	struct sock *sk = (struct sock *)param;
+	struct nr_sock *nr = nr_sk(sk);
 
 	bh_lock_sock(sk);
 	if (nr->condition & NR_COND_ACK_PENDING) {
@@ -164,20 +165,19 @@ static void nr_t2timer_expiry(struct timer_list *t)
 	bh_unlock_sock(sk);
 }
 
-static void nr_t4timer_expiry(struct timer_list *t)
+static void nr_t4timer_expiry(unsigned long param)
 {
-	struct nr_sock *nr = from_timer(nr, t, t4timer);
-	struct sock *sk = &nr->sock;
+	struct sock *sk = (struct sock *)param;
 
 	bh_lock_sock(sk);
 	nr_sk(sk)->condition &= ~NR_COND_PEER_RX_BUSY;
 	bh_unlock_sock(sk);
 }
 
-static void nr_idletimer_expiry(struct timer_list *t)
+static void nr_idletimer_expiry(unsigned long param)
 {
-	struct nr_sock *nr = from_timer(nr, t, idletimer);
-	struct sock *sk = &nr->sock;
+	struct sock *sk = (struct sock *)param;
+	struct nr_sock *nr = nr_sk(sk);
 
 	bh_lock_sock(sk);
 
@@ -202,10 +202,10 @@ static void nr_idletimer_expiry(struct timer_list *t)
 	bh_unlock_sock(sk);
 }
 
-static void nr_t1timer_expiry(struct timer_list *t)
+static void nr_t1timer_expiry(unsigned long param)
 {
-	struct nr_sock *nr = from_timer(nr, t, t1timer);
-	struct sock *sk = &nr->sock;
+	struct sock *sk = (struct sock *)param;
+	struct nr_sock *nr = nr_sk(sk);
 
 	bh_lock_sock(sk);
 	switch (nr->state) {

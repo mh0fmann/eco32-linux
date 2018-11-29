@@ -1,4 +1,3 @@
-// SPDX-License-Identifier: GPL-2.0+
 /*
  * f_ncm.c -- USB CDC Network (NCM) link function driver
  *
@@ -9,6 +8,11 @@
  *
  * Copyright (C) 2003-2005,2008 David Brownell
  * Copyright (C) 2008 Nokia Corporation
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
  */
 
 #include <linux/kernel.h>
@@ -73,7 +77,9 @@ struct f_ncm {
 	struct sk_buff			*skb_tx_ndp;
 	u16				ndp_dgram_count;
 	bool				timer_force_tx;
+	struct tasklet_struct		tx_tasklet;
 	struct hrtimer			task_timer;
+
 	bool				timer_stopping;
 };
 
@@ -1102,7 +1108,7 @@ static struct sk_buff *ncm_wrap_ntb(struct gether *port,
 
 		/* Delay the timer. */
 		hrtimer_start(&ncm->task_timer, TX_TIMEOUT_NSECS,
-			      HRTIMER_MODE_REL_SOFT);
+			      HRTIMER_MODE_REL);
 
 		/* Add the datagram position entries */
 		ntb_ndp = skb_put_zero(ncm->skb_tx_ndp, dgram_idx_len);
@@ -1146,15 +1152,17 @@ err:
 }
 
 /*
- * The transmit should only be run if no skb data has been sent
- * for a certain duration.
+ * This transmits the NTB if there are frames waiting.
  */
-static enum hrtimer_restart ncm_tx_timeout(struct hrtimer *data)
+static void ncm_tx_tasklet(unsigned long data)
 {
-	struct f_ncm *ncm = container_of(data, struct f_ncm, task_timer);
+	struct f_ncm	*ncm = (void *)data;
+
+	if (ncm->timer_stopping)
+		return;
 
 	/* Only send if data is available. */
-	if (!ncm->timer_stopping && ncm->skb_tx_data) {
+	if (ncm->skb_tx_data) {
 		ncm->timer_force_tx = true;
 
 		/* XXX This allowance of a NULL skb argument to ndo_start_xmit
@@ -1167,6 +1175,16 @@ static enum hrtimer_restart ncm_tx_timeout(struct hrtimer *data)
 
 		ncm->timer_force_tx = false;
 	}
+}
+
+/*
+ * The transmit should only be run if no skb data has been sent
+ * for a certain duration.
+ */
+static enum hrtimer_restart ncm_tx_timeout(struct hrtimer *data)
+{
+	struct f_ncm *ncm = container_of(data, struct f_ncm, task_timer);
+	tasklet_schedule(&ncm->tx_tasklet);
 	return HRTIMER_NORESTART;
 }
 
@@ -1499,7 +1517,8 @@ static int ncm_bind(struct usb_configuration *c, struct usb_function *f)
 	ncm->port.open = ncm_open;
 	ncm->port.close = ncm_close;
 
-	hrtimer_init(&ncm->task_timer, CLOCK_MONOTONIC, HRTIMER_MODE_REL_SOFT);
+	tasklet_init(&ncm->tx_tasklet, ncm_tx_tasklet, (unsigned long) ncm);
+	hrtimer_init(&ncm->task_timer, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
 	ncm->task_timer.function = ncm_tx_timeout;
 
 	DBG(cdev, "CDC Network: %s speed IN/%s OUT/%s NOTIFY/%s\n",
@@ -1549,7 +1568,7 @@ static struct configfs_attribute *ncm_attrs[] = {
 	NULL,
 };
 
-static const struct config_item_type ncm_func_type = {
+static struct config_item_type ncm_func_type = {
 	.ct_item_ops	= &ncm_item_ops,
 	.ct_attrs	= ncm_attrs,
 	.ct_owner	= THIS_MODULE,
@@ -1608,6 +1627,7 @@ static void ncm_unbind(struct usb_configuration *c, struct usb_function *f)
 	DBG(c->cdev, "ncm unbind\n");
 
 	hrtimer_cancel(&ncm->task_timer);
+	tasklet_kill(&ncm->tx_tasklet);
 
 	ncm_string_defs[0].id = 0;
 	usb_free_all_descriptors(f);

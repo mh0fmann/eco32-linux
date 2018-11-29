@@ -45,10 +45,10 @@ static inline void print_err_status(struct tm6000_core *dev,
 
 	switch (status) {
 	case -ENOENT:
-		errmsg = "unlinked synchronously";
+		errmsg = "unlinked synchronuously";
 		break;
 	case -ECONNRESET:
-		errmsg = "unlinked asynchronously";
+		errmsg = "unlinked asynchronuously";
 		break;
 	case -ENOSR:
 		errmsg = "Buffer error (overrun)";
@@ -123,7 +123,7 @@ static int tm6000_start_stream(struct tm6000_core *dev)
 	}
 
 	dvb->bulk_urb = usb_alloc_urb(0, GFP_KERNEL);
-	if (!dvb->bulk_urb)
+	if (dvb->bulk_urb == NULL)
 		return -ENOMEM;
 
 	pipe = usb_rcvbulkpipe(dev->udev, dev->bulk_in.endp->desc.bEndpointAddress
@@ -133,8 +133,9 @@ static int tm6000_start_stream(struct tm6000_core *dev)
 	size = size * 15; /* 512 x 8 or 12 or 15 */
 
 	dvb->bulk_urb->transfer_buffer = kzalloc(size, GFP_KERNEL);
-	if (!dvb->bulk_urb->transfer_buffer) {
+	if (dvb->bulk_urb->transfer_buffer == NULL) {
 		usb_free_urb(dvb->bulk_urb);
+		printk(KERN_ERR "tm6000: couldn't allocate transfer buffer!\n");
 		return -ENOMEM;
 	}
 
@@ -266,11 +267,6 @@ static int register_dvb(struct tm6000_core *dev)
 
 	ret = dvb_register_adapter(&dvb->adapter, "Trident TVMaster 6000 DVB-T",
 					THIS_MODULE, &dev->udev->dev, adapter_nr);
-	if (ret < 0) {
-		pr_err("tm6000: couldn't register the adapter!\n");
-		goto err;
-	}
-
 	dvb->adapter.priv = dev;
 
 	if (dvb->frontend) {
@@ -365,7 +361,7 @@ static void unregister_dvb(struct tm6000_core *dev)
 {
 	struct tm6000_dvb *dvb = dev->dvb;
 
-	if (dvb->bulk_urb) {
+	if (dvb->bulk_urb != NULL) {
 		struct urb *bulk_urb = dvb->bulk_urb;
 
 		kfree(bulk_urb->transfer_buffer);
@@ -404,8 +400,10 @@ static int dvb_init(struct tm6000_core *dev)
 	}
 
 	dvb = kzalloc(sizeof(struct tm6000_dvb), GFP_KERNEL);
-	if (!dvb)
+	if (!dvb) {
+		printk(KERN_INFO "Cannot allocate memory\n");
 		return -ENOMEM;
+	}
 
 	dev->dvb = dvb;
 

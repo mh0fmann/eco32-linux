@@ -1,5 +1,3 @@
-menu "IRQ chip support"
-
 config IRQCHIP
 	def_bool y
 	depends on OF_IRQ
@@ -8,7 +6,7 @@ config ARM_GIC
 	bool
 	select IRQ_DOMAIN
 	select IRQ_DOMAIN_HIERARCHY
-	select GENERIC_IRQ_MULTI_HANDLER
+	select MULTI_IRQ_HANDLER
 	select GENERIC_IRQ_EFFECTIVE_AFF_MASK
 
 config ARM_GIC_PM
@@ -34,28 +32,15 @@ config GIC_NON_BANKED
 config ARM_GIC_V3
 	bool
 	select IRQ_DOMAIN
-	select GENERIC_IRQ_MULTI_HANDLER
+	select MULTI_IRQ_HANDLER
 	select IRQ_DOMAIN_HIERARCHY
 	select PARTITION_PERCPU
 	select GENERIC_IRQ_EFFECTIVE_AFF_MASK
 
 config ARM_GIC_V3_ITS
 	bool
-	select GENERIC_MSI_IRQ_DOMAIN
-	default ARM_GIC_V3
-
-config ARM_GIC_V3_ITS_PCI
-	bool
-	depends on ARM_GIC_V3_ITS
 	depends on PCI
 	depends on PCI_MSI
-	default ARM_GIC_V3_ITS
-
-config ARM_GIC_V3_ITS_FSL_MC
-	bool
-	depends on ARM_GIC_V3_ITS
-	depends on FSL_MC_BUS
-	default ARM_GIC_V3_ITS
 
 config ARM_NVIC
 	bool
@@ -66,7 +51,7 @@ config ARM_NVIC
 config ARM_VIC
 	bool
 	select IRQ_DOMAIN
-	select GENERIC_IRQ_MULTI_HANDLER
+	select MULTI_IRQ_HANDLER
 
 config ARM_VIC_NR
 	int
@@ -93,14 +78,14 @@ config ATMEL_AIC_IRQ
 	bool
 	select GENERIC_IRQ_CHIP
 	select IRQ_DOMAIN
-	select GENERIC_IRQ_MULTI_HANDLER
+	select MULTI_IRQ_HANDLER
 	select SPARSE_IRQ
 
 config ATMEL_AIC5_IRQ
 	bool
 	select GENERIC_IRQ_CHIP
 	select IRQ_DOMAIN
-	select GENERIC_IRQ_MULTI_HANDLER
+	select MULTI_IRQ_HANDLER
 	select SPARSE_IRQ
 
 config I8259
@@ -137,7 +122,7 @@ config DW_APB_ICTL
 config FARADAY_FTINTC010
 	bool
 	select IRQ_DOMAIN
-	select GENERIC_IRQ_MULTI_HANDLER
+	select MULTI_IRQ_HANDLER
 	select SPARSE_IRQ
 
 config HISILICON_IRQ_MBIGEN
@@ -162,12 +147,9 @@ config CLPS711X_IRQCHIP
 	bool
 	depends on ARCH_CLPS711X
 	select IRQ_DOMAIN
-	select GENERIC_IRQ_MULTI_HANDLER
+	select MULTI_IRQ_HANDLER
 	select SPARSE_IRQ
 	default y
-
-config OMPIC
-	bool
 
 config OR1K_PIC
 	bool
@@ -181,7 +163,7 @@ config OMAP_IRQCHIP
 config ORION_IRQCHIP
 	bool
 	select IRQ_DOMAIN
-	select GENERIC_IRQ_MULTI_HANDLER
+	select MULTI_IRQ_HANDLER
 
 config PIC32_EVIC
 	bool
@@ -292,11 +274,6 @@ config IRQ_MXS
 	select IRQ_DOMAIN
 	select STMP_DEVICE
 
-config MSCC_OCELOT_IRQ
-	bool
-	select IRQ_DOMAIN
-	select GENERIC_IRQ_CHIP
-
 config MVEBU_GICP
 	bool
 
@@ -309,9 +286,6 @@ config MVEBU_ODMI
 
 config MVEBU_PIC
 	bool
-
-config MVEBU_SEI
-        bool
 
 config LS_SCFG_MSI
 	def_bool y if SOC_LS1021A || ARCH_LAYERSCAPE
@@ -330,7 +304,6 @@ config EZNPS_GIC
 config STM32_EXTI
 	bool
 	select IRQ_DOMAIN
-	select GENERIC_IRQ_CHIP
 
 config QCOM_IRQ_COMBINER
 	bool "QCOM IRQ combiner support"
@@ -348,59 +321,3 @@ config IRQ_UNIPHIER_AIDET
 	select IRQ_DOMAIN_HIERARCHY
 	help
 	  Support for the UniPhier AIDET (ARM Interrupt Detector).
-
-config MESON_IRQ_GPIO
-       bool "Meson GPIO Interrupt Multiplexer"
-       depends on ARCH_MESON
-       select IRQ_DOMAIN
-       select IRQ_DOMAIN_HIERARCHY
-       help
-         Support Meson SoC Family GPIO Interrupt Multiplexer
-
-config GOLDFISH_PIC
-       bool "Goldfish programmable interrupt controller"
-       depends on MIPS && (GOLDFISH || COMPILE_TEST)
-       select IRQ_DOMAIN
-       help
-         Say yes here to enable Goldfish interrupt controller driver used
-         for Goldfish based virtual platforms.
-
-config QCOM_PDC
-	bool "QCOM PDC"
-	depends on ARCH_QCOM
-	select IRQ_DOMAIN
-	select IRQ_DOMAIN_HIERARCHY
-	help
-	  Power Domain Controller driver to manage and configure wakeup
-	  IRQs for Qualcomm Technologies Inc (QTI) mobile chips.
-
-config CSKY_MPINTC
-	bool "C-SKY Multi Processor Interrupt Controller"
-	depends on CSKY
-	help
-	  Say yes here to enable C-SKY SMP interrupt controller driver used
-	  for C-SKY SMP system.
-	  In fact it's not mmio map in hw and it use ld/st to visit the
-	  controller's register inside CPU.
-
-config CSKY_APB_INTC
-	bool "C-SKY APB Interrupt Controller"
-	depends on CSKY
-	help
-	  Say yes here to enable C-SKY APB interrupt controller driver used
-	  by C-SKY single core SOC system. It use mmio map apb-bus to visit
-	  the controller's register.
-
-endmenu
-
-config SIFIVE_PLIC
-	bool "SiFive Platform-Level Interrupt Controller"
-	depends on RISCV
-	help
-	   This enables support for the PLIC chip found in SiFive (and
-	   potentially other) RISC-V systems.  The PLIC controls devices
-	   interrupts and connects them to each core's local interrupt
-	   controller.  Aside from timer and software interrupts, all other
-	   interrupt sources are subordinate to the PLIC.
-
-	   If you don't know what to do here, say Y.

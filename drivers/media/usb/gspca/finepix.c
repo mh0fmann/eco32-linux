@@ -89,7 +89,7 @@ static void dostream(struct work_struct *work)
 	int ret = 0;
 	int len;
 
-	gspca_dbg(gspca_dev, D_STREAM, "dostream started\n");
+	PDEBUG(D_STREAM, "dostream started");
 
 	/* loop reading a frame */
 again:
@@ -160,7 +160,7 @@ again:
 	}
 
 out:
-	gspca_dbg(gspca_dev, D_STREAM, "dostream stopped\n");
+	PDEBUG(D_STREAM, "dostream stopped");
 }
 
 /* this function is called at probe time */

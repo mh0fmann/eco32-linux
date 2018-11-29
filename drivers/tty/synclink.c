@@ -1,4 +1,3 @@
-// SPDX-License-Identifier: GPL-1.0+
 /*
  * $Id: synclink.c,v 4.38 2005/11/07 16:30:34 paulkf Exp $
  *
@@ -13,6 +12,8 @@
  * Derived from serial.c written by Theodore Ts'o and Linus Torvalds
  *
  * Original release 01/11/99
+ *
+ * This code is released under the GNU General Public License (GPL)
  *
  * This driver is primarily intended for use in synchronous
  * HDLC mode. Asynchronous mode is also provided.
@@ -700,7 +701,7 @@ static void usc_enable_async_clock( struct mgsl_struct *info, u32 DataRate );
 
 static void usc_loopback_frame( struct mgsl_struct *info );
 
-static void mgsl_tx_timeout(struct timer_list *t);
+static void mgsl_tx_timeout(unsigned long context);
 
 
 static void usc_loopmode_cancel_transmit( struct mgsl_struct * info );
@@ -1768,7 +1769,7 @@ static int startup(struct mgsl_struct * info)
 	
 	memset(&info->icount, 0, sizeof(info->icount));
 
-	timer_setup(&info->tx_timer, mgsl_tx_timeout, 0);
+	setup_timer(&info->tx_timer, mgsl_tx_timeout, (unsigned long)info);
 	
 	/* Allocate and claim adapter resources */
 	retval = mgsl_claim_resources(info);
@@ -2959,7 +2960,8 @@ static int mgsl_ioctl(struct tty_struct *tty,
 	if (mgsl_paranoia_check(info, tty->name, "mgsl_ioctl"))
 		return -ENODEV;
 
-	if (cmd != TIOCMIWAIT) {
+	if ((cmd != TIOCGSERIAL) && (cmd != TIOCSSERIAL) &&
+	    (cmd != TIOCMIWAIT)) {
 		if (tty_io_error(tty))
 		    return -EIO;
 	}
@@ -3533,6 +3535,19 @@ static int mgsl_proc_show(struct seq_file *m, void *v)
 	return 0;
 }
 
+static int mgsl_proc_open(struct inode *inode, struct file *file)
+{
+	return single_open(file, mgsl_proc_show, NULL);
+}
+
+static const struct file_operations mgsl_proc_fops = {
+	.owner		= THIS_MODULE,
+	.open		= mgsl_proc_open,
+	.read		= seq_read,
+	.llseek		= seq_lseek,
+	.release	= single_release,
+};
+
 /* mgsl_allocate_dma_buffers()
  * 
  * 	Allocate and format DMA buffers (ISA adapter)
@@ -4083,7 +4098,8 @@ static int mgsl_claim_resources(struct mgsl_struct *info)
 		if (request_dma(info->dma_level,info->device_name) < 0){
 			printk( "%s(%d):Can't request DMA channel on device %s DMA=%d\n",
 				__FILE__,__LINE__,info->device_name, info->dma_level );
-			goto errout;
+			mgsl_release_resources( info );
+			return -ENODEV;
 		}
 		info->dma_requested = true;
 
@@ -4284,7 +4300,7 @@ static const struct tty_operations mgsl_ops = {
 	.tiocmget = tiocmget,
 	.tiocmset = tiocmset,
 	.get_icount = msgl_get_icount,
-	.proc_show = mgsl_proc_show,
+	.proc_fops = &mgsl_proc_fops,
 };
 
 /*
@@ -7503,9 +7519,9 @@ static void mgsl_trace_block(struct mgsl_struct *info,const char* data, int coun
  * Arguments:	context		pointer to device instance data
  * Return Value:	None
  */
-static void mgsl_tx_timeout(struct timer_list *t)
+static void mgsl_tx_timeout(unsigned long context)
 {
-	struct mgsl_struct *info = from_timer(info, t, tx_timer);
+	struct mgsl_struct *info = (struct mgsl_struct*)context;
 	unsigned long flags;
 	
 	if ( debug_level >= DEBUG_LEVEL_INFO )

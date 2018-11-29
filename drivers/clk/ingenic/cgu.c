@@ -43,8 +43,7 @@ static inline bool
 ingenic_cgu_gate_get(struct ingenic_cgu *cgu,
 		     const struct ingenic_cgu_gate_info *info)
 {
-	return !!(readl(cgu->base + info->reg) & BIT(info->bit))
-		^ info->clear_to_gate;
+	return readl(cgu->base + info->reg) & BIT(info->bit);
 }
 
 /**
@@ -63,7 +62,7 @@ ingenic_cgu_gate_set(struct ingenic_cgu *cgu,
 {
 	u32 clkgr = readl(cgu->base + info->reg);
 
-	if (val ^ info->clear_to_gate)
+	if (val)
 		clkgr |= BIT(info->bit);
 	else
 		clkgr &= ~BIT(info->bit);
@@ -101,12 +100,14 @@ ingenic_pll_recalc_rate(struct clk_hw *hw, unsigned long parent_rate)
 	n += pll_info->n_offset;
 	od_enc = ctl >> pll_info->od_shift;
 	od_enc &= GENMASK(pll_info->od_bits - 1, 0);
-	bypass = !pll_info->no_bypass_bit &&
-		 !!(ctl & BIT(pll_info->bypass_bit));
+	bypass = !!(ctl & BIT(pll_info->bypass_bit));
 	enable = !!(ctl & BIT(pll_info->enable_bit));
 
 	if (bypass)
 		return parent_rate;
+
+	if (!enable)
+		return 0;
 
 	for (od = 0; od < pll_info->od_max; od++) {
 		if (pll_info->od_encoding[od] == od_enc)
@@ -151,24 +152,16 @@ ingenic_pll_calc(const struct ingenic_cgu_clk_info *clk_info,
 	return div_u64((u64)parent_rate * m, n * od);
 }
 
-static inline const struct ingenic_cgu_clk_info *to_clk_info(
-		struct ingenic_clk *ingenic_clk)
-{
-	struct ingenic_cgu *cgu = ingenic_clk->cgu;
-	const struct ingenic_cgu_clk_info *clk_info;
-
-	clk_info = &cgu->clock_info[ingenic_clk->idx];
-	BUG_ON(clk_info->type != CGU_CLK_PLL);
-
-	return clk_info;
-}
-
 static long
 ingenic_pll_round_rate(struct clk_hw *hw, unsigned long req_rate,
 		       unsigned long *prate)
 {
 	struct ingenic_clk *ingenic_clk = to_ingenic_clk(hw);
-	const struct ingenic_cgu_clk_info *clk_info = to_clk_info(ingenic_clk);
+	struct ingenic_cgu *cgu = ingenic_clk->cgu;
+	const struct ingenic_cgu_clk_info *clk_info;
+
+	clk_info = &cgu->clock_info[ingenic_clk->idx];
+	BUG_ON(clk_info->type != CGU_CLK_PLL);
 
 	return ingenic_pll_calc(clk_info, req_rate, *prate, NULL, NULL, NULL);
 }
@@ -177,13 +170,18 @@ static int
 ingenic_pll_set_rate(struct clk_hw *hw, unsigned long req_rate,
 		     unsigned long parent_rate)
 {
+	const unsigned timeout = 100;
 	struct ingenic_clk *ingenic_clk = to_ingenic_clk(hw);
 	struct ingenic_cgu *cgu = ingenic_clk->cgu;
-	const struct ingenic_cgu_clk_info *clk_info = to_clk_info(ingenic_clk);
-	const struct ingenic_cgu_pll_info *pll_info = &clk_info->pll;
+	const struct ingenic_cgu_clk_info *clk_info;
+	const struct ingenic_cgu_pll_info *pll_info;
 	unsigned long rate, flags;
-	unsigned int m, n, od;
+	unsigned m, n, od, i;
 	u32 ctl;
+
+	clk_info = &cgu->clock_info[ingenic_clk->idx];
+	BUG_ON(clk_info->type != CGU_CLK_PLL);
+	pll_info = &clk_info->pll;
 
 	rate = ingenic_pll_calc(clk_info, req_rate, parent_rate,
 			       &m, &n, &od);
@@ -202,26 +200,6 @@ ingenic_pll_set_rate(struct clk_hw *hw, unsigned long req_rate,
 
 	ctl &= ~(GENMASK(pll_info->od_bits - 1, 0) << pll_info->od_shift);
 	ctl |= pll_info->od_encoding[od - 1] << pll_info->od_shift;
-
-	writel(ctl, cgu->base + pll_info->reg);
-	spin_unlock_irqrestore(&cgu->lock, flags);
-
-	return 0;
-}
-
-static int ingenic_pll_enable(struct clk_hw *hw)
-{
-	struct ingenic_clk *ingenic_clk = to_ingenic_clk(hw);
-	struct ingenic_cgu *cgu = ingenic_clk->cgu;
-	const struct ingenic_cgu_clk_info *clk_info = to_clk_info(ingenic_clk);
-	const struct ingenic_cgu_pll_info *pll_info = &clk_info->pll;
-	const unsigned int timeout = 100;
-	unsigned long flags;
-	unsigned int i;
-	u32 ctl;
-
-	spin_lock_irqsave(&cgu->lock, flags);
-	ctl = readl(cgu->base + pll_info->reg);
 
 	ctl &= ~BIT(pll_info->bypass_bit);
 	ctl |= BIT(pll_info->enable_bit);
@@ -244,48 +222,10 @@ static int ingenic_pll_enable(struct clk_hw *hw)
 	return 0;
 }
 
-static void ingenic_pll_disable(struct clk_hw *hw)
-{
-	struct ingenic_clk *ingenic_clk = to_ingenic_clk(hw);
-	struct ingenic_cgu *cgu = ingenic_clk->cgu;
-	const struct ingenic_cgu_clk_info *clk_info = to_clk_info(ingenic_clk);
-	const struct ingenic_cgu_pll_info *pll_info = &clk_info->pll;
-	unsigned long flags;
-	u32 ctl;
-
-	spin_lock_irqsave(&cgu->lock, flags);
-	ctl = readl(cgu->base + pll_info->reg);
-
-	ctl &= ~BIT(pll_info->enable_bit);
-
-	writel(ctl, cgu->base + pll_info->reg);
-	spin_unlock_irqrestore(&cgu->lock, flags);
-}
-
-static int ingenic_pll_is_enabled(struct clk_hw *hw)
-{
-	struct ingenic_clk *ingenic_clk = to_ingenic_clk(hw);
-	struct ingenic_cgu *cgu = ingenic_clk->cgu;
-	const struct ingenic_cgu_clk_info *clk_info = to_clk_info(ingenic_clk);
-	const struct ingenic_cgu_pll_info *pll_info = &clk_info->pll;
-	unsigned long flags;
-	u32 ctl;
-
-	spin_lock_irqsave(&cgu->lock, flags);
-	ctl = readl(cgu->base + pll_info->reg);
-	spin_unlock_irqrestore(&cgu->lock, flags);
-
-	return !!(ctl & BIT(pll_info->enable_bit));
-}
-
 static const struct clk_ops ingenic_pll_ops = {
 	.recalc_rate = ingenic_pll_recalc_rate,
 	.round_rate = ingenic_pll_round_rate,
 	.set_rate = ingenic_pll_set_rate,
-
-	.enable = ingenic_pll_enable,
-	.disable = ingenic_pll_disable,
-	.is_enabled = ingenic_pll_is_enabled,
 };
 
 /*
@@ -388,8 +328,6 @@ ingenic_clk_recalc_rate(struct clk_hw *hw, unsigned long parent_rate)
 		div *= clk_info->div.div;
 
 		rate /= div;
-	} else if (clk_info->type & CGU_CLK_FIXDIV) {
-		rate /= clk_info->fixdiv.div;
 	}
 
 	return rate;
@@ -512,9 +450,6 @@ static int ingenic_clk_enable(struct clk_hw *hw)
 		spin_lock_irqsave(&cgu->lock, flags);
 		ingenic_cgu_gate_set(cgu, &clk_info->gate, false);
 		spin_unlock_irqrestore(&cgu->lock, flags);
-
-		if (clk_info->gate.delay_us)
-			udelay(clk_info->gate.delay_us);
 	}
 
 	return 0;
@@ -663,7 +598,6 @@ static int ingenic_register_clock(struct ingenic_cgu *cgu, unsigned idx)
 		}
 	} else if (caps & CGU_CLK_PLL) {
 		clk_init.ops = &ingenic_pll_ops;
-		clk_init.flags |= CLK_SET_RATE_GATE;
 
 		caps &= ~CGU_CLK_PLL;
 

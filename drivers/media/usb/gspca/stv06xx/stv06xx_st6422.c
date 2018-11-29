@@ -277,7 +277,7 @@ static int st6422_stop(struct sd *sd)
 {
 	struct gspca_dev *gspca_dev = (struct gspca_dev *)sd;
 
-	gspca_dbg(gspca_dev, D_STREAM, "Halting stream\n");
+	PDEBUG(D_STREAM, "Halting stream");
 
 	return 0;
 }

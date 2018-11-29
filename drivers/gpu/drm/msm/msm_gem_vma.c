@@ -96,8 +96,6 @@ msm_gem_address_space_create(struct device *dev, struct iommu_domain *domain,
 		const char *name)
 {
 	struct msm_gem_address_space *aspace;
-	u64 size = domain->geometry.aperture_end -
-		domain->geometry.aperture_start;
 
 	aspace = kzalloc(sizeof(*aspace), GFP_KERNEL);
 	if (!aspace)
@@ -108,7 +106,7 @@ msm_gem_address_space_create(struct device *dev, struct iommu_domain *domain,
 	aspace->mmu = msm_iommu_new(dev, domain);
 
 	drm_mm_init(&aspace->mm, (domain->geometry.aperture_start >> PAGE_SHIFT),
-		size >> PAGE_SHIFT);
+			(domain->geometry.aperture_end >> PAGE_SHIFT) - 1);
 
 	kref_init(&aspace->kref);
 

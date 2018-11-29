@@ -9,17 +9,15 @@
 #ifndef _LINUX_PAGEVEC_H
 #define _LINUX_PAGEVEC_H
 
-#include <linux/xarray.h>
-
-/* 15 pointers + header align the pagevec structure to a power of two */
-#define PAGEVEC_SIZE	15
+/* 14 pointers + two long's align the pagevec structure to a power of two */
+#define PAGEVEC_SIZE	14
 
 struct page;
 struct address_space;
 
 struct pagevec {
-	unsigned char nr;
-	bool percpu_pvec_drained;
+	unsigned long nr;
+	unsigned long cold;
 	struct page *pages[PAGEVEC_SIZE];
 };
 
@@ -40,22 +38,14 @@ static inline unsigned pagevec_lookup(struct pagevec *pvec,
 	return pagevec_lookup_range(pvec, mapping, start, (pgoff_t)-1);
 }
 
-unsigned pagevec_lookup_range_tag(struct pagevec *pvec,
-		struct address_space *mapping, pgoff_t *index, pgoff_t end,
-		xa_mark_t tag);
-unsigned pagevec_lookup_range_nr_tag(struct pagevec *pvec,
-		struct address_space *mapping, pgoff_t *index, pgoff_t end,
-		xa_mark_t tag, unsigned max_pages);
-static inline unsigned pagevec_lookup_tag(struct pagevec *pvec,
-		struct address_space *mapping, pgoff_t *index, xa_mark_t tag)
-{
-	return pagevec_lookup_range_tag(pvec, mapping, index, (pgoff_t)-1, tag);
-}
+unsigned pagevec_lookup_tag(struct pagevec *pvec,
+		struct address_space *mapping, pgoff_t *index, int tag,
+		unsigned nr_pages);
 
-static inline void pagevec_init(struct pagevec *pvec)
+static inline void pagevec_init(struct pagevec *pvec, int cold)
 {
 	pvec->nr = 0;
-	pvec->percpu_pvec_drained = false;
+	pvec->cold = cold;
 }
 
 static inline void pagevec_reinit(struct pagevec *pvec)

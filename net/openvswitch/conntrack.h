@@ -17,11 +17,10 @@
 #include "flow.h"
 
 struct ovs_conntrack_info;
-struct ovs_ct_limit_info;
 enum ovs_key_attr;
 
 #if IS_ENABLED(CONFIG_NF_CONNTRACK)
-int ovs_ct_init(struct net *);
+void ovs_ct_init(struct net *);
 void ovs_ct_exit(struct net *);
 bool ovs_ct_verify(struct net *, enum ovs_key_attr attr);
 int ovs_ct_copy_action(struct net *, const struct nlattr *,
@@ -31,7 +30,6 @@ int ovs_ct_action_to_attr(const struct ovs_conntrack_info *, struct sk_buff *);
 
 int ovs_ct_execute(struct net *, struct sk_buff *, struct sw_flow_key *,
 		   const struct ovs_conntrack_info *);
-int ovs_ct_clear(struct sk_buff *skb, struct sw_flow_key *key);
 
 void ovs_ct_fill_key(const struct sk_buff *skb, struct sw_flow_key *key);
 int ovs_ct_put_key(const struct sw_flow_key *swkey,
@@ -45,7 +43,7 @@ void ovs_ct_free_action(const struct nlattr *a);
 #else
 #include <linux/errno.h>
 
-static inline int ovs_ct_init(struct net *net) { return 0; }
+static inline void ovs_ct_init(struct net *net) { }
 
 static inline void ovs_ct_exit(struct net *net) { }
 
@@ -75,12 +73,6 @@ static inline int ovs_ct_execute(struct net *net, struct sk_buff *skb,
 	return -ENOTSUPP;
 }
 
-static inline int ovs_ct_clear(struct sk_buff *skb,
-			       struct sw_flow_key *key)
-{
-	return -ENOTSUPP;
-}
-
 static inline void ovs_ct_fill_key(const struct sk_buff *skb,
 				   struct sw_flow_key *key)
 {
@@ -105,8 +97,4 @@ static inline void ovs_ct_free_action(const struct nlattr *a) { }
 
 #define CT_SUPPORTED_MASK 0
 #endif /* CONFIG_NF_CONNTRACK */
-
-#if IS_ENABLED(CONFIG_NETFILTER_CONNCOUNT)
-extern struct genl_family dp_ct_limit_genl_family;
-#endif
 #endif /* ovs_conntrack.h */

@@ -48,7 +48,7 @@ struct efx_mcdi_async_param {
 	/* followed by request/response buffer */
 };
 
-static void efx_mcdi_timeout_async(struct timer_list *t);
+static void efx_mcdi_timeout_async(unsigned long context);
 static int efx_mcdi_drv_attach(struct efx_nic *efx, bool driver_operating,
 			       bool *was_attached_out);
 static bool efx_mcdi_poll_once(struct efx_nic *efx);
@@ -87,7 +87,8 @@ int efx_mcdi_init(struct efx_nic *efx)
 	mcdi->mode = MCDI_MODE_POLL;
 	spin_lock_init(&mcdi->async_lock);
 	INIT_LIST_HEAD(&mcdi->async_list);
-	timer_setup(&mcdi->async_timer, efx_mcdi_timeout_async, 0);
+	setup_timer(&mcdi->async_timer, efx_mcdi_timeout_async,
+		    (unsigned long)mcdi);
 
 	(void) efx_mcdi_poll_reboot(efx);
 	mcdi->new_epoch = true;
@@ -375,7 +376,7 @@ static int efx_mcdi_poll(struct efx_nic *efx)
 	 * because generally mcdi responses are fast. After that, back off
 	 * and poll once a jiffy (approximately)
 	 */
-	spins = USER_TICK_USEC;
+	spins = TICK_USEC;
 	finish = jiffies + MCDI_RPC_TIMEOUT;
 
 	while (1) {
@@ -607,9 +608,9 @@ static void efx_mcdi_ev_cpl(struct efx_nic *efx, unsigned int seqno,
 	}
 }
 
-static void efx_mcdi_timeout_async(struct timer_list *t)
+static void efx_mcdi_timeout_async(unsigned long context)
 {
-	struct efx_mcdi_iface *mcdi = from_timer(mcdi, t, async_timer);
+	struct efx_mcdi_iface *mcdi = (struct efx_mcdi_iface *)context;
 
 	efx_mcdi_complete_async(mcdi, true);
 }

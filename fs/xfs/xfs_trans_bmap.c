@@ -1,7 +1,21 @@
-// SPDX-License-Identifier: GPL-2.0+
 /*
  * Copyright (C) 2016 Oracle.  All Rights Reserved.
+ *
  * Author: Darrick J. Wong <darrick.wong@oracle.com>
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation; either version 2
+ * of the License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it would be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write the Free Software Foundation,
+ * Inc.,  51 Franklin St, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 #include "xfs.h"
 #include "xfs_fs.h"
@@ -43,6 +57,7 @@ int
 xfs_trans_log_finish_bmap_update(
 	struct xfs_trans		*tp,
 	struct xfs_bud_log_item		*budp,
+	struct xfs_defer_ops		*dop,
 	enum xfs_bmap_intent_type	type,
 	struct xfs_inode		*ip,
 	int				whichfork,
@@ -53,7 +68,7 @@ xfs_trans_log_finish_bmap_update(
 {
 	int				error;
 
-	error = xfs_bmap_finish_one(tp, ip, type, whichfork, startoff,
+	error = xfs_bmap_finish_one(tp, dop, ip, type, whichfork, startoff,
 			startblock, blockcount, state);
 
 	/*
@@ -64,7 +79,7 @@ xfs_trans_log_finish_bmap_update(
 	 * 2.) shuts down the filesystem
 	 */
 	tp->t_flags |= XFS_TRANS_DIRTY;
-	set_bit(XFS_LI_DIRTY, &budp->bud_item.li_flags);
+	budp->bud_item.li_desc->lid_flags |= XFS_LID_DIRTY;
 
 	return error;
 }
@@ -143,7 +158,7 @@ xfs_bmap_update_log_item(
 	bmap = container_of(item, struct xfs_bmap_intent, bi_list);
 
 	tp->t_flags |= XFS_TRANS_DIRTY;
-	set_bit(XFS_LI_DIRTY, &buip->bui_item.li_flags);
+	buip->bui_item.li_desc->lid_flags |= XFS_LID_DIRTY;
 
 	/*
 	 * atomic_inc_return gives us the value after the increment;
@@ -175,6 +190,7 @@ xfs_bmap_update_create_done(
 STATIC int
 xfs_bmap_update_finish_item(
 	struct xfs_trans		*tp,
+	struct xfs_defer_ops		*dop,
 	struct list_head		*item,
 	void				*done_item,
 	void				**state)
@@ -185,7 +201,7 @@ xfs_bmap_update_finish_item(
 
 	bmap = container_of(item, struct xfs_bmap_intent, bi_list);
 	count = bmap->bi_bmap.br_blockcount;
-	error = xfs_trans_log_finish_bmap_update(tp, done_item,
+	error = xfs_trans_log_finish_bmap_update(tp, done_item, dop,
 			bmap->bi_type,
 			bmap->bi_owner, bmap->bi_whichfork,
 			bmap->bi_bmap.br_startoff,

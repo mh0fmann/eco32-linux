@@ -2579,7 +2579,6 @@ err_out_unmap_bars:
 	for (i = 0; i < 3; ++i)
 		if (dev->bar[i])
 			iounmap(dev->bar[i]);
-	kfree(dev);
 
 err_out_free_regions:
 	pci_release_regions(pdev);

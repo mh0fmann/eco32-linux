@@ -1,8 +1,21 @@
-// SPDX-License-Identifier: GPL-2.0-only
 /*
  * adv7842 - Analog Devices ADV7842 video decoder driver
  *
  * Copyright 2013 Cisco Systems, Inc. and/or its affiliates. All rights reserved.
+ *
+ * This program is free software; you may redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; version 2 of the License.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+ * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+ * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+ * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS
+ * BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN
+ * ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+ * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ *
  */
 
 /*
@@ -786,13 +799,11 @@ static int edid_write_hdmi_segment(struct v4l2_subdev *sd, u8 port)
 	/* Disable I2C access to internal EDID ram from HDMI DDC ports */
 	rep_write_and_or(sd, 0x77, 0xf3, 0x00);
 
-	if (!state->hdmi_edid.present) {
-		cec_phys_addr_invalidate(state->cec_adap);
+	if (!state->hdmi_edid.present)
 		return 0;
-	}
 
-	pa = v4l2_get_edid_phys_addr(edid, 256, &spa_loc);
-	err = v4l2_phys_addr_validate(pa, &pa, NULL);
+	pa = cec_get_edid_phys_addr(edid, 256, &spa_loc);
+	err = cec_phys_addr_validate(pa, &pa, NULL);
 	if (err)
 		return err;
 
@@ -1527,7 +1538,6 @@ static void adv7842_fill_optional_dv_timings_fields(struct v4l2_subdev *sd,
 	v4l2_find_dv_timings_cap(timings, adv7842_get_dv_timings_cap(sd),
 			is_digital_input(sd) ? 250000 : 1000000,
 			adv7842_check_dv_timings, NULL);
-	timings->bt.flags |= V4L2_DV_FL_CAN_DETECT_REDUCED_FPS;
 }
 
 static int adv7842_query_dv_timings(struct v4l2_subdev *sd,
@@ -1599,14 +1609,6 @@ static int adv7842_query_dv_timings(struct v4l2_subdev *sd,
 			bt->il_vbackporch = 0;
 		}
 		adv7842_fill_optional_dv_timings_fields(sd, timings);
-		if ((timings->bt.flags & V4L2_DV_FL_CAN_REDUCE_FPS) &&
-		    freq < bt->pixelclock) {
-			u32 reduced_freq = ((u32)bt->pixelclock / 1001) * 1000;
-			u32 delta_freq = abs(freq - reduced_freq);
-
-			if (delta_freq < ((u32)bt->pixelclock - reduced_freq) / 2)
-				timings->bt.flags |= V4L2_DV_FL_REDUCED_FPS;
-		}
 	} else {
 		/* find format
 		 * Since LCVS values are inaccurate [REF_03, p. 339-340],
@@ -3113,7 +3115,7 @@ static int adv7842_ddr_ram_test(struct v4l2_subdev *sd)
 	sdp_write(sd, 0x12, 0x00); /* Disable 3D comb, Frame TBC & 3DNR */
 	io_write(sd, 0xFF, 0x04);  /* Reset memory controller */
 
-	usleep_range(5000, 6000);
+	mdelay(5);
 
 	sdp_write(sd, 0x12, 0x00);    /* Disable 3D Comb, Frame TBC & 3DNR */
 	sdp_io_write(sd, 0x2A, 0x01); /* Memory BIST Initialisation */
@@ -3127,12 +3129,12 @@ static int adv7842_ddr_ram_test(struct v4l2_subdev *sd)
 	sdp_io_write(sd, 0x7d, 0x00); /* Memory BIST Initialisation */
 	sdp_io_write(sd, 0x7e, 0x1a); /* Memory BIST Initialisation */
 
-	usleep_range(5000, 6000);
+	mdelay(5);
 
 	sdp_io_write(sd, 0xd9, 0xd5); /* Enable BIST Test */
 	sdp_write(sd, 0x12, 0x05); /* Enable FRAME TBC & 3D COMB */
 
-	msleep(20);
+	mdelay(20);
 
 	for (i = 0; i < 10; i++) {
 		u8 result = sdp_io_read(sd, 0xdb);
@@ -3143,7 +3145,7 @@ static int adv7842_ddr_ram_test(struct v4l2_subdev *sd)
 			else
 				pass++;
 		}
-		msleep(20);
+		mdelay(20);
 	}
 
 	v4l2_dbg(1, debug, sd,
@@ -3465,9 +3467,11 @@ static int adv7842_probe(struct i2c_client *client,
 		return -ENODEV;
 	}
 
-	state = devm_kzalloc(&client->dev, sizeof(*state), GFP_KERNEL);
-	if (!state)
+	state = devm_kzalloc(&client->dev, sizeof(struct adv7842_state), GFP_KERNEL);
+	if (!state) {
+		v4l_err(client, "Could not allocate adv7842_state memory!\n");
 		return -ENOMEM;
+	}
 
 	/* platform data */
 	state->pdata = *pdata;
@@ -3552,7 +3556,6 @@ static int adv7842_probe(struct i2c_client *client,
 	INIT_DELAYED_WORK(&state->delayed_work_enable_hotplug,
 			adv7842_delayed_work_enable_hotplug);
 
-	sd->entity.function = MEDIA_ENT_F_DV_DECODER;
 	state->pad.flags = MEDIA_PAD_FL_SOURCE;
 	err = media_entity_pads_init(&sd->entity, 1, &state->pad);
 	if (err)

@@ -237,8 +237,6 @@ static inline void copy_user_highpage(struct page *to, struct page *from,
 
 #endif
 
-#ifndef __HAVE_ARCH_COPY_HIGHPAGE
-
 static inline void copy_highpage(struct page *to, struct page *from)
 {
 	char *vfrom, *vto;
@@ -249,7 +247,5 @@ static inline void copy_highpage(struct page *to, struct page *from)
 	kunmap_atomic(vto);
 	kunmap_atomic(vfrom);
 }
-
-#endif
 
 #endif /* _LINUX_HIGHMEM_H */

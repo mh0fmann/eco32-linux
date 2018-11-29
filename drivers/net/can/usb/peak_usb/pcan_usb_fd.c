@@ -184,7 +184,7 @@ static int pcan_usb_fd_send_cmd(struct peak_usb_device *dev, void *cmd_tail)
 	void *cmd_head = pcan_usb_fd_cmd_buffer(dev);
 	int err = 0;
 	u8 *packet_ptr;
-	int packet_len;
+	int i, n = 1, packet_len;
 	ptrdiff_t cmd_len;
 
 	/* usb device unregistered? */
@@ -201,13 +201,17 @@ static int pcan_usb_fd_send_cmd(struct peak_usb_device *dev, void *cmd_tail)
 	}
 
 	packet_ptr = cmd_head;
-	packet_len = cmd_len;
 
 	/* firmware is not able to re-assemble 512 bytes buffer in full-speed */
-	if (unlikely(dev->udev->speed != USB_SPEED_HIGH))
-		packet_len = min(packet_len, PCAN_UFD_LOSPD_PKT_SIZE);
+	if ((dev->udev->speed != USB_SPEED_HIGH) &&
+	    (cmd_len > PCAN_UFD_LOSPD_PKT_SIZE)) {
+		packet_len = PCAN_UFD_LOSPD_PKT_SIZE;
+		n += cmd_len / packet_len;
+	} else {
+		packet_len = cmd_len;
+	}
 
-	do {
+	for (i = 0; i < n; i++) {
 		err = usb_bulk_msg(dev->udev,
 				   usb_sndbulkpipe(dev->udev,
 						   PCAN_USBPRO_EP_CMDOUT),
@@ -220,12 +224,7 @@ static int pcan_usb_fd_send_cmd(struct peak_usb_device *dev, void *cmd_tail)
 		}
 
 		packet_ptr += packet_len;
-		cmd_len -= packet_len;
-
-		if (cmd_len < PCAN_UFD_LOSPD_PKT_SIZE)
-			packet_len = cmd_len;
-
-	} while (packet_len > 0);
+	}
 
 	return err;
 }
@@ -514,7 +513,8 @@ static int pcan_usb_fd_decode_canmsg(struct pcan_usb_fd_if *usb_if,
 	else
 		memcpy(cfd->data, rm->d, cfd->len);
 
-	peak_usb_netif_rx(skb, &usb_if->time_ref, le32_to_cpu(rm->ts_low));
+	peak_usb_netif_rx(skb, &usb_if->time_ref,
+			  le32_to_cpu(rm->ts_low), le32_to_cpu(rm->ts_high));
 
 	netdev->stats.rx_packets++;
 	netdev->stats.rx_bytes += cfd->len;
@@ -574,7 +574,8 @@ static int pcan_usb_fd_decode_status(struct pcan_usb_fd_if *usb_if,
 	if (!skb)
 		return -ENOMEM;
 
-	peak_usb_netif_rx(skb, &usb_if->time_ref, le32_to_cpu(sm->ts_low));
+	peak_usb_netif_rx(skb, &usb_if->time_ref,
+			  le32_to_cpu(sm->ts_low), le32_to_cpu(sm->ts_high));
 
 	netdev->stats.rx_packets++;
 	netdev->stats.rx_bytes += cf->can_dlc;
@@ -616,7 +617,8 @@ static int pcan_usb_fd_decode_overrun(struct pcan_usb_fd_if *usb_if,
 	cf->can_id |= CAN_ERR_CRTL;
 	cf->data[1] |= CAN_ERR_CRTL_RX_OVERFLOW;
 
-	peak_usb_netif_rx(skb, &usb_if->time_ref, le32_to_cpu(ov->ts_low));
+	peak_usb_netif_rx(skb, &usb_if->time_ref,
+			  le32_to_cpu(ov->ts_low), le32_to_cpu(ov->ts_high));
 
 	netdev->stats.rx_over_errors++;
 	netdev->stats.rx_errors++;

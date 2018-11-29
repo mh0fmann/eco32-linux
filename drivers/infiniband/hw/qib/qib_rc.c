@@ -246,6 +246,7 @@ int qib_make_rc_req(struct rvt_qp *qp, unsigned long *flags)
 		if (!(ib_rvt_state_ops[qp->state] & RVT_FLUSH_SEND))
 			goto bail;
 		/* We are in the error state, flush the work request. */
+		smp_read_barrier_depends(); /* see post_one_send() */
 		if (qp->s_last == READ_ONCE(qp->s_head))
 			goto bail;
 		/* If DMAs are in progress, we can't flush immediately. */
@@ -254,7 +255,7 @@ int qib_make_rc_req(struct rvt_qp *qp, unsigned long *flags)
 			goto bail;
 		}
 		wqe = rvt_get_swqe_ptr(qp, qp->s_last);
-		rvt_send_complete(qp, wqe, qp->s_last != qp->s_acked ?
+		qib_send_complete(qp, wqe, qp->s_last != qp->s_acked ?
 			IB_WC_SUCCESS : IB_WC_WR_FLUSH_ERR);
 		/* will get called again */
 		goto done;
@@ -292,6 +293,7 @@ int qib_make_rc_req(struct rvt_qp *qp, unsigned long *flags)
 		newreq = 0;
 		if (qp->s_cur == qp->s_tail) {
 			/* Check if send work queue is empty. */
+			smp_read_barrier_depends(); /* see post_one_send() */
 			if (qp->s_tail == READ_ONCE(qp->s_head))
 				goto bail;
 			/*
@@ -432,13 +434,13 @@ no_flow_control:
 				qp->s_state = OP(COMPARE_SWAP);
 				put_ib_ateth_swap(wqe->atomic_wr.swap,
 						  &ohdr->u.atomic_eth);
-				put_ib_ateth_compare(wqe->atomic_wr.compare_add,
-						     &ohdr->u.atomic_eth);
+				put_ib_ateth_swap(wqe->atomic_wr.compare_add,
+						  &ohdr->u.atomic_eth);
 			} else {
 				qp->s_state = OP(FETCH_ADD);
 				put_ib_ateth_swap(wqe->atomic_wr.compare_add,
 						  &ohdr->u.atomic_eth);
-				put_ib_ateth_compare(0, &ohdr->u.atomic_eth);
+				put_ib_ateth_swap(0, &ohdr->u.atomic_eth);
 			}
 			put_ib_ateth_vaddr(wqe->atomic_wr.remote_addr,
 					   &ohdr->u.atomic_eth);
@@ -838,7 +840,7 @@ void qib_restart_rc(struct rvt_qp *qp, u32 psn, int wait)
 			qib_migrate_qp(qp);
 			qp->s_retry = qp->s_retry_cnt;
 		} else if (qp->s_last == qp->s_acked) {
-			rvt_send_complete(qp, wqe, IB_WC_RETRY_EXC_ERR);
+			qib_send_complete(qp, wqe, IB_WC_RETRY_EXC_ERR);
 			rvt_error_qp(qp, IB_WC_WR_FLUSH_ERR);
 			return;
 		} else /* XXX need to handle delayed completion */
@@ -1221,7 +1223,7 @@ static int do_rc_ack(struct rvt_qp *qp, u32 aeth, u32 psn, int opcode,
 			ibp->rvp.n_other_naks++;
 class_b:
 			if (qp->s_last == qp->s_acked) {
-				rvt_send_complete(qp, wqe, status);
+				qib_send_complete(qp, wqe, status);
 				rvt_error_qp(qp, IB_WC_WR_FLUSH_ERR);
 			}
 			break;
@@ -1338,6 +1340,7 @@ static void qib_rc_rcv_resp(struct qib_ibport *ibp,
 		goto ack_done;
 
 	/* Ignore invalid responses. */
+	smp_read_barrier_depends(); /* see post_one_send */
 	if (qib_cmp24(psn, READ_ONCE(qp->s_next_psn)) >= 0)
 		goto ack_done;
 
@@ -1425,8 +1428,7 @@ read_middle:
 		qp->s_rdma_read_len -= pmtu;
 		update_last_psn(qp, psn);
 		spin_unlock_irqrestore(&qp->s_lock, flags);
-		rvt_copy_sge(qp, &qp->s_rdma_read_sge,
-			     data, pmtu, false, false);
+		qib_copy_sge(&qp->s_rdma_read_sge, data, pmtu, 0);
 		goto bail;
 
 	case OP(RDMA_READ_RESPONSE_ONLY):
@@ -1472,8 +1474,7 @@ read_last:
 		if (unlikely(tlen != qp->s_rdma_read_len))
 			goto ack_len_err;
 		aeth = be32_to_cpu(ohdr->u.aeth);
-		rvt_copy_sge(qp, &qp->s_rdma_read_sge,
-			     data, tlen, false, false);
+		qib_copy_sge(&qp->s_rdma_read_sge, data, tlen, 0);
 		WARN_ON(qp->s_rdma_read_sge.num_sge);
 		(void) do_rc_ack(qp, aeth, psn,
 				 OP(RDMA_READ_RESPONSE_LAST), 0, rcd);
@@ -1492,7 +1493,7 @@ ack_len_err:
 	status = IB_WC_LOC_LEN_ERR;
 ack_err:
 	if (qp->s_last == qp->s_acked) {
-		rvt_send_complete(qp, wqe, status);
+		qib_send_complete(qp, wqe, status);
 		rvt_error_qp(qp, IB_WC_WR_FLUSH_ERR);
 	}
 ack_done:
@@ -1830,7 +1831,7 @@ void qib_rc_rcv(struct qib_ctxtdata *rcd, struct ib_header *hdr,
 	/* OK, process the packet. */
 	switch (opcode) {
 	case OP(SEND_FIRST):
-		ret = rvt_get_rwqe(qp, false);
+		ret = qib_get_rwqe(qp, 0);
 		if (ret < 0)
 			goto nack_op_err;
 		if (!ret)
@@ -1846,12 +1847,12 @@ send_middle:
 		qp->r_rcv_len += pmtu;
 		if (unlikely(qp->r_rcv_len > qp->r_len))
 			goto nack_inv;
-		rvt_copy_sge(qp, &qp->r_sge, data, pmtu, true, false);
+		qib_copy_sge(&qp->r_sge, data, pmtu, 1);
 		break;
 
 	case OP(RDMA_WRITE_LAST_WITH_IMMEDIATE):
 		/* consume RWQE */
-		ret = rvt_get_rwqe(qp, true);
+		ret = qib_get_rwqe(qp, 1);
 		if (ret < 0)
 			goto nack_op_err;
 		if (!ret)
@@ -1860,7 +1861,7 @@ send_middle:
 
 	case OP(SEND_ONLY):
 	case OP(SEND_ONLY_WITH_IMMEDIATE):
-		ret = rvt_get_rwqe(qp, false);
+		ret = qib_get_rwqe(qp, 0);
 		if (ret < 0)
 			goto nack_op_err;
 		if (!ret)
@@ -1868,7 +1869,7 @@ send_middle:
 		qp->r_rcv_len = 0;
 		if (opcode == OP(SEND_ONLY))
 			goto no_immediate_data;
-		/* fall through -- for SEND_ONLY_WITH_IMMEDIATE */
+		/* FALLTHROUGH for SEND_ONLY_WITH_IMMEDIATE */
 	case OP(SEND_LAST_WITH_IMMEDIATE):
 send_last_imm:
 		wc.ex.imm_data = ohdr->u.imm_data;
@@ -1892,7 +1893,7 @@ send_last:
 		wc.byte_len = tlen + qp->r_rcv_len;
 		if (unlikely(wc.byte_len > qp->r_len))
 			goto nack_inv;
-		rvt_copy_sge(qp, &qp->r_sge, data, tlen, true, false);
+		qib_copy_sge(&qp->r_sge, data, tlen, 1);
 		rvt_put_ss(&qp->r_sge);
 		qp->r_msn++;
 		if (!test_and_clear_bit(RVT_R_WRID_VALID, &qp->r_aflags))
@@ -1915,7 +1916,8 @@ send_last:
 		wc.port_num = 0;
 		/* Signal completion event if the solicited bit is set. */
 		rvt_cq_enter(ibcq_to_rvtcq(qp->ibqp.recv_cq), &wc,
-			     ib_bth_is_solicited(ohdr));
+			     (ohdr->bth[0] &
+			      cpu_to_be32(IB_BTH_SOLICITED)) != 0);
 		break;
 
 	case OP(RDMA_WRITE_FIRST):
@@ -1951,7 +1953,7 @@ send_last:
 			goto send_middle;
 		else if (opcode == OP(RDMA_WRITE_ONLY))
 			goto no_immediate_data;
-		ret = rvt_get_rwqe(qp, true);
+		ret = qib_get_rwqe(qp, 1);
 		if (ret < 0)
 			goto nack_op_err;
 		if (!ret) {

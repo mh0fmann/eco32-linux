@@ -25,33 +25,8 @@
 #include <asm/kvm_arm.h>
 #include <asm/cputype.h>
 
-/* arm64 compatibility macros */
-#define PSR_AA32_MODE_ABT	ABT_MODE
-#define PSR_AA32_MODE_UND	UND_MODE
-#define PSR_AA32_T_BIT		PSR_T_BIT
-#define PSR_AA32_I_BIT		PSR_I_BIT
-#define PSR_AA32_A_BIT		PSR_A_BIT
-#define PSR_AA32_E_BIT		PSR_E_BIT
-#define PSR_AA32_IT_MASK	PSR_IT_MASK
-
 unsigned long *vcpu_reg(struct kvm_vcpu *vcpu, u8 reg_num);
-
-static inline unsigned long *vcpu_reg32(struct kvm_vcpu *vcpu, u8 reg_num)
-{
-	return vcpu_reg(vcpu, reg_num);
-}
-
-unsigned long *__vcpu_spsr(struct kvm_vcpu *vcpu);
-
-static inline unsigned long vpcu_read_spsr(struct kvm_vcpu *vcpu)
-{
-	return *__vcpu_spsr(vcpu);
-}
-
-static inline void vcpu_write_spsr(struct kvm_vcpu *vcpu, unsigned long v)
-{
-	*__vcpu_spsr(vcpu) = v;
-}
+unsigned long *vcpu_spsr(struct kvm_vcpu *vcpu);
 
 static inline unsigned long vcpu_get_reg(struct kvm_vcpu *vcpu,
 					 u8 reg_num)
@@ -67,25 +42,10 @@ static inline void vcpu_set_reg(struct kvm_vcpu *vcpu, u8 reg_num,
 
 bool kvm_condition_valid32(const struct kvm_vcpu *vcpu);
 void kvm_skip_instr32(struct kvm_vcpu *vcpu, bool is_wide_instr);
-void kvm_inject_undef32(struct kvm_vcpu *vcpu);
-void kvm_inject_dabt32(struct kvm_vcpu *vcpu, unsigned long addr);
-void kvm_inject_pabt32(struct kvm_vcpu *vcpu, unsigned long addr);
+void kvm_inject_undefined(struct kvm_vcpu *vcpu);
 void kvm_inject_vabt(struct kvm_vcpu *vcpu);
-
-static inline void kvm_inject_undefined(struct kvm_vcpu *vcpu)
-{
-	kvm_inject_undef32(vcpu);
-}
-
-static inline void kvm_inject_dabt(struct kvm_vcpu *vcpu, unsigned long addr)
-{
-	kvm_inject_dabt32(vcpu, addr);
-}
-
-static inline void kvm_inject_pabt(struct kvm_vcpu *vcpu, unsigned long addr)
-{
-	kvm_inject_pabt32(vcpu, addr);
-}
+void kvm_inject_dabt(struct kvm_vcpu *vcpu, unsigned long addr);
+void kvm_inject_pabt(struct kvm_vcpu *vcpu, unsigned long addr);
 
 static inline bool kvm_condition_valid(const struct kvm_vcpu *vcpu)
 {
@@ -102,24 +62,19 @@ static inline void vcpu_reset_hcr(struct kvm_vcpu *vcpu)
 	vcpu->arch.hcr = HCR_GUEST_MASK;
 }
 
-static inline unsigned long *vcpu_hcr(const struct kvm_vcpu *vcpu)
+static inline unsigned long vcpu_get_hcr(const struct kvm_vcpu *vcpu)
 {
-	return (unsigned long *)&vcpu->arch.hcr;
+	return vcpu->arch.hcr;
 }
 
-static inline void vcpu_clear_wfe_traps(struct kvm_vcpu *vcpu)
+static inline void vcpu_set_hcr(struct kvm_vcpu *vcpu, unsigned long hcr)
 {
-	vcpu->arch.hcr &= ~HCR_TWE;
-}
-
-static inline void vcpu_set_wfe_traps(struct kvm_vcpu *vcpu)
-{
-	vcpu->arch.hcr |= HCR_TWE;
+	vcpu->arch.hcr = hcr;
 }
 
 static inline bool vcpu_mode_is_32bit(const struct kvm_vcpu *vcpu)
 {
-	return true;
+	return 1;
 }
 
 static inline unsigned long *vcpu_pc(struct kvm_vcpu *vcpu)
@@ -146,7 +101,7 @@ static inline bool mode_has_spsr(struct kvm_vcpu *vcpu)
 static inline bool vcpu_mode_priv(struct kvm_vcpu *vcpu)
 {
 	unsigned long cpsr_mode = vcpu->arch.ctxt.gp_regs.usr_regs.ARM_cpsr & MODE_MASK;
-	return cpsr_mode > USR_MODE;
+	return cpsr_mode > USR_MODE;;
 }
 
 static inline u32 kvm_vcpu_get_hsr(const struct kvm_vcpu *vcpu)
@@ -248,7 +203,7 @@ static inline u8 kvm_vcpu_trap_get_fault_type(struct kvm_vcpu *vcpu)
 
 static inline bool kvm_vcpu_dabt_isextabt(struct kvm_vcpu *vcpu)
 {
-	switch (kvm_vcpu_trap_get_fault(vcpu)) {
+	switch (kvm_vcpu_trap_get_fault_type(vcpu)) {
 	case FSC_SEA:
 	case FSC_SEA_TTW0:
 	case FSC_SEA_TTW1:

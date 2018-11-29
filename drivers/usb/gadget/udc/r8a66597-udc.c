@@ -1,10 +1,13 @@
-// SPDX-License-Identifier: GPL-2.0
 /*
  * R8A66597 UDC (USB gadget)
  *
  * Copyright (C) 2006-2009 Renesas Solutions Corp.
  *
  * Author : Yoshihiro Shimoda <yoshihiro.shimoda.uh@renesas.com>
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; version 2 of the License.
  */
 
 #include <linux/module.h>
@@ -832,11 +835,11 @@ static void init_controller(struct r8a66597 *r8a66597)
 
 		r8a66597_bset(r8a66597, XCKE, SYSCFG0);
 
-		mdelay(3);
+		msleep(3);
 
 		r8a66597_bset(r8a66597, PLLC, SYSCFG0);
 
-		mdelay(1);
+		msleep(1);
 
 		r8a66597_bset(r8a66597, SCKE, SYSCFG0);
 
@@ -1190,7 +1193,7 @@ __acquires(r8a66597->lock)
 	r8a66597->ep0_req->length = 2;
 	/* AV: what happens if we get called again before that gets through? */
 	spin_unlock(&r8a66597->lock);
-	r8a66597_queue(r8a66597->gadget.ep0, r8a66597->ep0_req, GFP_ATOMIC);
+	r8a66597_queue(r8a66597->gadget.ep0, r8a66597->ep0_req, GFP_KERNEL);
 	spin_lock(&r8a66597->lock);
 }
 
@@ -1514,9 +1517,9 @@ static irqreturn_t r8a66597_irq(int irq, void *_r8a66597)
 	return IRQ_HANDLED;
 }
 
-static void r8a66597_timer(struct timer_list *t)
+static void r8a66597_timer(unsigned long _r8a66597)
 {
-	struct r8a66597 *r8a66597 = from_timer(r8a66597, t, timer);
+	struct r8a66597 *r8a66597 = (struct r8a66597 *)_r8a66597;
 	unsigned long flags;
 	u16 tmp;
 
@@ -1874,7 +1877,9 @@ static int r8a66597_probe(struct platform_device *pdev)
 	r8a66597->gadget.max_speed = USB_SPEED_HIGH;
 	r8a66597->gadget.name = udc_name;
 
-	timer_setup(&r8a66597->timer, r8a66597_timer, 0);
+	init_timer(&r8a66597->timer);
+	r8a66597->timer.function = r8a66597_timer;
+	r8a66597->timer.data = (unsigned long)r8a66597;
 	r8a66597->reg = reg;
 
 	if (r8a66597->pdata->on_chip) {

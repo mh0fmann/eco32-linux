@@ -21,8 +21,6 @@
 #include "host1x02_hardware.h"
 
 /* include code */
-#define HOST1X_HW 2
-
 #include "cdma_hw.c"
 #include "channel_hw.c"
 #include "debug_hw.c"

@@ -718,15 +718,15 @@ again:
 	return size > 0 ? size : ret;
 }
 
-static __poll_t acpi_aml_poll(struct file *file, poll_table *wait)
+static unsigned int acpi_aml_poll(struct file *file, poll_table *wait)
 {
-	__poll_t masks = 0;
+	int masks = 0;
 
 	poll_wait(file, &acpi_aml_io.wait, wait);
 	if (acpi_aml_user_readable())
-		masks |= EPOLLIN | EPOLLRDNORM;
+		masks |= POLLIN | POLLRDNORM;
 	if (acpi_aml_user_writable())
-		masks |= EPOLLOUT | EPOLLWRNORM;
+		masks |= POLLOUT | POLLWRNORM;
 
 	return masks;
 }

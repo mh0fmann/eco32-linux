@@ -610,12 +610,13 @@ bfad_hal_mem_alloc(struct bfad_s *bfad)
 	/* Iterate through the KVA meminfo queue */
 	list_for_each(km_qe, &kva_info->qe) {
 		kva_elem = (struct bfa_mem_kva_s *) km_qe;
-		kva_elem->kva = vzalloc(kva_elem->mem_len);
+		kva_elem->kva = vmalloc(kva_elem->mem_len);
 		if (kva_elem->kva == NULL) {
 			bfad_hal_mem_release(bfad);
 			rc = BFA_STATUS_ENOMEM;
 			goto ext;
 		}
+		memset(kva_elem->kva, 0, kva_elem->mem_len);
 	}
 
 	/* Iterate through the DMA meminfo queue */
@@ -691,9 +692,9 @@ ext:
 }
 
 void
-bfad_bfa_tmo(struct timer_list *t)
+bfad_bfa_tmo(unsigned long data)
 {
-	struct bfad_s	      *bfad = from_timer(bfad, t, hal_tmo);
+	struct bfad_s	      *bfad = (struct bfad_s *) data;
 	unsigned long	flags;
 	struct list_head	       doneq;
 
@@ -718,7 +719,9 @@ bfad_bfa_tmo(struct timer_list *t)
 void
 bfad_init_timer(struct bfad_s *bfad)
 {
-	timer_setup(&bfad->hal_tmo, bfad_bfa_tmo, 0);
+	init_timer(&bfad->hal_tmo);
+	bfad->hal_tmo.function = bfad_bfa_tmo;
+	bfad->hal_tmo.data = (unsigned long)bfad;
 
 	mod_timer(&bfad->hal_tmo,
 		  jiffies + msecs_to_jiffies(BFA_TIMER_FREQ));
@@ -980,20 +983,20 @@ bfad_start_ops(struct bfad_s *bfad) {
 
 	/* Fill the driver_info info to fcs*/
 	memset(&driver_info, 0, sizeof(driver_info));
-	strlcpy(driver_info.version, BFAD_DRIVER_VERSION,
-		sizeof(driver_info.version));
+	strncpy(driver_info.version, BFAD_DRIVER_VERSION,
+		sizeof(driver_info.version) - 1);
 	if (host_name)
-		strlcpy(driver_info.host_machine_name, host_name,
-			sizeof(driver_info.host_machine_name));
+		strncpy(driver_info.host_machine_name, host_name,
+			sizeof(driver_info.host_machine_name) - 1);
 	if (os_name)
-		strlcpy(driver_info.host_os_name, os_name,
-			sizeof(driver_info.host_os_name));
+		strncpy(driver_info.host_os_name, os_name,
+			sizeof(driver_info.host_os_name) - 1);
 	if (os_patch)
-		strlcpy(driver_info.host_os_patch, os_patch,
-			sizeof(driver_info.host_os_patch));
+		strncpy(driver_info.host_os_patch, os_patch,
+			sizeof(driver_info.host_os_patch) - 1);
 
-	strlcpy(driver_info.os_device_name, bfad->pci_name,
-		sizeof(driver_info.os_device_name));
+	strncpy(driver_info.os_device_name, bfad->pci_name,
+		sizeof(driver_info.os_device_name) - 1);
 
 	/* FCS driver info init */
 	spin_lock_irqsave(&bfad->bfad_lock, flags);
@@ -1568,6 +1571,8 @@ bfad_pci_slot_reset(struct pci_dev *pdev)
 	if (pci_set_dma_mask(bfad->pcidev, DMA_BIT_MASK(64)) != 0)
 		if (pci_set_dma_mask(bfad->pcidev, DMA_BIT_MASK(32)) != 0)
 			goto out_disable_device;
+
+	pci_cleanup_aer_uncorrect_error_status(pdev);
 
 	if (restart_bfa(bfad) == -1)
 		goto out_disable_device;

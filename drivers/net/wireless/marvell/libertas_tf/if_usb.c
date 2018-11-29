@@ -115,9 +115,9 @@ static void if_usb_setup_firmware(struct lbtf_private *priv)
 	lbtf_deb_leave(LBTF_DEB_USB);
 }
 
-static void if_usb_fw_timeo(struct timer_list *t)
+static void if_usb_fw_timeo(unsigned long priv)
 {
-	struct if_usb_card *cardp = from_timer(cardp, t, fw_timeout);
+	struct if_usb_card *cardp = (void *)priv;
 
 	lbtf_deb_enter(LBTF_DEB_USB);
 	if (!cardp->fwdnldover) {
@@ -156,7 +156,7 @@ static int if_usb_probe(struct usb_interface *intf,
 	if (!cardp)
 		goto error;
 
-	timer_setup(&cardp->fw_timeout, if_usb_fw_timeo, 0);
+	setup_timer(&cardp->fw_timeout, if_usb_fw_timeo, (unsigned long)cardp);
 	init_waitqueue_head(&cardp->fw_wq);
 
 	cardp->udev = udev;
@@ -603,22 +603,21 @@ static inline void process_cmdrequest(int recvlength, uint8_t *recvbuff,
 				      struct if_usb_card *cardp,
 				      struct lbtf_private *priv)
 {
-	unsigned long flags;
-
-	if (recvlength < MESSAGE_HEADER_LEN ||
-	    recvlength > LBS_CMD_BUFFER_SIZE) {
+	if (recvlength > LBS_CMD_BUFFER_SIZE) {
 		lbtf_deb_usbd(&cardp->udev->dev,
-			     "The receive buffer is invalid: %d\n", recvlength);
+			     "The receive buffer is too large\n");
 		kfree_skb(skb);
 		return;
 	}
 
-	spin_lock_irqsave(&priv->driver_lock, flags);
+	BUG_ON(!in_interrupt());
+
+	spin_lock(&priv->driver_lock);
 	memcpy(priv->cmd_resp_buff, recvbuff + MESSAGE_HEADER_LEN,
 	       recvlength - MESSAGE_HEADER_LEN);
 	kfree_skb(skb);
 	lbtf_cmd_response_rx(priv);
-	spin_unlock_irqrestore(&priv->driver_lock, flags);
+	spin_unlock(&priv->driver_lock);
 }
 
 /**

@@ -458,7 +458,14 @@ static irqreturn_t atmel_hlcdc_dc_irq_handler(int irq, void *data)
 static struct drm_framebuffer *atmel_hlcdc_fb_create(struct drm_device *dev,
 		struct drm_file *file_priv, const struct drm_mode_fb_cmd2 *mode_cmd)
 {
-	return drm_gem_fb_create(dev, file_priv, mode_cmd);
+	return drm_fb_cma_create(dev, file_priv, mode_cmd);
+}
+
+static void atmel_hlcdc_fb_output_poll_changed(struct drm_device *dev)
+{
+	struct atmel_hlcdc_dc *dc = dev->dev_private;
+
+	drm_fbdev_cma_hotplug_event(dc->fbdev);
 }
 
 struct atmel_hlcdc_dc_commit {
@@ -556,7 +563,7 @@ error:
 
 static const struct drm_mode_config_funcs mode_config_funcs = {
 	.fb_create = atmel_hlcdc_fb_create,
-	.output_poll_changed = drm_fb_helper_output_poll_changed,
+	.output_poll_changed = atmel_hlcdc_fb_output_poll_changed,
 	.atomic_check = drm_atomic_helper_check,
 	.atomic_commit = atmel_hlcdc_dc_atomic_commit,
 };
@@ -658,7 +665,10 @@ static int atmel_hlcdc_dc_load(struct drm_device *dev)
 
 	platform_set_drvdata(pdev, dev);
 
-	drm_fb_cma_fbdev_init(dev, 24, 0);
+	dc->fbdev = drm_fbdev_cma_init(dev, 24,
+			dev->mode_config.num_connector);
+	if (IS_ERR(dc->fbdev))
+		dc->fbdev = NULL;
 
 	drm_kms_helper_poll_init(dev);
 
@@ -678,10 +688,10 @@ static void atmel_hlcdc_dc_unload(struct drm_device *dev)
 {
 	struct atmel_hlcdc_dc *dc = dev->dev_private;
 
-	drm_fb_cma_fbdev_fini(dev);
+	if (dc->fbdev)
+		drm_fbdev_cma_fini(dc->fbdev);
 	flush_workqueue(dc->wq);
 	drm_kms_helper_poll_fini(dev);
-	drm_atomic_helper_shutdown(dev);
 	drm_mode_config_cleanup(dev);
 
 	pm_runtime_get_sync(dev->dev);
@@ -693,6 +703,13 @@ static void atmel_hlcdc_dc_unload(struct drm_device *dev)
 	pm_runtime_disable(dev->dev);
 	clk_disable_unprepare(dc->hlcdc->periph_clk);
 	destroy_workqueue(dc->wq);
+}
+
+static void atmel_hlcdc_dc_lastclose(struct drm_device *dev)
+{
+	struct atmel_hlcdc_dc *dc = dev->dev_private;
+
+	drm_fbdev_cma_restore_mode(dc->fbdev);
 }
 
 static int atmel_hlcdc_dc_irq_postinstall(struct drm_device *dev)
@@ -727,7 +744,7 @@ static struct drm_driver atmel_hlcdc_dc_driver = {
 	.driver_features = DRIVER_HAVE_IRQ | DRIVER_GEM |
 			   DRIVER_MODESET | DRIVER_PRIME |
 			   DRIVER_ATOMIC,
-	.lastclose = drm_fb_helper_lastclose,
+	.lastclose = atmel_hlcdc_dc_lastclose,
 	.irq_handler = atmel_hlcdc_dc_irq_handler,
 	.irq_preinstall = atmel_hlcdc_dc_irq_uninstall,
 	.irq_postinstall = atmel_hlcdc_dc_irq_postinstall,

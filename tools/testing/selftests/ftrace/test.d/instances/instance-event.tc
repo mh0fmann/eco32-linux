@@ -11,7 +11,7 @@ fail() { # mesg
     rmdir foo 2>/dev/null
     echo $1
     set -e
-    exit_fail
+    exit $FAIL
 }
 
 cd instances

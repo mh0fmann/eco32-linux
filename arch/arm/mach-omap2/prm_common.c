@@ -218,7 +218,10 @@ void omap_prcm_irq_cleanup(void)
 	kfree(prcm_irq_setup->priority_mask);
 	prcm_irq_setup->priority_mask = NULL;
 
-	irq = prcm_irq_setup->irq;
+	if (prcm_irq_setup->xlate_irq)
+		irq = prcm_irq_setup->xlate_irq(prcm_irq_setup->irq);
+	else
+		irq = prcm_irq_setup->irq;
 	irq_set_chained_handler(irq, NULL);
 
 	if (prcm_irq_setup->base_irq > 0)
@@ -285,11 +288,10 @@ int omap_prcm_register_chain_handler(struct omap_prcm_irq_setup *irq_setup)
 
 	prcm_irq_setup = irq_setup;
 
-	prcm_irq_chips = kcalloc(nr_regs, sizeof(void *), GFP_KERNEL);
-	prcm_irq_setup->saved_mask = kcalloc(nr_regs, sizeof(u32),
-					     GFP_KERNEL);
-	prcm_irq_setup->priority_mask = kcalloc(nr_regs, sizeof(u32),
-						GFP_KERNEL);
+	prcm_irq_chips = kzalloc(sizeof(void *) * nr_regs, GFP_KERNEL);
+	prcm_irq_setup->saved_mask = kzalloc(sizeof(u32) * nr_regs, GFP_KERNEL);
+	prcm_irq_setup->priority_mask = kzalloc(sizeof(u32) * nr_regs,
+		GFP_KERNEL);
 
 	if (!prcm_irq_chips || !prcm_irq_setup->saved_mask ||
 	    !prcm_irq_setup->priority_mask)
@@ -305,7 +307,10 @@ int omap_prcm_register_chain_handler(struct omap_prcm_irq_setup *irq_setup)
 				1 << (offset & 0x1f);
 	}
 
-	irq = irq_setup->irq;
+	if (irq_setup->xlate_irq)
+		irq = irq_setup->xlate_irq(irq_setup->irq);
+	else
+		irq = irq_setup->irq;
 	irq_set_chained_handler(irq, omap_prcm_irq_handler);
 
 	irq_setup->base_irq = irq_alloc_descs(-1, 0, irq_setup->nr_regs * 32,
@@ -666,7 +671,7 @@ static struct omap_prcm_init_data omap4_prm_data __initdata = {
 	.index = TI_CLKM_PRM,
 	.init = omap44xx_prm_init,
 	.device_inst_offset = OMAP4430_PRM_DEVICE_INST,
-	.flags = PRM_HAS_IO_WAKEUP | PRM_HAS_VOLTAGE,
+	.flags = PRM_HAS_IO_WAKEUP | PRM_HAS_VOLTAGE | PRM_IRQ_DEFAULT,
 };
 #endif
 

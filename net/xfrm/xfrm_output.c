@@ -44,7 +44,7 @@ static int xfrm_skb_check_space(struct sk_buff *skb)
 
 static struct dst_entry *skb_dst_pop(struct sk_buff *skb)
 {
-	struct dst_entry *child = dst_clone(xfrm_dst_child(skb_dst(skb)));
+	struct dst_entry *child = dst_clone(skb_dst(skb)->child);
 
 	skb_dst_drop(skb);
 	return child;
@@ -66,7 +66,8 @@ static int xfrm_output_one(struct sk_buff *skb, int err)
 			goto error_nolock;
 		}
 
-		skb->mark = xfrm_smark_get(skb->mark, x);
+		if (x->props.output_mark)
+			skb->mark = x->props.output_mark;
 
 		err = x->outer_mode->output(x, skb);
 		if (err) {
@@ -100,10 +101,6 @@ static int xfrm_output_one(struct sk_buff *skb, int err)
 		spin_unlock_bh(&x->lock);
 
 		skb_dst_force(skb);
-		if (!skb_dst(skb)) {
-			XFRM_INC_STATS(net, LINUX_MIB_XFRMOUTERROR);
-			goto error_nolock;
-		}
 
 		if (xfrm_offload(skb)) {
 			x->type_offload->encap(x, skb);
@@ -193,7 +190,7 @@ static int xfrm_output_gso(struct net *net, struct sock *sk, struct sk_buff *skb
 		struct sk_buff *nskb = segs->next;
 		int err;
 
-		skb_mark_not_on_list(segs);
+		segs->next = NULL;
 		err = xfrm_output2(net, sk, segs);
 
 		if (unlikely(err)) {
@@ -288,9 +285,8 @@ void xfrm_local_error(struct sk_buff *skb, int mtu)
 		return;
 
 	afinfo = xfrm_state_get_afinfo(proto);
-	if (afinfo) {
+	if (afinfo)
 		afinfo->local_error(skb, mtu);
-		rcu_read_unlock();
-	}
+	rcu_read_unlock();
 }
 EXPORT_SYMBOL_GPL(xfrm_local_error);

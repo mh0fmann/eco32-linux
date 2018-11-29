@@ -1,6 +1,16 @@
-// SPDX-License-Identifier: GPL-2.0
 /*
+ *
  * Copyright (C) 2011 Google, Inc.
+ *
+ * This software is licensed under the terms of the GNU General Public
+ * License version 2, as published by the Free Software Foundation, and
+ * may be copied, distributed, and modified under those terms.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
  */
 
 #include <linux/kernel.h>
@@ -17,18 +27,19 @@ union ion_ioctl_arg {
 
 static int validate_ioctl_arg(unsigned int cmd, union ion_ioctl_arg *arg)
 {
+	int ret = 0;
+
 	switch (cmd) {
 	case ION_IOC_HEAP_QUERY:
-		if (arg->query.reserved0 ||
-		    arg->query.reserved1 ||
-		    arg->query.reserved2)
-			return -EINVAL;
+		ret = arg->query.reserved0 != 0;
+		ret |= arg->query.reserved1 != 0;
+		ret |= arg->query.reserved2 != 0;
 		break;
 	default:
 		break;
 	}
 
-	return 0;
+	return ret ? -EINVAL : 0;
 }
 
 /* fix up the cases where the ioctl direction bits are incorrect */
@@ -60,10 +71,8 @@ long ion_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 		return -EFAULT;
 
 	ret = validate_ioctl_arg(cmd, &data);
-	if (ret) {
-		pr_warn_once("%s: ioctl validate failed\n", __func__);
+	if (WARN_ON_ONCE(ret))
 		return ret;
-	}
 
 	if (!(dir & _IOC_WRITE))
 		memset(&data, 0, sizeof(data));

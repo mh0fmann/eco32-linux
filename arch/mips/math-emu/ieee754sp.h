@@ -69,7 +69,7 @@ static inline int ieee754sp_finite(union ieee754sp x)
 #define SPDNORMY	SPDNORMx(ym, ye)
 #define SPDNORMZ	SPDNORMx(zm, ze)
 
-static inline union ieee754sp buildsp(int s, int bx, unsigned int m)
+static inline union ieee754sp buildsp(int s, int bx, unsigned m)
 {
 	union ieee754sp r;
 

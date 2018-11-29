@@ -1,10 +1,13 @@
-// SPDX-License-Identifier: GPL-2.0
 /*
  * PCIe Native PME support
  *
  * Copyright (C) 2007 - 2009 Intel Corp
  * Copyright (C) 2007 - 2009 Shaohua Li <shaohua.li@intel.com>
  * Copyright (C) 2009 Rafael J. Wysocki <rjw@sisk.pl>, Novell Inc.
+ *
+ * This file is subject to the terms and conditions of the GNU General Public
+ * License V2.  See the file "COPYING" in the main directory of this archive
+ * for more details.
  */
 
 #include <linux/pci.h>
@@ -14,6 +17,7 @@
 #include <linux/init.h>
 #include <linux/interrupt.h>
 #include <linux/device.h>
+#include <linux/pcieport_if.h>
 #include <linux/pm_runtime.h>
 
 #include "../pci.h"
@@ -194,14 +198,14 @@ static void pcie_pme_handle_request(struct pci_dev *port, u16 req_id)
 		 * assuming that the PME was reported by a PCIe-PCI bridge that
 		 * used devfn different from zero.
 		 */
-		pci_dbg(port, "PME interrupt generated for non-existent device %02x:%02x.%d\n",
+		dev_dbg(&port->dev, "PME interrupt generated for non-existent device %02x:%02x.%d\n",
 			busnr, PCI_SLOT(devfn), PCI_FUNC(devfn));
 		found = pcie_pme_from_pci_bridge(bus, 0);
 	}
 
  out:
 	if (!found)
-		pci_dbg(port, "Spurious native PME interrupt!\n");
+		dev_dbg(&port->dev, "Spurious native PME interrupt!\n");
 }
 
 /**
@@ -222,9 +226,6 @@ static void pcie_pme_work_fn(struct work_struct *work)
 			break;
 
 		pcie_capability_read_dword(port, PCI_EXP_RTSTA, &rtsta);
-		if (rtsta == (u32) ~0)
-			break;
-
 		if (rtsta & PCI_EXP_RTSTA_PME) {
 			/*
 			 * Clear PME status of the port.  If there are other
@@ -272,7 +273,7 @@ static irqreturn_t pcie_pme_irq(int irq, void *context)
 	spin_lock_irqsave(&data->lock, flags);
 	pcie_capability_read_dword(port, PCI_EXP_RTSTA, &rtsta);
 
-	if (rtsta == (u32) ~0 || !(rtsta & PCI_EXP_RTSTA_PME)) {
+	if (!(rtsta & PCI_EXP_RTSTA_PME)) {
 		spin_unlock_irqrestore(&data->lock, flags);
 		return IRQ_NONE;
 	}
@@ -341,7 +342,7 @@ static int pcie_pme_probe(struct pcie_device *srv)
 		return ret;
 	}
 
-	pci_info(port, "Signaling PME with IRQ %d\n", srv->irq);
+	dev_info(&port->dev, "Signaling PME with IRQ %d\n", srv->irq);
 
 	pcie_pme_mark_devices(port);
 	pcie_pme_interrupt_enable(port, true);
@@ -432,31 +433,6 @@ static void pcie_pme_remove(struct pcie_device *srv)
 	kfree(get_service_data(srv));
 }
 
-static int pcie_pme_runtime_suspend(struct pcie_device *srv)
-{
-	struct pcie_pme_service_data *data = get_service_data(srv);
-
-	spin_lock_irq(&data->lock);
-	pcie_pme_interrupt_enable(srv->port, false);
-	pcie_clear_root_pme_status(srv->port);
-	data->noirq = true;
-	spin_unlock_irq(&data->lock);
-
-	return 0;
-}
-
-static int pcie_pme_runtime_resume(struct pcie_device *srv)
-{
-	struct pcie_pme_service_data *data = get_service_data(srv);
-
-	spin_lock_irq(&data->lock);
-	pcie_pme_interrupt_enable(srv->port, true);
-	data->noirq = false;
-	spin_unlock_irq(&data->lock);
-
-	return 0;
-}
-
 static struct pcie_port_service_driver pcie_pme_driver = {
 	.name		= "pcie_pme",
 	.port_type	= PCI_EXP_TYPE_ROOT_PORT,
@@ -464,8 +440,6 @@ static struct pcie_port_service_driver pcie_pme_driver = {
 
 	.probe		= pcie_pme_probe,
 	.suspend	= pcie_pme_suspend,
-	.runtime_suspend = pcie_pme_runtime_suspend,
-	.runtime_resume	= pcie_pme_runtime_resume,
 	.resume		= pcie_pme_resume,
 	.remove		= pcie_pme_remove,
 };
@@ -473,7 +447,8 @@ static struct pcie_port_service_driver pcie_pme_driver = {
 /**
  * pcie_pme_service_init - Register the PCIe PME service driver.
  */
-int __init pcie_pme_init(void)
+static int __init pcie_pme_service_init(void)
 {
 	return pcie_port_service_register(&pcie_pme_driver);
 }
+device_initcall(pcie_pme_service_init);

@@ -419,8 +419,7 @@ static int cpia_usb_transferCmd(struct gspca_dev *gspca_dev, u8 *command)
 		pipe = usb_sndctrlpipe(gspca_dev->dev, 0);
 		requesttype = USB_TYPE_VENDOR | USB_RECIP_DEVICE;
 	} else {
-		gspca_err(gspca_dev, "Unexpected first byte of command: %x\n",
-			  command[0]);
+		PERR("Unexpected first byte of command: %x", command[0]);
 		return -EINVAL;
 	}
 
@@ -543,7 +542,7 @@ static int do_command(struct gspca_dev *gspca_dev, u16 command,
 			input_report_key(gspca_dev->input_dev, KEY_CAMERA, a);
 			input_sync(gspca_dev->input_dev);
 #endif
-			sd->params.qx3.button = a;
+	        	sd->params.qx3.button = a;
 		}
 		if (sd->params.qx3.button) {
 			/* button pressed - unlock the latch */
@@ -701,11 +700,11 @@ static void reset_camera_params(struct gspca_dev *gspca_dev)
 
 static void printstatus(struct gspca_dev *gspca_dev, struct cam_params *params)
 {
-	gspca_dbg(gspca_dev, D_PROBE, "status: %02x %02x %02x %02x %02x %02x %02x %02x\n",
-		  params->status.systemState, params->status.grabState,
-		  params->status.streamState, params->status.fatalError,
-		  params->status.cmdError, params->status.debugFlags,
-		  params->status.vpStatus, params->status.errorCode);
+	PDEBUG(D_PROBE, "status: %02x %02x %02x %02x %02x %02x %02x %02x",
+	       params->status.systemState, params->status.grabState,
+	       params->status.streamState, params->status.fatalError,
+	       params->status.cmdError, params->status.debugFlags,
+	       params->status.vpStatus, params->status.errorCode);
 }
 
 static int goto_low_power(struct gspca_dev *gspca_dev)
@@ -723,14 +722,14 @@ static int goto_low_power(struct gspca_dev *gspca_dev)
 
 	if (sd->params.status.systemState != LO_POWER_STATE) {
 		if (sd->params.status.systemState != WARM_BOOT_STATE) {
-			gspca_err(gspca_dev, "unexpected state after lo power cmd: %02x\n",
-				  sd->params.status.systemState);
+			PERR("unexpected state after lo power cmd: %02x",
+			     sd->params.status.systemState);
 			printstatus(gspca_dev, &sd->params);
 		}
 		return -EIO;
 	}
 
-	gspca_dbg(gspca_dev, D_CONF, "camera now in LOW power state\n");
+	PDEBUG(D_CONF, "camera now in LOW power state");
 	return 0;
 }
 
@@ -753,13 +752,13 @@ static int goto_high_power(struct gspca_dev *gspca_dev)
 		return ret;
 
 	if (sd->params.status.systemState != HI_POWER_STATE) {
-		gspca_err(gspca_dev, "unexpected state after hi power cmd: %02x\n",
-			  sd->params.status.systemState);
+		PERR("unexpected state after hi power cmd: %02x",
+		     sd->params.status.systemState);
 		printstatus(gspca_dev, &sd->params);
 		return -EIO;
 	}
 
-	gspca_dbg(gspca_dev, D_CONF, "camera now in HIGH power state\n");
+	PDEBUG(D_CONF, "camera now in HIGH power state");
 	return 0;
 }
 
@@ -1302,7 +1301,7 @@ static void monitor_exposure(struct gspca_dev *gspca_dev)
 			sd->params.exposure.coarseExpHi = new_exposure >> 8;
 			setexp = 1;
 			sd->exposure_status = EXPOSURE_NORMAL;
-			gspca_dbg(gspca_dev, D_CONF, "Automatically decreasing sensor_fps\n");
+			PDEBUG(D_CONF, "Automatically decreasing sensor_fps");
 
 		} else if ((sd->exposure_status == EXPOSURE_VERY_LIGHT ||
 			    sd->exposure_status == EXPOSURE_LIGHT) &&
@@ -1331,7 +1330,7 @@ static void monitor_exposure(struct gspca_dev *gspca_dev)
 			sd->params.exposure.coarseExpHi = new_exposure >> 8;
 			setexp = 1;
 			sd->exposure_status = EXPOSURE_NORMAL;
-			gspca_dbg(gspca_dev, D_CONF, "Automatically increasing sensor_fps\n");
+			PDEBUG(D_CONF, "Automatically increasing sensor_fps");
 		}
 	} else {
 		/* Flicker control off */
@@ -1349,7 +1348,7 @@ static void monitor_exposure(struct gspca_dev *gspca_dev)
 				setexp = 1;
 			}
 			sd->exposure_status = EXPOSURE_NORMAL;
-			gspca_dbg(gspca_dev, D_CONF, "Automatically decreasing sensor_fps\n");
+			PDEBUG(D_CONF, "Automatically decreasing sensor_fps");
 
 		} else if ((sd->exposure_status == EXPOSURE_VERY_LIGHT ||
 			    sd->exposure_status == EXPOSURE_LIGHT) &&
@@ -1366,7 +1365,7 @@ static void monitor_exposure(struct gspca_dev *gspca_dev)
 				setexp = 1;
 			}
 			sd->exposure_status = EXPOSURE_NORMAL;
-			gspca_dbg(gspca_dev, D_CONF, "Automatically increasing sensor_fps\n");
+			PDEBUG(D_CONF, "Automatically increasing sensor_fps");
 		}
 	}
 
@@ -1434,8 +1433,8 @@ static int sd_config(struct gspca_dev *gspca_dev,
 	sd->mainsFreq = FREQ_DEF == V4L2_CID_POWER_LINE_FREQUENCY_60HZ;
 	reset_camera_params(gspca_dev);
 
-	gspca_dbg(gspca_dev, D_PROBE, "cpia CPiA camera detected (vid/pid 0x%04X:0x%04X)\n",
-		  id->idVendor, id->idProduct);
+	PDEBUG(D_PROBE, "cpia CPiA camera detected (vid/pid 0x%04X:0x%04X)",
+	       id->idVendor, id->idProduct);
 
 	cam = &gspca_dev->cam;
 	cam->cam_mode = mode;
@@ -1446,8 +1445,8 @@ static int sd_config(struct gspca_dev *gspca_dev,
 	sd->params.version.firmwareVersion = 0;
 	get_version_information(gspca_dev);
 	if (sd->params.version.firmwareVersion != 1) {
-		gspca_err(gspca_dev, "only firmware version 1 is supported (got: %d)\n",
-			  sd->params.version.firmwareVersion);
+		PERR("only firmware version 1 is supported (got: %d)",
+		     sd->params.version.firmwareVersion);
 		return -ENODEV;
 	}
 
@@ -1472,8 +1471,8 @@ static int sd_start(struct gspca_dev *gspca_dev)
 	/* Start the camera in low power mode */
 	if (goto_low_power(gspca_dev)) {
 		if (sd->params.status.systemState != WARM_BOOT_STATE) {
-			gspca_err(gspca_dev, "unexpected systemstate: %02x\n",
-				  sd->params.status.systemState);
+			PERR("unexpected systemstate: %02x",
+			     sd->params.status.systemState);
 			printstatus(gspca_dev, &sd->params);
 			return -ENODEV;
 		}
@@ -1520,9 +1519,8 @@ static int sd_start(struct gspca_dev *gspca_dev)
 		return ret;
 
 	if (sd->params.status.fatalError) {
-		gspca_err(gspca_dev, "fatal_error: %04x, vp_status: %04x\n",
-			  sd->params.status.fatalError,
-			  sd->params.status.vpStatus);
+		PERR("fatal_error: %04x, vp_status: %04x",
+		     sd->params.status.fatalError, sd->params.status.vpStatus);
 		return -EIO;
 	}
 
@@ -1669,18 +1667,18 @@ static int sd_init(struct gspca_dev *gspca_dev)
 
 	sd_stopN(gspca_dev);
 
-	gspca_dbg(gspca_dev, D_PROBE, "CPIA Version:             %d.%02d (%d.%d)\n",
-		  sd->params.version.firmwareVersion,
-		  sd->params.version.firmwareRevision,
-		  sd->params.version.vcVersion,
-		  sd->params.version.vcRevision);
-	gspca_dbg(gspca_dev, D_PROBE, "CPIA PnP-ID:              %04x:%04x:%04x",
-		  sd->params.pnpID.vendor, sd->params.pnpID.product,
-		  sd->params.pnpID.deviceRevision);
-	gspca_dbg(gspca_dev, D_PROBE, "VP-Version:               %d.%d %04x",
-		  sd->params.vpVersion.vpVersion,
-		  sd->params.vpVersion.vpRevision,
-		  sd->params.vpVersion.cameraHeadID);
+	PDEBUG(D_PROBE, "CPIA Version:             %d.%02d (%d.%d)",
+			sd->params.version.firmwareVersion,
+			sd->params.version.firmwareRevision,
+			sd->params.version.vcVersion,
+			sd->params.version.vcRevision);
+	PDEBUG(D_PROBE, "CPIA PnP-ID:              %04x:%04x:%04x",
+			sd->params.pnpID.vendor, sd->params.pnpID.product,
+			sd->params.pnpID.deviceRevision);
+	PDEBUG(D_PROBE, "VP-Version:               %d.%d %04x",
+			sd->params.vpVersion.vpVersion,
+			sd->params.vpVersion.vpRevision,
+			sd->params.vpVersion.cameraHeadID);
 
 	return 0;
 }

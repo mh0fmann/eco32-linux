@@ -58,9 +58,8 @@ static int mthca_update_rate(struct mthca_dev *dev, u8 port_num)
 
 	ret = ib_query_port(&dev->ib_dev, port_num, tprops);
 	if (ret) {
-		dev_warn(&dev->ib_dev.dev,
-			 "ib_query_port failed (%d) forport %d\n", ret,
-			 port_num);
+		printk(KERN_WARNING "ib_query_port failed (%d) for %s port %d\n",
+		       ret, dev->ib_dev.name, port_num);
 		goto out;
 	}
 

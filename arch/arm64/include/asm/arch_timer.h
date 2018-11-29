@@ -52,7 +52,6 @@ struct arch_timer_erratum_workaround {
 	const char *desc;
 	u32 (*read_cntp_tval_el0)(void);
 	u32 (*read_cntv_tval_el0)(void);
-	u64 (*read_cntpct_el0)(void);
 	u64 (*read_cntvct_el0)(void);
 	int (*set_next_event_phys)(unsigned long, struct clock_event_device *);
 	int (*set_next_event_virt)(unsigned long, struct clock_event_device *);
@@ -145,13 +144,15 @@ static inline u32 arch_timer_get_cntkctl(void)
 static inline void arch_timer_set_cntkctl(u32 cntkctl)
 {
 	write_sysreg(cntkctl, cntkctl_el1);
-	isb();
 }
 
 static inline u64 arch_counter_get_cntpct(void)
 {
-	isb();
-	return arch_timer_reg_read_stable(cntpct_el0);
+	/*
+	 * AArch64 kernel and user space mandate the use of CNTVCT.
+	 */
+	BUG();
+	return 0;
 }
 
 static inline u64 arch_counter_get_cntvct(void)

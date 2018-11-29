@@ -1,4 +1,3 @@
-// SPDX-License-Identifier: GPL-2.0+
 /* speakup.c
  * review functions for the speakup screen review package.
  * originally written by: Kirk Reiser and Andy Berdan.
@@ -7,6 +6,16 @@
  *
  ** Copyright (C) 1998  Kirk Reiser.
  *  Copyright (C) 2003  David Borowski.
+ *
+ *  This program is free software; you can redistribute it and/or modify
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation; either version 2 of the License, or
+ *  (at your option) any later version.
+ *
+ *  This program is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
  */
 
 #include <linux/kernel.h>
@@ -67,8 +76,6 @@ short spk_punc_mask;
 int spk_punc_level, spk_reading_punc;
 char spk_str_caps_start[MAXVARLEN + 1] = "\0";
 char spk_str_caps_stop[MAXVARLEN + 1] = "\0";
-char spk_str_pause[MAXVARLEN + 1] = "\0";
-bool spk_paused;
 const struct st_bits_data spk_punc_info[] = {
 	{"none", "", 0},
 	{"some", "/$%&@", SOME},
@@ -419,7 +426,7 @@ static void announce_edge(struct vc_data *vc, int msg_id)
 		bleep(spk_y);
 	if ((spk_bleeps & 2) && (msg_id < edge_quiet))
 		synth_printf("%s\n",
-			     spk_msg_get(MSG_EDGE_MSGS_START + msg_id - 1));
+			spk_msg_get(MSG_EDGE_MSGS_START + msg_id - 1));
 }
 
 static void speak_char(u16 ch)
@@ -440,7 +447,7 @@ static void speak_char(u16 ch)
 
 	cp = spk_characters[ch];
 	if (!cp) {
-		pr_info("%s: cp == NULL!\n", __func__);
+		pr_info("speak_char: cp == NULL!\n");
 		return;
 	}
 	if (IS_CHAR(ch, B_CAP)) {
@@ -451,9 +458,8 @@ static void speak_char(u16 ch)
 		if (*cp == '^') {
 			cp++;
 			synth_printf(" %s%s ", spk_msg_get(MSG_CTRL), cp);
-		} else {
+		} else
 			synth_printf(" %s ", cp);
-		}
 	}
 }
 
@@ -564,7 +570,7 @@ static u_long get_word(struct vc_data *vc)
 		   get_char(vc, (u_short *)&tmp_pos + 1, &temp) > SPACE) {
 		tmp_pos += 2;
 		tmpx++;
-	} else {
+	} else
 		while (tmpx > 0) {
 			ch = get_char(vc, (u_short *)tmp_pos - 1, &temp);
 			if ((ch == SPACE || ch == 0 ||
@@ -574,7 +580,6 @@ static u_long get_word(struct vc_data *vc)
 			tmp_pos -= 2;
 			tmpx--;
 		}
-	}
 	attr_ch = get_char(vc, (u_short *)tmp_pos, &spk_attr);
 	buf[cnt++] = attr_ch;
 	while (tmpx < vc->vc_cols - 1) {
@@ -1159,8 +1164,8 @@ static void spkup_write(const u16 *in_buf, int count)
 static const int NUM_CTL_LABELS = (MSG_CTL_END - MSG_CTL_START + 1);
 
 static void read_all_doc(struct vc_data *vc);
-static void cursor_done(struct timer_list *unused);
-static DEFINE_TIMER(cursor_timer, cursor_done);
+static void cursor_done(u_long data);
+static DEFINE_TIMER(cursor_timer, cursor_done, 0, 0);
 
 static void do_handle_shift(struct vc_data *vc, u_char value, char up_flag)
 {
@@ -1677,7 +1682,7 @@ static int speak_highlight(struct vc_data *vc)
 	return 0;
 }
 
-static void cursor_done(struct timer_list *unused)
+static void cursor_done(u_long data)
 {
 	struct vc_data *vc = vc_cons[cursor_con].d;
 	unsigned long flags;
@@ -1784,10 +1789,6 @@ static void speakup_con_update(struct vc_data *vc)
 		/* Speakup output, discard */
 		return;
 	speakup_date(vc);
-	if (vc->vc_mode == KD_GRAPHICS && !spk_paused && spk_str_pause[0]) {
-		synth_printf("%s", spk_str_pause);
-		spk_paused = true;
-	}
 	spin_unlock_irqrestore(&speakup_info.spinlock, flags);
 }
 
@@ -2100,7 +2101,7 @@ speakup_key(struct vc_data *vc, int shift_state, int keycode, u_short keysym,
 	u_char shift_info, offset;
 	int ret = 0;
 
-	if (!synth)
+	if (synth == NULL)
 		return 0;
 
 	spin_lock_irqsave(&speakup_info.spinlock, flags);

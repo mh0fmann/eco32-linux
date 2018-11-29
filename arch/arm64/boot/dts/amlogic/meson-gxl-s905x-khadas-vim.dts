@@ -1,6 +1,7 @@
-// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
 /*
  * Copyright (c) 2017 Martin Blumenstingl <martin.blumenstingl@googlemail.com>.
+ *
+ * SPDX-License-Identifier: (GPL-2.0+ OR MIT)
  */
 
 /dts-v1/;
@@ -28,7 +29,6 @@
 
 	aliases {
 		serial2 = &uart_AO_B;
-		ethernet0 = &ethmac;
 	};
 
 	gpio-keys-polled {
@@ -122,9 +122,7 @@
 			  "J9 Header Pin33",
 			  "IR In",
 			  "HDMI CEC",
-			  "SYS LED",
-			  /* GPIO_TEST_N */
-			  "";
+			  "SYS LED";
 };
 
 &pinctrl_periphs {
@@ -165,7 +163,9 @@
 			  "WIFI 32K", "Bluetooth Enable",
 			  "Bluetooth WAKE HOST",
 			  /* Bank GPIOCLK */
-			  "", "J9 Header Pin39";
+			  "", "J9 Header Pin39",
+			  /* GPIO_TEST_N */
+			  "";
 };
 
 &pwm_AO_ab {

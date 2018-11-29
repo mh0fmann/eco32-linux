@@ -95,8 +95,8 @@ struct mon_bin_hdr {
 	unsigned short busnum;	/* Bus number */
 	char flag_setup;
 	char flag_data;
-	s64 ts_sec;		/* ktime_get_real_ts64 */
-	s32 ts_usec;		/* ktime_get_real_ts64 */
+	s64 ts_sec;		/* getnstimeofday64 */
+	s32 ts_usec;		/* getnstimeofday64 */
 	int status;
 	unsigned int len_urb;	/* Length of data (submitted or actual) */
 	unsigned int len_cap;	/* Delivered length */
@@ -497,7 +497,7 @@ static void mon_bin_event(struct mon_reader_bin *rp, struct urb *urb,
 	struct mon_bin_hdr *ep;
 	char data_tag = 0;
 
-	ktime_get_real_ts64(&ts);
+	getnstimeofday64(&ts);
 
 	spin_lock_irqsave(&rp->b_lock, flags);
 
@@ -637,7 +637,7 @@ static void mon_bin_error(void *data, struct urb *urb, int error)
 	unsigned int offset;
 	struct mon_bin_hdr *ep;
 
-	ktime_get_real_ts64(&ts);
+	getnstimeofday64(&ts);
 
 	spin_lock_irqsave(&rp->b_lock, flags);
 
@@ -1004,9 +1004,7 @@ static long mon_bin_ioctl(struct file *file, unsigned int cmd, unsigned long arg
 		break;
 
 	case MON_IOCQ_RING_SIZE:
-		mutex_lock(&rp->fetch_lock);
 		ret = rp->b_size;
-		mutex_unlock(&rp->fetch_lock);
 		break;
 
 	case MON_IOCT_RING_SIZE:
@@ -1024,8 +1022,7 @@ static long mon_bin_ioctl(struct file *file, unsigned int cmd, unsigned long arg
 			return -EINVAL;
 
 		size = CHUNK_ALIGN(arg);
-		vec = kcalloc(size / CHUNK_SIZE, sizeof(struct mon_pgmap),
-			      GFP_KERNEL);
+		vec = kzalloc(sizeof(struct mon_pgmap) * (size / CHUNK_SIZE), GFP_KERNEL);
 		if (vec == NULL) {
 			ret = -ENOMEM;
 			break;
@@ -1192,11 +1189,11 @@ static long mon_bin_compat_ioctl(struct file *file,
 }
 #endif /* CONFIG_COMPAT */
 
-static __poll_t
+static unsigned int
 mon_bin_poll(struct file *file, struct poll_table_struct *wait)
 {
 	struct mon_reader_bin *rp = file->private_data;
-	__poll_t mask = 0;
+	unsigned int mask = 0;
 	unsigned long flags;
 
 	if (file->f_mode & FMODE_READ)
@@ -1204,7 +1201,7 @@ mon_bin_poll(struct file *file, struct poll_table_struct *wait)
 
 	spin_lock_irqsave(&rp->b_lock, flags);
 	if (!MON_RING_EMPTY(rp))
-		mask |= EPOLLIN | EPOLLRDNORM;    /* readable */
+		mask |= POLLIN | POLLRDNORM;    /* readable */
 	spin_unlock_irqrestore(&rp->b_lock, flags);
 	return mask;
 }
@@ -1228,22 +1225,18 @@ static void mon_bin_vma_close(struct vm_area_struct *vma)
 /*
  * Map ring pages to user space.
  */
-static vm_fault_t mon_bin_vma_fault(struct vm_fault *vmf)
+static int mon_bin_vma_fault(struct vm_fault *vmf)
 {
 	struct mon_reader_bin *rp = vmf->vma->vm_private_data;
 	unsigned long offset, chunk_idx;
 	struct page *pageptr;
 
-	mutex_lock(&rp->fetch_lock);
 	offset = vmf->pgoff << PAGE_SHIFT;
-	if (offset >= rp->b_size) {
-		mutex_unlock(&rp->fetch_lock);
+	if (offset >= rp->b_size)
 		return VM_FAULT_SIGBUS;
-	}
 	chunk_idx = offset / CHUNK_SIZE;
 	pageptr = rp->b_vec[chunk_idx].pg;
 	get_page(pageptr);
-	mutex_unlock(&rp->fetch_lock);
 	vmf->page = pageptr;
 	return 0;
 }

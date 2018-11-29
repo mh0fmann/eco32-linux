@@ -47,19 +47,18 @@ MODULE_PARM_DESC(full_eeprom, "Allow access to full 128B EEPROM (dangerous)");
 
 static void solo_set_time(struct solo_dev *solo_dev)
 {
-	struct timespec64 ts;
+	struct timespec ts;
 
-	ktime_get_ts64(&ts);
+	ktime_get_ts(&ts);
 
-	/* no overflow because we use monotonic timestamps */
-	solo_reg_write(solo_dev, SOLO_TIMER_SEC, (u32)ts.tv_sec);
-	solo_reg_write(solo_dev, SOLO_TIMER_USEC, (u32)ts.tv_nsec / NSEC_PER_USEC);
+	solo_reg_write(solo_dev, SOLO_TIMER_SEC, ts.tv_sec);
+	solo_reg_write(solo_dev, SOLO_TIMER_USEC, ts.tv_nsec / NSEC_PER_USEC);
 }
 
 static void solo_timer_sync(struct solo_dev *solo_dev)
 {
 	u32 sec, usec;
-	struct timespec64 ts;
+	struct timespec ts;
 	long diff;
 
 	if (solo_dev->type != SOLO_DEV_6110)
@@ -73,11 +72,11 @@ static void solo_timer_sync(struct solo_dev *solo_dev)
 	sec = solo_reg_read(solo_dev, SOLO_TIMER_SEC);
 	usec = solo_reg_read(solo_dev, SOLO_TIMER_USEC);
 
-	ktime_get_ts64(&ts);
+	ktime_get_ts(&ts);
 
-	diff = (s32)ts.tv_sec - (s32)sec;
+	diff = (long)ts.tv_sec - (long)sec;
 	diff = (diff * 1000000)
-		+ ((s32)(ts.tv_nsec / NSEC_PER_USEC) - (s32)usec);
+		+ ((long)(ts.tv_nsec / NSEC_PER_USEC) - (long)usec);
 
 	if (diff > 1000 || diff < -1000) {
 		solo_set_time(solo_dev);

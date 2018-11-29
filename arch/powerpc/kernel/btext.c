@@ -157,20 +157,20 @@ void btext_map(void)
 
 	/* By default, we are no longer mapped */
 	boot_text_mapped = 0;
-	if (!dispDeviceBase)
+	if (dispDeviceBase == 0)
 		return;
 	base = ((unsigned long) dispDeviceBase) & 0xFFFFF000UL;
 	offset = ((unsigned long) dispDeviceBase) - base;
 	size = dispDeviceRowBytes * dispDeviceRect[3] + offset
 		+ dispDeviceRect[0];
-	vbase = ioremap_wc(base, size);
-	if (!vbase)
+	vbase = __ioremap(base, size, pgprot_val(pgprot_noncached_wc(__pgprot(0))));
+	if (vbase == 0)
 		return;
 	logicalDisplayBase = vbase + offset;
 	boot_text_mapped = 1;
 }
 
-static int btext_initialize(struct device_node *np)
+int btext_initialize(struct device_node *np)
 {
 	unsigned int width, height, depth, pitch;
 	unsigned long address = 0;
@@ -270,7 +270,7 @@ static unsigned char * calc_base(int x, int y)
 	unsigned char *base;
 
 	base = logicalDisplayBase;
-	if (!base)
+	if (base == 0)
 		base = dispDeviceBase;
 	base += (x + dispDeviceRect[0]) * (dispDeviceDepth >> 3);
 	base += (y + dispDeviceRect[1]) * dispDeviceRowBytes;
@@ -281,7 +281,7 @@ static unsigned char * calc_base(int x, int y)
 void btext_update_display(unsigned long phys, int width, int height,
 			  int depth, int pitch)
 {
-	if (!dispDeviceBase)
+	if (dispDeviceBase == 0)
 		return;
 
 	/* check it's the same frame buffer (within 256MB) */

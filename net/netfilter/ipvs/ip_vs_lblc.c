@@ -48,7 +48,6 @@
 #include <linux/kernel.h>
 #include <linux/skbuff.h>
 #include <linux/jiffies.h>
-#include <linux/hash.h>
 
 /* for sysctl */
 #include <linux/fs.h>
@@ -107,7 +106,6 @@ struct ip_vs_lblc_table {
 	struct rcu_head		rcu_head;
 	struct hlist_head	bucket[IP_VS_LBLC_TAB_SIZE];  /* hash bucket */
 	struct timer_list       periodic_timer; /* collect stale entries */
-	struct ip_vs_service	*svc;		/* pointer back to service */
 	atomic_t                entries;        /* number of entries */
 	int                     max_size;       /* maximum size of entries */
 	int                     rover;          /* rover for expire check */
@@ -161,7 +159,7 @@ ip_vs_lblc_hashkey(int af, const union nf_inet_addr *addr)
 		addr_fold = addr->ip6[0]^addr->ip6[1]^
 			    addr->ip6[2]^addr->ip6[3];
 #endif
-	return hash_32(ntohl(addr_fold), IP_VS_LBLC_TAB_BITS);
+	return (ntohl(addr_fold)*2654435761UL) & IP_VS_LBLC_TAB_MASK;
 }
 
 
@@ -239,7 +237,7 @@ static void ip_vs_lblc_flush(struct ip_vs_service *svc)
 	int i;
 
 	spin_lock_bh(&svc->sched_lock);
-	tbl->dead = true;
+	tbl->dead = 1;
 	for (i = 0; i < IP_VS_LBLC_TAB_SIZE; i++) {
 		hlist_for_each_entry_safe(en, next, &tbl->bucket[i], list) {
 			ip_vs_lblc_del(en);
@@ -296,10 +294,10 @@ static inline void ip_vs_lblc_full_check(struct ip_vs_service *svc)
  *             of the table.
  *      The full expiration check is for this purpose now.
  */
-static void ip_vs_lblc_check_expire(struct timer_list *t)
+static void ip_vs_lblc_check_expire(unsigned long data)
 {
-	struct ip_vs_lblc_table *tbl = from_timer(tbl, t, periodic_timer);
-	struct ip_vs_service *svc = tbl->svc;
+	struct ip_vs_service *svc = (struct ip_vs_service *) data;
+	struct ip_vs_lblc_table *tbl = svc->sched_data;
 	unsigned long now = jiffies;
 	int goal;
 	int i, j;
@@ -370,14 +368,13 @@ static int ip_vs_lblc_init_svc(struct ip_vs_service *svc)
 	tbl->max_size = IP_VS_LBLC_TAB_SIZE*16;
 	tbl->rover = 0;
 	tbl->counter = 1;
-	tbl->dead = false;
-	tbl->svc = svc;
-	atomic_set(&tbl->entries, 0);
+	tbl->dead = 0;
 
 	/*
 	 *    Hook periodic timer for garbage collection
 	 */
-	timer_setup(&tbl->periodic_timer, ip_vs_lblc_check_expire, 0);
+	setup_timer(&tbl->periodic_timer, ip_vs_lblc_check_expire,
+			(unsigned long)svc);
 	mod_timer(&tbl->periodic_timer, jiffies + CHECK_EXPIRE_INTERVAL);
 
 	return 0;

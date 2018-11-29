@@ -165,7 +165,7 @@ static int buffer_init(struct vb2_buffer *vb2)
 	return 0;
 }
 
-const struct vb2_ops saa7134_vbi_qops = {
+struct vb2_ops saa7134_vbi_qops = {
 	.queue_setup	= queue_setup,
 	.buf_init	= buffer_init,
 	.buf_prepare	= buffer_prepare,
@@ -181,7 +181,8 @@ const struct vb2_ops saa7134_vbi_qops = {
 int saa7134_vbi_init1(struct saa7134_dev *dev)
 {
 	INIT_LIST_HEAD(&dev->vbi_q.queue);
-	timer_setup(&dev->vbi_q.timeout, saa7134_buffer_timeout, 0);
+	setup_timer(&dev->vbi_q.timeout, saa7134_buffer_timeout,
+		    (unsigned long)(&dev->vbi_q));
 	dev->vbi_q.dev              = dev;
 
 	if (vbibufs < 2)

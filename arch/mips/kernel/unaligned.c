@@ -130,7 +130,7 @@ do {                                                        \
 			: "r" (addr), "i" (-EFAULT));       \
 } while(0)
 
-#ifdef CONFIG_CPU_HAS_LOAD_STORE_LR
+#ifndef CONFIG_CPU_MIPSR6
 #define     _LoadW(addr, value, res, type)   \
 do {                                                        \
 		__asm__ __volatile__ (                      \
@@ -151,8 +151,8 @@ do {                                                        \
 			: "r" (addr), "i" (-EFAULT));       \
 } while(0)
 
-#else /* !CONFIG_CPU_HAS_LOAD_STORE_LR */
-/* For CPUs without lwl instruction */
+#else
+/* MIPSR6 has no lwl instruction */
 #define     _LoadW(addr, value, res, type) \
 do {                                                        \
 		__asm__ __volatile__ (			    \
@@ -186,7 +186,7 @@ do {                                                        \
 			: "r" (addr), "i" (-EFAULT));       \
 } while(0)
 
-#endif /* !CONFIG_CPU_HAS_LOAD_STORE_LR */
+#endif /* CONFIG_CPU_MIPSR6 */
 
 #define     _LoadHWU(addr, value, res, type) \
 do {                                                        \
@@ -212,7 +212,7 @@ do {                                                        \
 			: "r" (addr), "i" (-EFAULT));       \
 } while(0)
 
-#ifdef CONFIG_CPU_HAS_LOAD_STORE_LR
+#ifndef CONFIG_CPU_MIPSR6
 #define     _LoadWU(addr, value, res, type)  \
 do {                                                        \
 		__asm__ __volatile__ (                      \
@@ -255,8 +255,8 @@ do {                                                        \
 			: "r" (addr), "i" (-EFAULT));       \
 } while(0)
 
-#else /* !CONFIG_CPU_HAS_LOAD_STORE_LR */
-/* For CPUs without lwl and ldl instructions */
+#else
+/* MIPSR6 has not lwl and ldl instructions */
 #define	    _LoadWU(addr, value, res, type) \
 do {                                                        \
 		__asm__ __volatile__ (			    \
@@ -339,7 +339,7 @@ do {                                                        \
 			: "r" (addr), "i" (-EFAULT));       \
 } while(0)
 
-#endif /* !CONFIG_CPU_HAS_LOAD_STORE_LR */
+#endif /* CONFIG_CPU_MIPSR6 */
 
 
 #define     _StoreHW(addr, value, res, type) \
@@ -365,7 +365,7 @@ do {                                                        \
 			: "r" (value), "r" (addr), "i" (-EFAULT));\
 } while(0)
 
-#ifdef CONFIG_CPU_HAS_LOAD_STORE_LR
+#ifndef CONFIG_CPU_MIPSR6
 #define     _StoreW(addr, value, res, type)  \
 do {                                                        \
 		__asm__ __volatile__ (                      \
@@ -406,7 +406,8 @@ do {                                                        \
 		: "r" (value), "r" (addr), "i" (-EFAULT));  \
 } while(0)
 
-#else /* !CONFIG_CPU_HAS_LOAD_STORE_LR */
+#else
+/* MIPSR6 has no swl and sdl instructions */
 #define     _StoreW(addr, value, res, type)  \
 do {                                                        \
 		__asm__ __volatile__ (                      \
@@ -482,7 +483,7 @@ do {                                                        \
 		: "memory");                                \
 } while(0)
 
-#endif /* !CONFIG_CPU_HAS_LOAD_STORE_LR */
+#endif /* CONFIG_CPU_MIPSR6 */
 
 #else /* __BIG_ENDIAN */
 
@@ -508,7 +509,7 @@ do {                                                        \
 			: "r" (addr), "i" (-EFAULT));       \
 } while(0)
 
-#ifdef CONFIG_CPU_HAS_LOAD_STORE_LR
+#ifndef CONFIG_CPU_MIPSR6
 #define     _LoadW(addr, value, res, type)   \
 do {                                                        \
 		__asm__ __volatile__ (                      \
@@ -529,8 +530,8 @@ do {                                                        \
 			: "r" (addr), "i" (-EFAULT));       \
 } while(0)
 
-#else  /* !CONFIG_CPU_HAS_LOAD_STORE_LR */
-/* For CPUs without lwl instruction */
+#else
+/* MIPSR6 has no lwl instruction */
 #define     _LoadW(addr, value, res, type) \
 do {                                                        \
 		__asm__ __volatile__ (			    \
@@ -564,7 +565,7 @@ do {                                                        \
 			: "r" (addr), "i" (-EFAULT));       \
 } while(0)
 
-#endif /* !CONFIG_CPU_HAS_LOAD_STORE_LR */
+#endif /* CONFIG_CPU_MIPSR6 */
 
 
 #define     _LoadHWU(addr, value, res, type) \
@@ -591,7 +592,7 @@ do {                                                        \
 			: "r" (addr), "i" (-EFAULT));       \
 } while(0)
 
-#ifdef CONFIG_CPU_HAS_LOAD_STORE_LR
+#ifndef CONFIG_CPU_MIPSR6
 #define     _LoadWU(addr, value, res, type)  \
 do {                                                        \
 		__asm__ __volatile__ (                      \
@@ -634,8 +635,8 @@ do {                                                        \
 			: "r" (addr), "i" (-EFAULT));       \
 } while(0)
 
-#else /* !CONFIG_CPU_HAS_LOAD_STORE_LR */
-/* For CPUs without lwl and ldl instructions */
+#else
+/* MIPSR6 has not lwl and ldl instructions */
 #define	    _LoadWU(addr, value, res, type) \
 do {                                                        \
 		__asm__ __volatile__ (			    \
@@ -717,7 +718,7 @@ do {                                                        \
 			: "=&r" (value), "=r" (res)	    \
 			: "r" (addr), "i" (-EFAULT));       \
 } while(0)
-#endif /* !CONFIG_CPU_HAS_LOAD_STORE_LR */
+#endif /* CONFIG_CPU_MIPSR6 */
 
 #define     _StoreHW(addr, value, res, type) \
 do {                                                        \
@@ -742,7 +743,7 @@ do {                                                        \
 			: "r" (value), "r" (addr), "i" (-EFAULT));\
 } while(0)
 
-#ifdef CONFIG_CPU_HAS_LOAD_STORE_LR
+#ifndef CONFIG_CPU_MIPSR6
 #define     _StoreW(addr, value, res, type)  \
 do {                                                        \
 		__asm__ __volatile__ (                      \
@@ -783,8 +784,8 @@ do {                                                        \
 		: "r" (value), "r" (addr), "i" (-EFAULT));  \
 } while(0)
 
-#else /* !CONFIG_CPU_HAS_LOAD_STORE_LR */
-/* For CPUs without swl and sdl instructions */
+#else
+/* MIPSR6 has no swl and sdl instructions */
 #define     _StoreW(addr, value, res, type)  \
 do {                                                        \
 		__asm__ __volatile__ (                      \
@@ -860,7 +861,7 @@ do {                                                        \
 		: "memory");                                \
 } while(0)
 
-#endif /* !CONFIG_CPU_HAS_LOAD_STORE_LR */
+#endif /* CONFIG_CPU_MIPSR6 */
 #endif
 
 #define LoadHWU(addr, value, res)	_LoadHWU(addr, value, res, kernel)

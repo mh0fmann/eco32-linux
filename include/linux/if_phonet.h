@@ -11,5 +11,5 @@
 
 #include <uapi/linux/if_phonet.h>
 
-extern const struct header_ops phonet_header_ops;
+extern struct header_ops phonet_header_ops;
 #endif

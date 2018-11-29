@@ -8,7 +8,6 @@
  * Copyright(c) 2012 - 2014 Intel Corporation. All rights reserved.
  * Copyright(c) 2013 - 2015 Intel Mobile Communications GmbH
  * Copyright(c) 2016 - 2017 Intel Deutschland GmbH
- * Copyright(c) 2018 Intel Corporation
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of version 2 of the GNU General Public License as
@@ -31,7 +30,6 @@
  * Copyright(c) 2012 - 2014 Intel Corporation. All rights reserved.
  * Copyright(c) 2013 - 2015 Intel Mobile Communications GmbH
  * Copyright(c) 2016 - 2017 Intel Deutschland GmbH
- * Copyright(c) 2018 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -65,8 +63,8 @@
 #include "runtime.h"
 #include "fw/api/commands.h"
 
-static void iwl_parse_shared_mem_22000(struct iwl_fw_runtime *fwrt,
-				       struct iwl_rx_packet *pkt)
+static void iwl_parse_shared_mem_a000(struct iwl_fw_runtime *fwrt,
+				      struct iwl_rx_packet *pkt)
 {
 	struct iwl_shared_mem_cfg *mem_cfg = (void *)pkt->data;
 	int i, lmac;
@@ -145,8 +143,8 @@ void iwl_get_shared_mem_conf(struct iwl_fw_runtime *fwrt)
 		return;
 
 	pkt = cmd.resp_pkt;
-	if (fwrt->trans->cfg->device_family >= IWL_DEVICE_FAMILY_22000)
-		iwl_parse_shared_mem_22000(fwrt, pkt);
+	if (fwrt->trans->cfg->device_family == IWL_DEVICE_FAMILY_A000)
+		iwl_parse_shared_mem_a000(fwrt, pkt);
 	else
 		iwl_parse_shared_mem(fwrt, pkt);
 

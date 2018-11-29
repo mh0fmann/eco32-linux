@@ -673,7 +673,10 @@ static int hdmi_audio_register(struct device *dev)
 		dev, "omap-hdmi-audio", PLATFORM_DEVID_AUTO,
 		&pdata, sizeof(pdata));
 
-	return PTR_ERR_OR_ZERO(hdmi.audio_pdev);
+	if (IS_ERR(hdmi.audio_pdev))
+		return PTR_ERR(hdmi.audio_pdev);
+
+	return 0;
 }
 
 /* HDMI HW IP initialisation */

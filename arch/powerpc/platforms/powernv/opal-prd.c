@@ -147,13 +147,13 @@ static bool opal_msg_queue_empty(void)
 	return ret;
 }
 
-static __poll_t opal_prd_poll(struct file *file,
+static unsigned int opal_prd_poll(struct file *file,
 		struct poll_table_struct *wait)
 {
 	poll_wait(file, &opal_prd_msg_wait, wait);
 
 	if (!opal_msg_queue_empty())
-		return EPOLLIN | EPOLLRDNORM;
+		return POLLIN | POLLRDNORM;
 
 	return 0;
 }

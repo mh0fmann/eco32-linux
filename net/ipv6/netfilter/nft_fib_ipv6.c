@@ -60,6 +60,7 @@ static u32 __nft_fib6_eval_type(const struct nft_fib *priv,
 {
 	const struct net_device *dev = NULL;
 	const struct nf_ipv6_ops *v6ops;
+	const struct nf_afinfo *afinfo;
 	int route_err, addrtype;
 	struct rt6_info *rt;
 	struct flowi6 fl6 = {
@@ -68,8 +69,8 @@ static u32 __nft_fib6_eval_type(const struct nft_fib *priv,
 	};
 	u32 ret = 0;
 
-	v6ops = nf_get_ipv6_ops();
-	if (!v6ops)
+	afinfo = nf_get_afinfo(NFPROTO_IPV6);
+	if (!afinfo)
 		return RTN_UNREACHABLE;
 
 	if (priv->flags & NFTA_FIB_F_IIF)
@@ -79,11 +80,12 @@ static u32 __nft_fib6_eval_type(const struct nft_fib *priv,
 
 	nft_fib6_flowi_init(&fl6, priv, pkt, dev, iph);
 
-	if (dev && v6ops->chk_addr(nft_net(pkt), &fl6.daddr, dev, true))
+	v6ops = nf_get_ipv6_ops();
+	if (dev && v6ops && v6ops->chk_addr(nft_net(pkt), &fl6.daddr, dev, true))
 		ret = RTN_LOCAL;
 
-	route_err = v6ops->route(nft_net(pkt), (struct dst_entry **)&rt,
-				 flowi6_to_flowi(&fl6), false);
+	route_err = afinfo->route(nft_net(pkt), (struct dst_entry **)&rt,
+				  flowi6_to_flowi(&fl6), false);
 	if (route_err)
 		goto err;
 
@@ -180,8 +182,8 @@ void nft_fib6_eval(const struct nft_expr *expr, struct nft_regs *regs,
 	}
 
 	*dest = 0;
-	rt = (void *)ip6_route_lookup(nft_net(pkt), &fl6, pkt->skb,
-				      lookup_flags);
+ again:
+	rt = (void *)ip6_route_lookup(nft_net(pkt), &fl6, lookup_flags);
 	if (rt->dst.error)
 		goto put_rt_err;
 
@@ -189,8 +191,15 @@ void nft_fib6_eval(const struct nft_expr *expr, struct nft_regs *regs,
 	if (rt->rt6i_flags & (RTF_REJECT | RTF_ANYCAST | RTF_LOCAL))
 		goto put_rt_err;
 
-	if (oif && oif != rt->rt6i_idev->dev)
-		goto put_rt_err;
+	if (oif && oif != rt->rt6i_idev->dev) {
+		/* multipath route? Try again with F_IFACE */
+		if ((lookup_flags & RT6_LOOKUP_F_IFACE) == 0) {
+			lookup_flags |= RT6_LOOKUP_F_IFACE;
+			fl6.flowi6_oif = oif->ifindex;
+			ip6_rt_put(rt);
+			goto again;
+		}
+	}
 
 	switch (priv->result) {
 	case NFT_FIB_RESULT_OIF:

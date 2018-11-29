@@ -253,10 +253,10 @@ static void update_linkspeed(struct net_device *dev)
 	netif_carrier_on(dev);
 }
 
-static void w90p910_check_link(struct timer_list *t)
+static void w90p910_check_link(unsigned long dev_id)
 {
-	struct w90p910_ether *ether = from_timer(ether, t, check_timer);
-	struct net_device *dev = ether->mii.dev;
+	struct net_device *dev = (struct net_device *) dev_id;
+	struct w90p910_ether *ether = netdev_priv(dev);
 
 	update_linkspeed(dev);
 	mod_timer(&ether->check_timer, jiffies + msecs_to_jiffies(1000));
@@ -957,7 +957,8 @@ static int w90p910_ether_setup(struct net_device *dev)
 	ether->mii.mdio_read = w90p910_mdio_read;
 	ether->mii.mdio_write = w90p910_mdio_write;
 
-	timer_setup(&ether->check_timer, w90p910_check_link, 0);
+	setup_timer(&ether->check_timer, w90p910_check_link,
+						(unsigned long)dev);
 
 	return 0;
 }

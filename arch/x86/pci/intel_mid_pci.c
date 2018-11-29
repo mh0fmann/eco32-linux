@@ -280,7 +280,7 @@ static void intel_mid_pci_irq_disable(struct pci_dev *dev)
 	}
 }
 
-static const struct pci_ops intel_mid_pci_ops __initconst = {
+static struct pci_ops intel_mid_pci_ops = {
 	.read = pci_read,
 	.write = pci_write,
 };
@@ -300,7 +300,6 @@ int __init intel_mid_pci_init(void)
 	pci_root_ops = intel_mid_pci_ops;
 	pci_soc_mode = 1;
 	/* Continue with standard init */
-	acpi_noirq_set();
 	return 1;
 }
 

@@ -21,7 +21,6 @@
 #define SCU_STANDBY_ENABLE	(1 << 5)
 #define SCU_CONFIG		0x04
 #define SCU_CPU_STATUS		0x08
-#define SCU_CPU_STATUS_MASK	GENMASK(1, 0)
 #define SCU_INVALIDATE		0x0c
 #define SCU_FPGA_REVISION	0x10
 
@@ -73,24 +72,6 @@ void scu_enable(void __iomem *scu_base)
 }
 #endif
 
-static int scu_set_power_mode_internal(void __iomem *scu_base,
-				       unsigned int logical_cpu,
-				       unsigned int mode)
-{
-	unsigned int val;
-	int cpu = MPIDR_AFFINITY_LEVEL(cpu_logical_map(logical_cpu), 0);
-
-	if (mode > 3 || mode == 1 || cpu > 3)
-		return -EINVAL;
-
-	val = readb_relaxed(scu_base + SCU_CPU_STATUS + cpu);
-	val &= ~SCU_CPU_STATUS_MASK;
-	val |= mode;
-	writeb_relaxed(val, scu_base + SCU_CPU_STATUS + cpu);
-
-	return 0;
-}
-
 /*
  * Set the executing CPUs power mode as defined.  This will be in
  * preparation for it executing a WFI instruction.
@@ -101,27 +82,15 @@ static int scu_set_power_mode_internal(void __iomem *scu_base,
  */
 int scu_power_mode(void __iomem *scu_base, unsigned int mode)
 {
-	return scu_set_power_mode_internal(scu_base, smp_processor_id(), mode);
-}
-
-/*
- * Set the given (logical) CPU's power mode to SCU_PM_NORMAL.
- */
-int scu_cpu_power_enable(void __iomem *scu_base, unsigned int cpu)
-{
-	return scu_set_power_mode_internal(scu_base, cpu, SCU_PM_NORMAL);
-}
-
-int scu_get_cpu_power_mode(void __iomem *scu_base, unsigned int logical_cpu)
-{
 	unsigned int val;
-	int cpu = MPIDR_AFFINITY_LEVEL(cpu_logical_map(logical_cpu), 0);
+	int cpu = MPIDR_AFFINITY_LEVEL(cpu_logical_map(smp_processor_id()), 0);
 
-	if (cpu > 3)
+	if (mode > 3 || mode == 1 || cpu > 3)
 		return -EINVAL;
 
-	val = readb_relaxed(scu_base + SCU_CPU_STATUS + cpu);
-	val &= SCU_CPU_STATUS_MASK;
+	val = readb_relaxed(scu_base + SCU_CPU_STATUS + cpu) & ~0x03;
+	val |= mode;
+	writeb_relaxed(val, scu_base + SCU_CPU_STATUS + cpu);
 
-	return val;
+	return 0;
 }

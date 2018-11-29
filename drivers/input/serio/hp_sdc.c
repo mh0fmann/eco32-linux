@@ -193,7 +193,7 @@ static void hp_sdc_take(int irq, void *dev_id, uint8_t status, uint8_t data)
 	curr->seq[curr->idx++] = status;
 	curr->seq[curr->idx++] = data;
 	hp_sdc.rqty -= 2;
-	hp_sdc.rtime = ktime_get();
+	do_gettimeofday(&hp_sdc.rtv);
 
 	if (hp_sdc.rqty <= 0) {
 		/* All data has been gathered. */
@@ -306,10 +306,13 @@ static void hp_sdc_tasklet(unsigned long foo)
 	write_lock_irq(&hp_sdc.rtq_lock);
 
 	if (hp_sdc.rcurr >= 0) {
-		ktime_t now = ktime_get();
+		struct timeval tv;
 
-		if (ktime_after(now, ktime_add_us(hp_sdc.rtime,
-						  HP_SDC_MAX_REG_DELAY))) {
+		do_gettimeofday(&tv);
+		if (tv.tv_sec > hp_sdc.rtv.tv_sec)
+			tv.tv_usec += USEC_PER_SEC;
+
+		if (tv.tv_usec - hp_sdc.rtv.tv_usec > HP_SDC_MAX_REG_DELAY) {
 			hp_sdc_transaction *curr;
 			uint8_t tmp;
 
@@ -318,8 +321,8 @@ static void hp_sdc_tasklet(unsigned long foo)
 			 * we'll need to figure out a way to communicate
 			 * it back to the application. and be less verbose.
 			 */
-			printk(KERN_WARNING PREFIX "read timeout (%lldus)!\n",
-			       ktime_us_delta(now, hp_sdc.rtime));
+			printk(KERN_WARNING PREFIX "read timeout (%ius)!\n",
+			       (int)(tv.tv_usec - hp_sdc.rtv.tv_usec));
 			curr->idx += hp_sdc.rqty;
 			hp_sdc.rqty = 0;
 			tmp = curr->seq[curr->actidx];
@@ -548,7 +551,7 @@ unsigned long hp_sdc_put(void)
 
 			/* Start a new read */
 			hp_sdc.rqty = curr->seq[curr->idx];
-			hp_sdc.rtime = ktime_get();
+			do_gettimeofday(&hp_sdc.rtv);
 			curr->idx++;
 			/* Still need to lock here in case of spurious irq. */
 			write_lock_irq(&hp_sdc.rtq_lock);
@@ -791,7 +794,7 @@ int hp_sdc_release_cooked_irq(hp_sdc_irqhook *callback)
 
 /************************* Keepalive timer task *********************/
 
-static void hp_sdc_kicker(struct timer_list *unused)
+static void hp_sdc_kicker(unsigned long data)
 {
 	tasklet_schedule(&hp_sdc.task);
 	/* Re-insert the periodic task. */
@@ -906,8 +909,9 @@ static int __init hp_sdc_init(void)
 	down(&s_sync); /* Wait for t_sync to complete */
 
 	/* Create the keepalive task */
-	timer_setup(&hp_sdc.kicker, hp_sdc_kicker, 0);
+	init_timer(&hp_sdc.kicker);
 	hp_sdc.kicker.expires = jiffies + HZ;
+	hp_sdc.kicker.function = &hp_sdc_kicker;
 	add_timer(&hp_sdc.kicker);
 
 	hp_sdc.dev_err = 0;

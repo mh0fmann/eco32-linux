@@ -26,8 +26,7 @@ int br_process_vlan_tunnel_info(struct net_bridge *br,
 				struct net_bridge_port *p,
 				int cmd,
 				struct vtunnel_info *tinfo_curr,
-				struct vtunnel_info *tinfo_last,
-				bool *changed);
+				struct vtunnel_info *tinfo_last);
 int br_get_vlan_tunnel_info_size(struct net_bridge_vlan_group *vg);
 int br_fill_vlan_tunnel_info(struct sk_buff *skb,
 			     struct net_bridge_vlan_group *vg);

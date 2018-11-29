@@ -21,13 +21,8 @@
 	model = "EBV SOCrates";
 	compatible = "ebv,socrates", "altr,socfpga-cyclone5", "altr,socfpga";
 
-	aliases {
-		ethernet0 = &gmac1;
-	};
-
 	chosen {
-		bootargs = "earlyprintk";
-		stdout-path = "serial0:115200n8";
+		bootargs = "console=ttyS0,115200";
 	};
 
 	memory@0 {

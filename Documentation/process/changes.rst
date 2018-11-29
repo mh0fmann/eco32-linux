@@ -29,13 +29,11 @@ you probably needn't concern yourself with isdn4k-utils.
 ====================== ===============  ========================================
         Program        Minimal version       Command to check the version
 ====================== ===============  ========================================
-GNU C                  4.6              gcc --version
+GNU C                  3.2              gcc --version
 GNU make               3.81             make --version
 binutils               2.20             ld -v
-flex                   2.5.35           flex --version
-bison                  2.0              bison --version
 util-linux             2.10o            fdformat --version
-kmod                   13               depmod -V
+module-init-tools      0.9.10           depmod -V
 e2fsprogs              1.41.4           e2fsck -V
 jfsutils               1.1.3            fsck.jfs -V
 reiserfsprogs          3.6.3            reiserfsck -V
@@ -78,29 +76,8 @@ Binutils
 --------
 
 The build system has, as of 4.13, switched to using thin archives (`ar T`)
-rather than incremental linking (`ld -r`) for built-in.a intermediate steps.
+rather than incremental linking (`ld -r`) for built-in.o intermediate steps.
 This requires binutils 2.20 or newer.
-
-pkg-config
-----------
-
-The build system, as of 4.18, requires pkg-config to check for installed
-kconfig tools and to determine flags settings for use in
-'make {g,x}config'.  Previously pkg-config was being used but not
-verified or documented.
-
-Flex
-----
-
-Since Linux 4.16, the build system generates lexical analyzers
-during build.  This requires flex 2.5.35 or later.
-
-
-Bison
------
-
-Since Linux 4.16, the build system generates parsers
-during build.  This requires bison 2.0 or later.
 
 Perl
 ----
@@ -163,6 +140,12 @@ produces better output than ksymoops).  If for some reason your kernel
 is not build with ``CONFIG_KALLSYMS`` and you have no way to rebuild and
 reproduce the Oops with that option, then you can still decode that Oops
 with ksymoops.
+
+Module-Init-Tools
+-----------------
+
+A new module loader is now in the kernel that requires ``module-init-tools``
+to use.  It is backward compatible with the 2.4.x series kernels.
 
 Mkinitrd
 --------
@@ -350,16 +333,6 @@ Binutils
 
 - <https://www.kernel.org/pub/linux/devel/binutils/>
 
-Flex
-----
-
-- <https://github.com/westes/flex/releases>
-
-Bison
------
-
-- <ftp://ftp.gnu.org/gnu/bison/>
-
 OpenSSL
 -------
 
@@ -373,16 +346,15 @@ Util-linux
 
 - <https://www.kernel.org/pub/linux/utils/util-linux/>
 
-Kmod
-----
-
-- <https://www.kernel.org/pub/linux/utils/kernel/kmod/>
-- <https://git.kernel.org/pub/scm/utils/kernel/kmod/kmod.git>
-
 Ksymoops
 --------
 
 - <https://www.kernel.org/pub/linux/utils/kernel/ksymoops/v2.4/>
+
+Module-Init-Tools
+-----------------
+
+- <https://www.kernel.org/pub/linux/utils/kernel/module-init-tools/>
 
 Mkinitrd
 --------
@@ -433,7 +405,7 @@ udev
 FUSE
 ----
 
-- <https://github.com/libfuse/libfuse/releases>
+- <http://sourceforge.net/projects/fuse>
 
 mcelog
 ------

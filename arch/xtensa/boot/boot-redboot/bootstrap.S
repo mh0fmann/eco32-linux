@@ -42,7 +42,6 @@ __start_a0:
 	.align 4
 
 	.section .text, "ax"
-	.literal_position
 	.begin literal_prefix .text
 
 	/* put literals in here! */

@@ -137,14 +137,14 @@ exit_unlock:
 	return retval;
 }
 
-static __poll_t roccat_poll(struct file *file, poll_table *wait)
+static unsigned int roccat_poll(struct file *file, poll_table *wait)
 {
 	struct roccat_reader *reader = file->private_data;
 	poll_wait(file, &reader->device->wait, wait);
 	if (reader->cbuf_start != reader->device->cbuf_end)
-		return EPOLLIN | EPOLLRDNORM;
+		return POLLIN | POLLRDNORM;
 	if (!reader->device->exist)
-		return EPOLLERR | EPOLLHUP;
+		return POLLERR | POLLHUP;
 	return 0;
 }
 

@@ -219,8 +219,14 @@ do_sigreturn(struct sigcontext __user *sc)
 
 	/* Send SIGTRAP if we're single-stepping: */
 	if (ptrace_cancel_bpt (current)) {
-		send_sig_fault(SIGTRAP, TRAP_BRKPT, (void __user *) regs->pc, 0,
-			       current);
+		siginfo_t info;
+
+		info.si_signo = SIGTRAP;
+		info.si_errno = 0;
+		info.si_code = TRAP_BRKPT;
+		info.si_addr = (void __user *) regs->pc;
+		info.si_trapno = 0;
+		send_sig_info(SIGTRAP, &info, current);
 	}
 	return;
 
@@ -247,8 +253,14 @@ do_rt_sigreturn(struct rt_sigframe __user *frame)
 
 	/* Send SIGTRAP if we're single-stepping: */
 	if (ptrace_cancel_bpt (current)) {
-		send_sig_fault(SIGTRAP, TRAP_BRKPT, (void __user *) regs->pc, 0,
-			       current);
+		siginfo_t info;
+
+		info.si_signo = SIGTRAP;
+		info.si_errno = 0;
+		info.si_code = TRAP_BRKPT;
+		info.si_addr = (void __user *) regs->pc;
+		info.si_trapno = 0;
+		send_sig_info(SIGTRAP, &info, current);
 	}
 	return;
 

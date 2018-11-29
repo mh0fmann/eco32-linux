@@ -15,8 +15,8 @@
 #include <linux/err.h>
 #include <linux/fips.h>
 #include <crypto/internal/rsa.h>
-#include "rsapubkey.asn1.h"
-#include "rsaprivkey.asn1.h"
+#include "rsapubkey-asn1.h"
+#include "rsaprivkey-asn1.h"
 
 int rsa_get_n(void *context, size_t hdrlen, unsigned char tag,
 	      const void *value, size_t vlen)
@@ -30,7 +30,7 @@ int rsa_get_n(void *context, size_t hdrlen, unsigned char tag,
 		return -EINVAL;
 
 	if (fips_enabled) {
-		while (n_sz && !*ptr) {
+		while (!*ptr && n_sz) {
 			ptr++;
 			n_sz--;
 		}

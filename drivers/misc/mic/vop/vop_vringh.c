@@ -937,10 +937,13 @@ static long vop_ioctl(struct file *f, unsigned int cmd, unsigned long arg)
 		    dd.num_vq > MIC_MAX_VRINGS)
 			return -EINVAL;
 
-		dd_config = memdup_user(argp, mic_desc_size(&dd));
-		if (IS_ERR(dd_config))
-			return PTR_ERR(dd_config);
-
+		dd_config = kzalloc(mic_desc_size(&dd), GFP_KERNEL);
+		if (!dd_config)
+			return -ENOMEM;
+		if (copy_from_user(dd_config, argp, mic_desc_size(&dd))) {
+			ret = -EFAULT;
+			goto free_ret;
+		}
 		/* Ensure desc has not changed between the two reads */
 		if (memcmp(&dd, dd_config, sizeof(dd))) {
 			ret = -EINVAL;
@@ -992,12 +995,17 @@ _unlock_ret:
 		ret = vop_vdev_inited(vdev);
 		if (ret)
 			goto __unlock_ret;
-		buf = memdup_user(argp, vdev->dd->config_len);
-		if (IS_ERR(buf)) {
-			ret = PTR_ERR(buf);
+		buf = kzalloc(vdev->dd->config_len, GFP_KERNEL);
+		if (!buf) {
+			ret = -ENOMEM;
 			goto __unlock_ret;
 		}
+		if (copy_from_user(buf, argp, vdev->dd->config_len)) {
+			ret = -EFAULT;
+			goto done;
+		}
 		ret = vop_virtio_config_change(vdev, buf);
+done:
 		kfree(buf);
 __unlock_ret:
 		mutex_unlock(&vdev->vdev_mutex);
@@ -1010,27 +1018,27 @@ __unlock_ret:
 }
 
 /*
- * We return EPOLLIN | EPOLLOUT from poll when new buffers are enqueued, and
+ * We return POLLIN | POLLOUT from poll when new buffers are enqueued, and
  * not when previously enqueued buffers may be available. This means that
  * in the card->host (TX) path, when userspace is unblocked by poll it
  * must drain all available descriptors or it can stall.
  */
-static __poll_t vop_poll(struct file *f, poll_table *wait)
+static unsigned int vop_poll(struct file *f, poll_table *wait)
 {
 	struct vop_vdev *vdev = f->private_data;
-	__poll_t mask = 0;
+	int mask = 0;
 
 	mutex_lock(&vdev->vdev_mutex);
 	if (vop_vdev_inited(vdev)) {
-		mask = EPOLLERR;
+		mask = POLLERR;
 		goto done;
 	}
 	poll_wait(f, &vdev->waitq, wait);
 	if (vop_vdev_inited(vdev)) {
-		mask = EPOLLERR;
+		mask = POLLERR;
 	} else if (vdev->poll_wake) {
 		vdev->poll_wake = 0;
-		mask = EPOLLIN | EPOLLOUT;
+		mask = POLLIN | POLLOUT;
 	}
 done:
 	mutex_unlock(&vdev->vdev_mutex);

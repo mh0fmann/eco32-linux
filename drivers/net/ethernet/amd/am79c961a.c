@@ -302,10 +302,10 @@ am79c961_init_for_open(struct net_device *dev)
 	write_rreg (dev->base_addr, CSR0, CSR0_IENA|CSR0_STRT);
 }
 
-static void am79c961_timer(struct timer_list *t)
+static void am79c961_timer(unsigned long data)
 {
-	struct dev_priv *priv = from_timer(priv, t, timer);
-	struct net_device *dev = priv->dev;
+	struct net_device *dev = (struct net_device *)data;
+	struct dev_priv *priv = netdev_priv(dev);
 	unsigned int lnkstat, carrier;
 	unsigned long flags;
 
@@ -440,7 +440,7 @@ static void am79c961_timeout(struct net_device *dev)
 /*
  * Transmit a packet
  */
-static netdev_tx_t
+static int
 am79c961_sendpacket(struct sk_buff *skb, struct net_device *dev)
 {
 	struct dev_priv *priv = netdev_priv(dev);
@@ -728,8 +728,9 @@ static int am79c961_probe(struct platform_device *pdev)
 	am79c961_banner();
 
 	spin_lock_init(&priv->chip_lock);
-	priv->dev = dev;
-	timer_setup(&priv->timer, am79c961_timer, 0);
+	init_timer(&priv->timer);
+	priv->timer.data = (unsigned long)dev;
+	priv->timer.function = am79c961_timer;
 
 	if (am79c961_hw_init(dev))
 		goto release;

@@ -3080,9 +3080,9 @@ err_out:
  * The routine called when the error timer expires, to track the number of
  * recurring errors.
  */
-static void et131x_error_timer_handler(struct timer_list *t)
+static void et131x_error_timer_handler(unsigned long data)
 {
-	struct et131x_adapter *adapter = from_timer(adapter, t, error_timer);
+	struct et131x_adapter *adapter = (struct et131x_adapter *)data;
 	struct phy_device *phydev = adapter->netdev->phydev;
 
 	if (et1310_in_phy_coma(adapter)) {
@@ -3258,11 +3258,19 @@ static int et131x_mii_probe(struct net_device *netdev)
 		return PTR_ERR(phydev);
 	}
 
-	phy_set_max_speed(phydev, SPEED_100);
+	phydev->supported &= (SUPPORTED_10baseT_Half |
+			      SUPPORTED_10baseT_Full |
+			      SUPPORTED_100baseT_Half |
+			      SUPPORTED_100baseT_Full |
+			      SUPPORTED_Autoneg |
+			      SUPPORTED_MII |
+			      SUPPORTED_TP);
 
 	if (adapter->pdev->device != ET131X_PCI_DEVICE_ID_FAST)
-		phy_set_max_speed(phydev, SPEED_1000);
+		phydev->supported |= SUPPORTED_1000baseT_Half |
+				     SUPPORTED_1000baseT_Full;
 
+	phydev->advertising = phydev->supported;
 	phydev->autoneg = AUTONEG_ENABLE;
 
 	phy_attached_info(phydev);
@@ -3616,9 +3624,11 @@ static int et131x_open(struct net_device *netdev)
 	int result;
 
 	/* Start the timer to track NIC errors */
-	timer_setup(&adapter->error_timer, et131x_error_timer_handler, 0);
+	init_timer(&adapter->error_timer);
 	adapter->error_timer.expires = jiffies +
 		msecs_to_jiffies(TX_ERROR_PERIOD);
+	adapter->error_timer.function = et131x_error_timer_handler;
+	adapter->error_timer.data = (unsigned long)adapter;
 	add_timer(&adapter->error_timer);
 
 	result = request_irq(irq, et131x_isr,

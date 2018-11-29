@@ -382,10 +382,9 @@ static void arcdev_setup(struct net_device *dev)
 	dev->flags = IFF_BROADCAST;
 }
 
-static void arcnet_timer(struct timer_list *t)
+static void arcnet_timer(unsigned long data)
 {
-	struct arcnet_local *lp = from_timer(lp, t, timer);
-	struct net_device *dev = lp->dev;
+	struct net_device *dev = (struct net_device *)data;
 
 	if (!netif_carrier_ok(dev)) {
 		netif_carrier_on(dev);
@@ -451,7 +450,9 @@ struct net_device *alloc_arcdev(const char *name)
 
 		lp->dev = dev;
 		spin_lock_init(&lp->lock);
-		timer_setup(&lp->timer, arcnet_timer, 0);
+		init_timer(&lp->timer);
+		lp->timer.data = (unsigned long) dev;
+		lp->timer.function = arcnet_timer;
 	}
 
 	return dev;

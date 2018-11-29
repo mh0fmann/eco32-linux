@@ -1205,7 +1205,7 @@ static int ioctl_get_cycle_timer2(struct client *client, union ioctl_arg *arg)
 {
 	struct fw_cdev_get_cycle_timer2 *a = &arg->get_cycle_timer2;
 	struct fw_card *card = client->device->card;
-	struct timespec64 ts = {0, 0};
+	struct timespec ts = {0, 0};
 	u32 cycle_time;
 	int ret = 0;
 
@@ -1214,9 +1214,9 @@ static int ioctl_get_cycle_timer2(struct client *client, union ioctl_arg *arg)
 	cycle_time = card->driver->read_csr(card, CSR_CYCLE_TIME);
 
 	switch (a->clk_id) {
-	case CLOCK_REALTIME:      ktime_get_real_ts64(&ts);	break;
-	case CLOCK_MONOTONIC:     ktime_get_ts64(&ts);		break;
-	case CLOCK_MONOTONIC_RAW: ktime_get_raw_ts64(&ts);	break;
+	case CLOCK_REALTIME:      getnstimeofday(&ts);	break;
+	case CLOCK_MONOTONIC:     ktime_get_ts(&ts);	break;
+	case CLOCK_MONOTONIC_RAW: getrawmonotonic(&ts);	break;
 	default:
 		ret = -EINVAL;
 	}
@@ -1784,17 +1784,17 @@ static int fw_device_op_release(struct inode *inode, struct file *file)
 	return 0;
 }
 
-static __poll_t fw_device_op_poll(struct file *file, poll_table * pt)
+static unsigned int fw_device_op_poll(struct file *file, poll_table * pt)
 {
 	struct client *client = file->private_data;
-	__poll_t mask = 0;
+	unsigned int mask = 0;
 
 	poll_wait(file, &client->wait, pt);
 
 	if (fw_device_is_shutdown(client->device))
-		mask |= EPOLLHUP | EPOLLERR;
+		mask |= POLLHUP | POLLERR;
 	if (!list_empty(&client->event_list))
-		mask |= EPOLLIN | EPOLLRDNORM;
+		mask |= POLLIN | POLLRDNORM;
 
 	return mask;
 }

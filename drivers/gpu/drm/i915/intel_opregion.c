@@ -32,8 +32,6 @@
 
 #include <drm/drmP.h>
 #include <drm/i915_drm.h>
-
-#include "intel_opregion.h"
 #include "i915_drv.h"
 #include "intel_drv.h"
 
@@ -369,7 +367,7 @@ int intel_opregion_notify_encoder(struct intel_encoder *intel_encoder,
 	if (intel_encoder->type == INTEL_OUTPUT_DSI)
 		port = 0;
 	else
-		port = intel_encoder->port;
+		port = intel_ddi_get_encoder_port(intel_encoder);
 
 	if (port == PORT_E)  {
 		port = 0;
@@ -385,7 +383,7 @@ int intel_opregion_notify_encoder(struct intel_encoder *intel_encoder,
 	case INTEL_OUTPUT_ANALOG:
 		type = DISPLAY_TYPE_CRT;
 		break;
-	case INTEL_OUTPUT_DDI:
+	case INTEL_OUTPUT_UNKNOWN:
 	case INTEL_OUTPUT_DP:
 	case INTEL_OUTPUT_HDMI:
 	case INTEL_OUTPUT_DP_MST:
@@ -608,16 +606,16 @@ void intel_opregion_asle_intr(struct drm_i915_private *dev_priv)
 #define ACPI_EV_LID            (1<<1)
 #define ACPI_EV_DOCK           (1<<2)
 
-/*
- * The only video events relevant to opregion are 0x80. These indicate either a
- * docking event, lid switch or display switch request. In Linux, these are
- * handled by the dock, button and video drivers.
- */
+static struct intel_opregion *system_opregion;
+
 static int intel_opregion_video_event(struct notifier_block *nb,
 				      unsigned long val, void *data)
 {
-	struct intel_opregion *opregion = container_of(nb, struct intel_opregion,
-						       acpi_notifier);
+	/* The only video events relevant to opregion are 0x80. These indicate
+	   either a docking event, lid switch or display switch request. In
+	   Linux, these are handled by the dock, button and video drivers.
+	*/
+
 	struct acpi_bus_event *event = data;
 	struct opregion_acpi *acpi;
 	int ret = NOTIFY_OK;
@@ -625,7 +623,10 @@ static int intel_opregion_video_event(struct notifier_block *nb,
 	if (strcmp(event->device_class, ACPI_VIDEO_CLASS) != 0)
 		return NOTIFY_DONE;
 
-	acpi = opregion->acpi;
+	if (!system_opregion)
+		return NOTIFY_DONE;
+
+	acpi = system_opregion->acpi;
 
 	if (event->type == 0x80 && ((acpi->cevt & 1) == 0))
 		ret = NOTIFY_BAD;
@@ -634,6 +635,10 @@ static int intel_opregion_video_event(struct notifier_block *nb,
 
 	return ret;
 }
+
+static struct notifier_block intel_opregion_notifier = {
+	.notifier_call = intel_opregion_video_event,
+};
 
 /*
  * Initialise the DIDL field in opregion. This passes a list of devices to
@@ -790,8 +795,8 @@ void intel_opregion_register(struct drm_i915_private *dev_priv)
 		opregion->acpi->csts = 0;
 		opregion->acpi->drdy = 1;
 
-		opregion->acpi_notifier.notifier_call = intel_opregion_video_event;
-		register_acpi_notifier(&opregion->acpi_notifier);
+		system_opregion = opregion;
+		register_acpi_notifier(&intel_opregion_notifier);
 	}
 
 	if (opregion->asle) {
@@ -815,8 +820,8 @@ void intel_opregion_unregister(struct drm_i915_private *dev_priv)
 	if (opregion->acpi) {
 		opregion->acpi->drdy = 0;
 
-		unregister_acpi_notifier(&opregion->acpi_notifier);
-		opregion->acpi_notifier.notifier_call = NULL;
+		system_opregion = NULL;
+		unregister_acpi_notifier(&intel_opregion_notifier);
 	}
 
 	/* just clear all opregion memory pointers now */
@@ -916,7 +921,7 @@ static int intel_load_vbt_firmware(struct drm_i915_private *dev_priv)
 {
 	struct intel_opregion *opregion = &dev_priv->opregion;
 	const struct firmware *fw = NULL;
-	const char *name = i915_modparams.vbt_firmware;
+	const char *name = i915.vbt_firmware;
 	int ret;
 
 	if (!name || !*name)

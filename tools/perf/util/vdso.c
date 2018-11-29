@@ -139,10 +139,12 @@ static enum dso_type machine__thread_dso_type(struct machine *machine,
 					      struct thread *thread)
 {
 	enum dso_type dso_type = DSO__TYPE_UNKNOWN;
-	struct map *map = map_groups__first(thread->mg);
+	struct map *map;
+	struct dso *dso;
 
+	map = map_groups__first(thread->mg, MAP__FUNCTION);
 	for (; map ; map = map_groups__next(map)) {
-		struct dso *dso = map->dso;
+		dso = map->dso;
 		if (!dso || dso->long_name[0] != '/')
 			continue;
 		dso_type = dso__type(dso, machine);
@@ -318,7 +320,7 @@ struct dso *machine__findnew_vdso(struct machine *machine,
 	struct vdso_info *vdso_info;
 	struct dso *dso = NULL;
 
-	down_write(&machine->dsos.lock);
+	pthread_rwlock_wrlock(&machine->dsos.lock);
 	if (!machine->vdso_info)
 		machine->vdso_info = vdso_info__new();
 
@@ -346,7 +348,7 @@ struct dso *machine__findnew_vdso(struct machine *machine,
 
 out_unlock:
 	dso__get(dso);
-	up_write(&machine->dsos.lock);
+	pthread_rwlock_unlock(&machine->dsos.lock);
 	return dso;
 }
 

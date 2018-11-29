@@ -96,12 +96,12 @@ static int pkg_temp_debugfs_init(void)
 		return -ENOENT;
 
 	d = debugfs_create_u32("pkg_thres_interrupt", S_IRUGO, debugfs,
-			       &pkg_interrupt_cnt);
+				(u32 *)&pkg_interrupt_cnt);
 	if (!d)
 		goto err_out;
 
 	d = debugfs_create_u32("pkg_thres_work", S_IRUGO, debugfs,
-			       &pkg_work_cnt);
+				(u32 *)&pkg_work_cnt);
 	if (!d)
 		goto err_out;
 
@@ -516,8 +516,7 @@ static int __init pkg_temp_thermal_init(void)
 		return -ENODEV;
 
 	max_packages = topology_max_packages();
-	packages = kcalloc(max_packages, sizeof(struct pkg_device *),
-			   GFP_KERNEL);
+	packages = kzalloc(max_packages * sizeof(struct pkg_device *), GFP_KERNEL);
 	if (!packages)
 		return -ENOMEM;
 

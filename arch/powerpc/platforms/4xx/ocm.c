@@ -113,6 +113,7 @@ static void __init ocm_init_node(int count, struct device_node *node)
 	int len;
 
 	struct resource rsrc;
+	int ioflags;
 
 	ocm = ocm_get_node(count);
 
@@ -178,8 +179,9 @@ static void __init ocm_init_node(int count, struct device_node *node)
 
 	/* ioremap the non-cached region */
 	if (ocm->nc.memtotal) {
+		ioflags = _PAGE_NO_CACHE | _PAGE_GUARDED | _PAGE_EXEC;
 		ocm->nc.virt = __ioremap(ocm->nc.phys, ocm->nc.memtotal,
-					 _PAGE_EXEC | PAGE_KERNEL_NCG);
+					  ioflags);
 
 		if (!ocm->nc.virt) {
 			printk(KERN_ERR
@@ -193,8 +195,9 @@ static void __init ocm_init_node(int count, struct device_node *node)
 	/* ioremap the cached region */
 
 	if (ocm->c.memtotal) {
+		ioflags = _PAGE_EXEC;
 		ocm->c.virt = __ioremap(ocm->c.phys, ocm->c.memtotal,
-					_PAGE_EXEC | PAGE_KERNEL);
+					 ioflags);
 
 		if (!ocm->c.virt) {
 			printk(KERN_ERR
@@ -336,7 +339,7 @@ void *ppc4xx_ocm_alloc(phys_addr_t *phys, int size, int align,
 		if (IS_ERR_VALUE(offset))
 			continue;
 
-		ocm_blk = kzalloc(sizeof(*ocm_blk), GFP_KERNEL);
+		ocm_blk = kzalloc(sizeof(struct ocm_block), GFP_KERNEL);
 		if (!ocm_blk) {
 			printk(KERN_ERR "PPC4XX OCM: could not allocate ocm block");
 			rh_free(ocm_reg->rh, offset);

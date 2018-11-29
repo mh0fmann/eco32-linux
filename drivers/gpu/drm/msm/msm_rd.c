@@ -19,16 +19,10 @@
  *
  *   tail -f /sys/kernel/debug/dri/<minor>/rd > logfile.rd
  *
- * to log the cmdstream in a format that is understood by freedreno/cffdump
+ * To log the cmdstream in a format that is understood by freedreno/cffdump
  * utility.  By comparing the last successfully completed fence #, to the
  * cmdstream for the next fence, you can narrow down which process and submit
  * caused the gpu crash/lockup.
- *
- * Additionally:
- *
- *   tail -f /sys/kernel/debug/dri/<minor>/hangrd > logfile.rd
- *
- * will capture just the cmdstream from submits which triggered a GPU hang.
  *
  * This bypasses drm_debugfs_create_files() mainly because we need to use
  * our own fops for a bit more control.  In particular, we don't want to
@@ -226,89 +220,53 @@ static const struct file_operations rd_debugfs_fops = {
 	.release = rd_release,
 };
 
-
-static void rd_cleanup(struct msm_rd_state *rd)
-{
-	if (!rd)
-		return;
-
-	mutex_destroy(&rd->read_lock);
-	kfree(rd);
-}
-
-static struct msm_rd_state *rd_init(struct drm_minor *minor, const char *name)
-{
-	struct msm_rd_state *rd;
-	struct dentry *ent;
-	int ret = 0;
-
-	rd = kzalloc(sizeof(*rd), GFP_KERNEL);
-	if (!rd)
-		return ERR_PTR(-ENOMEM);
-
-	rd->dev = minor->dev;
-	rd->fifo.buf = rd->buf;
-
-	mutex_init(&rd->read_lock);
-
-	init_waitqueue_head(&rd->fifo_event);
-
-	ent = debugfs_create_file(name, S_IFREG | S_IRUGO,
-			minor->debugfs_root, rd, &rd_debugfs_fops);
-	if (!ent) {
-		DRM_ERROR("Cannot create /sys/kernel/debug/dri/%pd/%s\n",
-				minor->debugfs_root, name);
-		ret = -ENOMEM;
-		goto fail;
-	}
-
-	return rd;
-
-fail:
-	rd_cleanup(rd);
-	return ERR_PTR(ret);
-}
-
 int msm_rd_debugfs_init(struct drm_minor *minor)
 {
 	struct msm_drm_private *priv = minor->dev->dev_private;
 	struct msm_rd_state *rd;
-	int ret;
+	struct dentry *ent;
 
 	/* only create on first minor: */
 	if (priv->rd)
 		return 0;
 
-	rd = rd_init(minor, "rd");
-	if (IS_ERR(rd)) {
-		ret = PTR_ERR(rd);
-		goto fail;
-	}
+	rd = kzalloc(sizeof(*rd), GFP_KERNEL);
+	if (!rd)
+		return -ENOMEM;
 
+	rd->dev = minor->dev;
+	rd->fifo.buf = rd->buf;
+
+	mutex_init(&rd->read_lock);
 	priv->rd = rd;
 
-	rd = rd_init(minor, "hangrd");
-	if (IS_ERR(rd)) {
-		ret = PTR_ERR(rd);
+	init_waitqueue_head(&rd->fifo_event);
+
+	ent = debugfs_create_file("rd", S_IFREG | S_IRUGO,
+			minor->debugfs_root, rd, &rd_debugfs_fops);
+	if (!ent) {
+		DRM_ERROR("Cannot create /sys/kernel/debug/dri/%pd/rd\n",
+				minor->debugfs_root);
 		goto fail;
 	}
-
-	priv->hangrd = rd;
 
 	return 0;
 
 fail:
 	msm_rd_debugfs_cleanup(priv);
-	return ret;
+	return -1;
 }
 
 void msm_rd_debugfs_cleanup(struct msm_drm_private *priv)
 {
-	rd_cleanup(priv->rd);
-	priv->rd = NULL;
+	struct msm_rd_state *rd = priv->rd;
 
-	rd_cleanup(priv->hangrd);
-	priv->hangrd = NULL;
+	if (!rd)
+		return;
+
+	priv->rd = NULL;
+	mutex_destroy(&rd->read_lock);
+	kfree(rd);
 }
 
 static void snapshot_buf(struct msm_rd_state *rd,
@@ -318,6 +276,10 @@ static void snapshot_buf(struct msm_rd_state *rd,
 	struct msm_gem_object *obj = submit->bos[idx].obj;
 	const char *buf;
 
+	buf = msm_gem_get_vaddr(&obj->base);
+	if (IS_ERR(buf))
+		return;
+
 	if (iova) {
 		buf += iova - submit->bos[idx].iova;
 	} else {
@@ -325,33 +287,20 @@ static void snapshot_buf(struct msm_rd_state *rd,
 		size = obj->base.size;
 	}
 
-	/*
-	 * Always write the GPUADDR header so can get a complete list of all the
-	 * buffers in the cmd
-	 */
 	rd_write_section(rd, RD_GPUADDR,
 			(uint32_t[3]){ iova, size, iova >> 32 }, 12);
-
-	/* But only dump the contents of buffers marked READ */
-	if (!(submit->bos[idx].flags & MSM_SUBMIT_BO_READ))
-		return;
-
-	buf = msm_gem_get_vaddr_active(&obj->base);
-	if (IS_ERR(buf))
-		return;
-
 	rd_write_section(rd, RD_BUFFER_CONTENTS, buf, size);
 
 	msm_gem_put_vaddr(&obj->base);
 }
 
 /* called under struct_mutex */
-void msm_rd_dump_submit(struct msm_rd_state *rd, struct msm_gem_submit *submit,
-		const char *fmt, ...)
+void msm_rd_dump_submit(struct msm_gem_submit *submit)
 {
 	struct drm_device *dev = submit->dev;
-	struct task_struct *task;
-	char msg[256];
+	struct msm_drm_private *priv = dev->dev_private;
+	struct msm_rd_state *rd = priv->rd;
+	char msg[128];
 	int i, n;
 
 	if (!rd->open)
@@ -362,32 +311,23 @@ void msm_rd_dump_submit(struct msm_rd_state *rd, struct msm_gem_submit *submit,
 	 */
 	WARN_ON(!mutex_is_locked(&dev->struct_mutex));
 
-	if (fmt) {
-		va_list args;
-
-		va_start(args, fmt);
-		n = vscnprintf(msg, sizeof(msg), fmt, args);
-		va_end(args);
-
-		rd_write_section(rd, RD_CMD, msg, ALIGN(n, 4));
-	}
-
-	rcu_read_lock();
-	task = pid_task(submit->pid, PIDTYPE_PID);
-	if (task) {
-		n = scnprintf(msg, sizeof(msg), "%.*s/%d: fence=%u",
-				TASK_COMM_LEN, task->comm,
-				pid_nr(submit->pid), submit->seqno);
-	} else {
-		n = scnprintf(msg, sizeof(msg), "???/%d: fence=%u",
-				pid_nr(submit->pid), submit->seqno);
-	}
-	rcu_read_unlock();
+	n = snprintf(msg, sizeof(msg), "%.*s/%d: fence=%u",
+			TASK_COMM_LEN, current->comm, task_pid_nr(current),
+			submit->fence->seqno);
 
 	rd_write_section(rd, RD_CMD, msg, ALIGN(n, 4));
 
-	for (i = 0; rd_full && i < submit->nr_bos; i++)
-		snapshot_buf(rd, submit, i, 0, 0);
+	if (rd_full) {
+		for (i = 0; i < submit->nr_bos; i++) {
+			/* buffers that are written to probably don't start out
+			 * with anything interesting:
+			 */
+			if (submit->bos[i].flags & MSM_SUBMIT_BO_WRITE)
+				continue;
+
+			snapshot_buf(rd, submit, i, 0, 0);
+		}
+	}
 
 	for (i = 0; i < submit->nr_cmds; i++) {
 		uint64_t iova = submit->cmd[i].iova;

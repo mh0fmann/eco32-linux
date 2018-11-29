@@ -103,16 +103,15 @@ ssize_t led_trigger_show(struct device *dev, struct device_attribute *attr,
 EXPORT_SYMBOL_GPL(led_trigger_show);
 
 /* Caller must ensure led_cdev->trigger_lock held */
-int led_trigger_set(struct led_classdev *led_cdev, struct led_trigger *trig)
+void led_trigger_set(struct led_classdev *led_cdev, struct led_trigger *trig)
 {
 	unsigned long flags;
 	char *event = NULL;
 	char *envp[2];
 	const char *name;
-	int ret;
 
 	if (!led_cdev->trigger && !trig)
-		return 0;
+		return;
 
 	name = trig ? trig->name : "none";
 	event = kasprintf(GFP_KERNEL, "TRIGGER=%s", name);
@@ -127,10 +126,7 @@ int led_trigger_set(struct led_classdev *led_cdev, struct led_trigger *trig)
 		led_stop_software_blink(led_cdev);
 		if (led_cdev->trigger->deactivate)
 			led_cdev->trigger->deactivate(led_cdev);
-		device_remove_groups(led_cdev->dev, led_cdev->trigger->groups);
 		led_cdev->trigger = NULL;
-		led_cdev->trigger_data = NULL;
-		led_cdev->activated = false;
 		led_set_brightness(led_cdev, LED_OFF);
 	}
 	if (trig) {
@@ -138,20 +134,8 @@ int led_trigger_set(struct led_classdev *led_cdev, struct led_trigger *trig)
 		list_add_tail(&led_cdev->trig_list, &trig->led_cdevs);
 		write_unlock_irqrestore(&trig->leddev_list_lock, flags);
 		led_cdev->trigger = trig;
-
 		if (trig->activate)
-			ret = trig->activate(led_cdev);
-		else
-			ret = 0;
-
-		if (ret)
-			goto err_activate;
-
-		ret = device_add_groups(led_cdev->dev, trig->groups);
-		if (ret) {
-			dev_err(led_cdev->dev, "Failed to add trigger attributes\n");
-			goto err_add_groups;
-		}
+			trig->activate(led_cdev);
 	}
 
 	if (event) {
@@ -162,23 +146,6 @@ int led_trigger_set(struct led_classdev *led_cdev, struct led_trigger *trig)
 				"%s: Error sending uevent\n", __func__);
 		kfree(event);
 	}
-
-	return 0;
-
-err_add_groups:
-
-	if (trig->deactivate)
-		trig->deactivate(led_cdev);
-err_activate:
-
-	led_cdev->trigger = NULL;
-	led_cdev->trigger_data = NULL;
-	write_lock_irqsave(&led_cdev->trigger->leddev_list_lock, flags);
-	list_del(&led_cdev->trig_list);
-	write_unlock_irqrestore(&led_cdev->trigger->leddev_list_lock, flags);
-	led_set_brightness(led_cdev, LED_OFF);
-
-	return ret;
 }
 EXPORT_SYMBOL_GPL(led_trigger_set);
 

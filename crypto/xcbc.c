@@ -12,7 +12,8 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  *
  * Author:
  * 	Kazunori Miyazawa <miyazawa@linux-ipv6.org>
@@ -57,17 +58,15 @@ struct xcbc_desc_ctx {
 	u8 ctx[];
 };
 
-#define XCBC_BLOCKSIZE	16
-
 static int crypto_xcbc_digest_setkey(struct crypto_shash *parent,
 				     const u8 *inkey, unsigned int keylen)
 {
 	unsigned long alignmask = crypto_shash_alignmask(parent);
 	struct xcbc_tfm_ctx *ctx = crypto_shash_ctx(parent);
+	int bs = crypto_shash_blocksize(parent);
 	u8 *consts = PTR_ALIGN(&ctx->ctx[0], alignmask + 1);
 	int err = 0;
-	u8 key1[XCBC_BLOCKSIZE];
-	int bs = sizeof(key1);
+	u8 key1[bs];
 
 	if ((err = crypto_cipher_setkey(ctx->child, inkey, keylen)))
 		return err;
@@ -214,7 +213,7 @@ static int xcbc_create(struct crypto_template *tmpl, struct rtattr **tb)
 		return PTR_ERR(alg);
 
 	switch(alg->cra_blocksize) {
-	case XCBC_BLOCKSIZE:
+	case 16:
 		break;
 	default:
 		goto out_put_alg;

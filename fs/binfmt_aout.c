@@ -330,7 +330,6 @@ beyond_if:
 #ifdef __alpha__
 	regs->gp = ex.a_gpvalue;
 #endif
-	finalize_exec(bprm);
 	start_thread(regs, ex.a_entry, current->mm->start_stack);
 	return 0;
 }

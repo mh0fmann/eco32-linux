@@ -65,6 +65,7 @@
 #define INSN_LDI_R25_1	 0x34190002 /* ldi  1,%r25 (in_syscall=1) */
 #define INSN_LDI_R20	 0x3414015a /* ldi  __NR_rt_sigreturn,%r20 */
 #define INSN_BLE_SR2_R0  0xe4008200 /* be,l 0x100(%sr2,%r0),%sr0,%r31 */
+#define INSN_NOP	 0x08000240 /* nop */
 /* For debugging */
 #define INSN_DIE_HORRIBLY 0x68000ccc /* stw %r0,0x666(%sr0,%r0) */
 
@@ -92,6 +93,7 @@ sys_rt_sigreturn(struct pt_regs *regs, int in_syscall)
 	unsigned long usp = (regs->gr[30] & ~(0x01UL));
 	unsigned long sigframe_size = PARISC_RT_SIGFRAME_SIZE;
 #ifdef CONFIG_64BIT
+	compat_sigset_t compat_set;
 	struct compat_rt_sigframe __user * compat_frame;
 	
 	if (is_compat_task())
@@ -112,8 +114,9 @@ sys_rt_sigreturn(struct pt_regs *regs, int in_syscall)
 	
 	if (is_compat_task()) {
 		DBG(2,"sys_rt_sigreturn: ELF32 process.\n");
-		if (get_compat_sigset(&set, &compat_frame->uc.uc_sigmask))
+		if (__copy_from_user(&compat_set, &compat_frame->uc.uc_sigmask, sizeof(compat_set)))
 			goto give_sigsegv;
+		sigset_32to64(&set,&compat_set);
 	} else
 #endif
 	{
@@ -235,6 +238,7 @@ setup_rt_frame(struct ksignal *ksig, sigset_t *set, struct pt_regs *regs,
 	int err = 0;
 #ifdef CONFIG_64BIT
 	struct compat_rt_sigframe __user * compat_frame;
+	compat_sigset_t compat_set;
 #endif
 	
 	usp = (regs->gr[30] & ~(0x01UL));
@@ -257,8 +261,8 @@ setup_rt_frame(struct ksignal *ksig, sigset_t *set, struct pt_regs *regs,
 		DBG(1,"setup_rt_frame: frame->uc.uc_mcontext = 0x%p\n", &compat_frame->uc.uc_mcontext);
 		err |= setup_sigcontext32(&compat_frame->uc.uc_mcontext, 
 					&compat_frame->regs, regs, in_syscall);
-		err |= put_compat_sigset(&compat_frame->uc.uc_sigmask, set,
-					 sizeof(compat_sigset_t));
+		sigset_64to32(&compat_set,set);
+		err |= __copy_to_user(&compat_frame->uc.uc_sigmask, &compat_set, sizeof(compat_set));
 	} else
 #endif
 	{	

@@ -17,7 +17,7 @@
 
 #include "include/audit.h"
 #include "include/capability.h"
-#include "include/cred.h"
+#include "include/context.h"
 #include "include/policy.h"
 #include "include/ipc.h"
 #include "include/sig_names.h"
@@ -64,48 +64,40 @@ static void audit_ptrace_cb(struct audit_buffer *ab, void *va)
 			FLAGS_NONE, GFP_ATOMIC);
 }
 
-/* assumes check for PROFILE_MEDIATES is already done */
 /* TODO: conditionals */
 static int profile_ptrace_perm(struct aa_profile *profile,
-			     struct aa_label *peer, u32 request,
-			     struct common_audit_data *sa)
+			       struct aa_profile *peer, u32 request,
+			       struct common_audit_data *sa)
 {
 	struct aa_perms perms = { };
 
-	aad(sa)->peer = peer;
-	aa_profile_match_label(profile, peer, AA_CLASS_PTRACE, request,
+	/* need because of peer in cross check */
+	if (profile_unconfined(profile) ||
+	    !PROFILE_MEDIATES(profile, AA_CLASS_PTRACE))
+		return 0;
+
+	aad(sa)->peer = &peer->label;
+	aa_profile_match_label(profile, &peer->label, AA_CLASS_PTRACE, request,
 			       &perms);
 	aa_apply_modes_to_perms(profile, &perms);
 	return aa_check_perms(profile, &perms, request, sa, audit_ptrace_cb);
 }
 
-static int profile_tracee_perm(struct aa_profile *tracee,
-			       struct aa_label *tracer, u32 request,
-			       struct common_audit_data *sa)
+static int cross_ptrace_perm(struct aa_profile *tracer,
+			     struct aa_profile *tracee, u32 request,
+			     struct common_audit_data *sa)
 {
-	if (profile_unconfined(tracee) || unconfined(tracer) ||
-	    !PROFILE_MEDIATES(tracee, AA_CLASS_PTRACE))
-		return 0;
-
-	return profile_ptrace_perm(tracee, tracer, request, sa);
-}
-
-static int profile_tracer_perm(struct aa_profile *tracer,
-			       struct aa_label *tracee, u32 request,
-			       struct common_audit_data *sa)
-{
-	if (profile_unconfined(tracer))
-		return 0;
-
 	if (PROFILE_MEDIATES(tracer, AA_CLASS_PTRACE))
-		return profile_ptrace_perm(tracer, tracee, request, sa);
-
-	/* profile uses the old style capability check for ptrace */
-	if (&tracer->label == tracee)
+		return xcheck(profile_ptrace_perm(tracer, tracee, request, sa),
+			      profile_ptrace_perm(tracee, tracer,
+						  request << PTRACE_PERM_SHIFT,
+						  sa));
+	/* policy uses the old style capability check for ptrace */
+	if (profile_unconfined(tracer) || tracer == tracee)
 		return 0;
 
 	aad(sa)->label = &tracer->label;
-	aad(sa)->peer = tracee;
+	aad(sa)->peer = &tracee->label;
 	aad(sa)->request = 0;
 	aad(sa)->error = aa_capable(&tracer->label, CAP_SYS_PTRACE, 1);
 
@@ -123,13 +115,10 @@ static int profile_tracer_perm(struct aa_profile *tracer,
 int aa_may_ptrace(struct aa_label *tracer, struct aa_label *tracee,
 		  u32 request)
 {
-	struct aa_profile *profile;
-	u32 xrequest = request << PTRACE_PERM_SHIFT;
 	DEFINE_AUDIT_DATA(sa, LSM_AUDIT_DATA_NONE, OP_PTRACE);
 
-	return xcheck_labels(tracer, tracee, profile,
-			profile_tracer_perm(profile, tracee, request, &sa),
-			profile_tracee_perm(profile, tracer, xrequest, &sa));
+	return xcheck_labels_profiles(tracer, tracee, cross_ptrace_perm,
+				      request, &sa);
 }
 
 
@@ -138,7 +127,7 @@ static inline int map_signal_num(int sig)
 	if (sig > SIGRTMAX)
 		return SIGUNKNOWN;
 	else if (sig >= SIGRTMIN)
-		return sig - SIGRTMIN + SIGRT_BASE;
+		return sig - SIGRTMIN + 128;	/* rt sigs mapped to 128 */
 	else if (sig < MAXMAPPED_SIG)
 		return sig_map[sig];
 	return SIGUNKNOWN;
@@ -174,48 +163,60 @@ static void audit_signal_cb(struct audit_buffer *ab, void *va)
 			audit_signal_mask(ab, aad(sa)->denied);
 		}
 	}
-	if (aad(sa)->signal == SIGUNKNOWN)
-		audit_log_format(ab, "signal=unknown(%d)",
-				 aad(sa)->unmappedsig);
-	else if (aad(sa)->signal < MAXMAPPED_SIGNAME)
+	if (aad(sa)->signal < MAXMAPPED_SIG)
 		audit_log_format(ab, " signal=%s", sig_names[aad(sa)->signal]);
 	else
 		audit_log_format(ab, " signal=rtmin+%d",
-				 aad(sa)->signal - SIGRT_BASE);
+				 aad(sa)->signal - 128);
 	audit_log_format(ab, " peer=");
 	aa_label_xaudit(ab, labels_ns(aad(sa)->label), aad(sa)->peer,
 			FLAGS_NONE, GFP_ATOMIC);
 }
 
+/* TODO: update to handle compound name&name2, conditionals */
+static void profile_match_signal(struct aa_profile *profile, const char *label,
+				 int signal, struct aa_perms *perms)
+{
+	unsigned int state;
+
+	/* TODO: secondary cache check <profile, profile, perm> */
+	state = aa_dfa_next(profile->policy.dfa,
+			    profile->policy.start[AA_CLASS_SIGNAL],
+			    signal);
+	state = aa_dfa_match(profile->policy.dfa, state, label);
+	aa_compute_perms(profile->policy.dfa, state, perms);
+}
+
 static int profile_signal_perm(struct aa_profile *profile,
-			       struct aa_label *peer, u32 request,
+			       struct aa_profile *peer, u32 request,
 			       struct common_audit_data *sa)
 {
 	struct aa_perms perms;
-	unsigned int state;
 
 	if (profile_unconfined(profile) ||
 	    !PROFILE_MEDIATES(profile, AA_CLASS_SIGNAL))
 		return 0;
 
-	aad(sa)->peer = peer;
-	/* TODO: secondary cache check <profile, profile, perm> */
-	state = aa_dfa_next(profile->policy.dfa,
-			    profile->policy.start[AA_CLASS_SIGNAL],
-			    aad(sa)->signal);
-	aa_label_match(profile, peer, state, false, request, &perms);
+	aad(sa)->peer = &peer->label;
+	profile_match_signal(profile, peer->base.hname, aad(sa)->signal,
+			     &perms);
 	aa_apply_modes_to_perms(profile, &perms);
 	return aa_check_perms(profile, &perms, request, sa, audit_signal_cb);
 }
 
+static int aa_signal_cross_perm(struct aa_profile *sender,
+				struct aa_profile *target,
+				struct common_audit_data *sa)
+{
+	return xcheck(profile_signal_perm(sender, target, MAY_WRITE, sa),
+		      profile_signal_perm(target, sender, MAY_READ, sa));
+}
+
 int aa_may_signal(struct aa_label *sender, struct aa_label *target, int sig)
 {
-	struct aa_profile *profile;
 	DEFINE_AUDIT_DATA(sa, LSM_AUDIT_DATA_NONE, OP_SIGNAL);
 
 	aad(&sa)->signal = map_signal_num(sig);
-	aad(&sa)->unmappedsig = sig;
-	return xcheck_labels(sender, target, profile,
-			profile_signal_perm(profile, target, MAY_WRITE, &sa),
-			profile_signal_perm(profile, sender, MAY_READ, &sa));
+	return xcheck_labels_profiles(sender, target, aa_signal_cross_perm,
+				      &sa);
 }

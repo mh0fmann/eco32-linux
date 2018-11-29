@@ -157,7 +157,7 @@ struct hinic_cmdq {
 struct hinic_cmdqs {
 	struct hinic_hwif       *hwif;
 
-	struct dma_pool         *cmdq_buf_pool;
+	struct pci_pool         *cmdq_buf_pool;
 
 	struct hinic_wq         *saved_wqs;
 

@@ -18,7 +18,7 @@
 #include <linux/vmalloc.h>
 #include <linux/sched/signal.h>
 #include <linux/fs.h>
-#include <linux/memblock.h>
+#include <linux/bootmem.h>
 
 #include <asm/fpu.h>
 #include <asm/page.h>
@@ -45,7 +45,7 @@ struct kvm_stats_debugfs_item debugfs_entries[] = {
 	{ "cache",	  VCPU_STAT(cache_exits),	 KVM_STAT_VCPU },
 	{ "signal",	  VCPU_STAT(signal_exits),	 KVM_STAT_VCPU },
 	{ "interrupt",	  VCPU_STAT(int_exits),		 KVM_STAT_VCPU },
-	{ "cop_unusable", VCPU_STAT(cop_unusable_exits), KVM_STAT_VCPU },
+	{ "cop_unsuable", VCPU_STAT(cop_unusable_exits), KVM_STAT_VCPU },
 	{ "tlbmod",	  VCPU_STAT(tlbmod_exits),	 KVM_STAT_VCPU },
 	{ "tlbmiss_ld",	  VCPU_STAT(tlbmiss_ld_exits),	 KVM_STAT_VCPU },
 	{ "tlbmiss_st",	  VCPU_STAT(tlbmiss_st_exits),	 KVM_STAT_VCPU },
@@ -445,10 +445,10 @@ int kvm_arch_vcpu_ioctl_set_guest_debug(struct kvm_vcpu *vcpu,
 int kvm_arch_vcpu_ioctl_run(struct kvm_vcpu *vcpu, struct kvm_run *run)
 {
 	int r = -EINTR;
+	sigset_t sigsaved;
 
-	vcpu_load(vcpu);
-
-	kvm_sigset_activate(vcpu);
+	if (vcpu->sigset_active)
+		sigprocmask(SIG_SETMASK, &vcpu->sigset, &sigsaved);
 
 	if (vcpu->mmio_needed) {
 		if (!vcpu->mmio_is_write)
@@ -480,9 +480,9 @@ int kvm_arch_vcpu_ioctl_run(struct kvm_vcpu *vcpu, struct kvm_run *run)
 	local_irq_enable();
 
 out:
-	kvm_sigset_deactivate(vcpu);
+	if (vcpu->sigset_active)
+		sigprocmask(SIG_SETMASK, &sigsaved, NULL);
 
-	vcpu_put(vcpu);
 	return r;
 }
 
@@ -515,7 +515,7 @@ int kvm_vcpu_ioctl_interrupt(struct kvm_vcpu *vcpu,
 	dvcpu->arch.wait = 0;
 
 	if (swq_has_sleeper(&dvcpu->wq))
-		swake_up_one(&dvcpu->wq);
+		swake_up(&dvcpu->wq);
 
 	return 0;
 }
@@ -903,26 +903,6 @@ static int kvm_vcpu_ioctl_enable_cap(struct kvm_vcpu *vcpu,
 	return r;
 }
 
-long kvm_arch_vcpu_async_ioctl(struct file *filp, unsigned int ioctl,
-			       unsigned long arg)
-{
-	struct kvm_vcpu *vcpu = filp->private_data;
-	void __user *argp = (void __user *)arg;
-
-	if (ioctl == KVM_INTERRUPT) {
-		struct kvm_mips_interrupt irq;
-
-		if (copy_from_user(&irq, argp, sizeof(irq)))
-			return -EFAULT;
-		kvm_debug("[%d] %s: irq: %d\n", vcpu->vcpu_id, __func__,
-			  irq.irq);
-
-		return kvm_vcpu_ioctl_interrupt(vcpu, &irq);
-	}
-
-	return -ENOIOCTLCMD;
-}
-
 long kvm_arch_vcpu_ioctl(struct file *filp, unsigned int ioctl,
 			 unsigned long arg)
 {
@@ -930,54 +910,56 @@ long kvm_arch_vcpu_ioctl(struct file *filp, unsigned int ioctl,
 	void __user *argp = (void __user *)arg;
 	long r;
 
-	vcpu_load(vcpu);
-
 	switch (ioctl) {
 	case KVM_SET_ONE_REG:
 	case KVM_GET_ONE_REG: {
 		struct kvm_one_reg reg;
 
-		r = -EFAULT;
 		if (copy_from_user(&reg, argp, sizeof(reg)))
-			break;
+			return -EFAULT;
 		if (ioctl == KVM_SET_ONE_REG)
-			r = kvm_mips_set_reg(vcpu, &reg);
+			return kvm_mips_set_reg(vcpu, &reg);
 		else
-			r = kvm_mips_get_reg(vcpu, &reg);
-		break;
+			return kvm_mips_get_reg(vcpu, &reg);
 	}
 	case KVM_GET_REG_LIST: {
 		struct kvm_reg_list __user *user_list = argp;
 		struct kvm_reg_list reg_list;
 		unsigned n;
 
-		r = -EFAULT;
 		if (copy_from_user(&reg_list, user_list, sizeof(reg_list)))
-			break;
+			return -EFAULT;
 		n = reg_list.n;
 		reg_list.n = kvm_mips_num_regs(vcpu);
 		if (copy_to_user(user_list, &reg_list, sizeof(reg_list)))
-			break;
-		r = -E2BIG;
+			return -EFAULT;
 		if (n < reg_list.n)
-			break;
-		r = kvm_mips_copy_reg_indices(vcpu, user_list->reg);
-		break;
+			return -E2BIG;
+		return kvm_mips_copy_reg_indices(vcpu, user_list->reg);
 	}
+	case KVM_INTERRUPT:
+		{
+			struct kvm_mips_interrupt irq;
+
+			if (copy_from_user(&irq, argp, sizeof(irq)))
+				return -EFAULT;
+			kvm_debug("[%d] %s: irq: %d\n", vcpu->vcpu_id, __func__,
+				  irq.irq);
+
+			r = kvm_vcpu_ioctl_interrupt(vcpu, &irq);
+			break;
+		}
 	case KVM_ENABLE_CAP: {
 		struct kvm_enable_cap cap;
 
-		r = -EFAULT;
 		if (copy_from_user(&cap, argp, sizeof(cap)))
-			break;
+			return -EFAULT;
 		r = kvm_vcpu_ioctl_enable_cap(vcpu, &cap);
 		break;
 	}
 	default:
 		r = -ENOIOCTLCMD;
 	}
-
-	vcpu_put(vcpu);
 	return r;
 }
 
@@ -1076,7 +1058,7 @@ int kvm_arch_vcpu_ioctl_set_fpu(struct kvm_vcpu *vcpu, struct kvm_fpu *fpu)
 	return -ENOIOCTLCMD;
 }
 
-vm_fault_t kvm_arch_vcpu_fault(struct kvm_vcpu *vcpu, struct vm_fault *vmf)
+int kvm_arch_vcpu_fault(struct kvm_vcpu *vcpu, struct vm_fault *vmf)
 {
 	return VM_FAULT_SIGBUS;
 }
@@ -1166,8 +1148,6 @@ int kvm_arch_vcpu_ioctl_set_regs(struct kvm_vcpu *vcpu, struct kvm_regs *regs)
 {
 	int i;
 
-	vcpu_load(vcpu);
-
 	for (i = 1; i < ARRAY_SIZE(vcpu->arch.gprs); i++)
 		vcpu->arch.gprs[i] = regs->gpr[i];
 	vcpu->arch.gprs[0] = 0; /* zero is special, and cannot be set. */
@@ -1175,15 +1155,12 @@ int kvm_arch_vcpu_ioctl_set_regs(struct kvm_vcpu *vcpu, struct kvm_regs *regs)
 	vcpu->arch.lo = regs->lo;
 	vcpu->arch.pc = regs->pc;
 
-	vcpu_put(vcpu);
 	return 0;
 }
 
 int kvm_arch_vcpu_ioctl_get_regs(struct kvm_vcpu *vcpu, struct kvm_regs *regs)
 {
 	int i;
-
-	vcpu_load(vcpu);
 
 	for (i = 0; i < ARRAY_SIZE(vcpu->arch.gprs); i++)
 		regs->gpr[i] = vcpu->arch.gprs[i];
@@ -1192,7 +1169,6 @@ int kvm_arch_vcpu_ioctl_get_regs(struct kvm_vcpu *vcpu, struct kvm_regs *regs)
 	regs->lo = vcpu->arch.lo;
 	regs->pc = vcpu->arch.pc;
 
-	vcpu_put(vcpu);
 	return 0;
 }
 
@@ -1204,7 +1180,7 @@ static void kvm_mips_comparecount_func(unsigned long data)
 
 	vcpu->arch.wait = 0;
 	if (swq_has_sleeper(&vcpu->wq))
-		swake_up_one(&vcpu->wq);
+		swake_up(&vcpu->wq);
 }
 
 /* low level hrtimer wake routine */

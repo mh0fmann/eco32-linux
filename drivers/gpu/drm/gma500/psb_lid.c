@@ -23,9 +23,9 @@
 #include "psb_intel_reg.h"
 #include <linux/spinlock.h>
 
-static void psb_lid_timer_func(struct timer_list *t)
+static void psb_lid_timer_func(unsigned long data)
 {
-	struct drm_psb_private *dev_priv = from_timer(dev_priv, t, lid_timer);
+	struct drm_psb_private * dev_priv = (struct drm_psb_private *)data;
 	struct drm_device *dev = (struct drm_device *)dev_priv->dev;
 	struct timer_list *lid_timer = &dev_priv->lid_timer;
 	unsigned long irq_flags;
@@ -77,8 +77,10 @@ void psb_lid_timer_init(struct drm_psb_private *dev_priv)
 	spin_lock_init(&dev_priv->lid_lock);
 	spin_lock_irqsave(&dev_priv->lid_lock, irq_flags);
 
-	timer_setup(lid_timer, psb_lid_timer_func, 0);
+	init_timer(lid_timer);
 
+	lid_timer->data = (unsigned long)dev_priv;
+	lid_timer->function = psb_lid_timer_func;
 	lid_timer->expires = jiffies + PSB_LID_DELAY;
 
 	add_timer(lid_timer);

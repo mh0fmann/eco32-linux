@@ -231,7 +231,7 @@ static int isdn_timer_cnt2 = 0;
 static int isdn_timer_cnt3 = 0;
 
 static void
-isdn_timer_funct(struct timer_list *unused)
+isdn_timer_funct(ulong dummy)
 {
 	int tf = dev->tflags;
 	if (tf & ISDN_TIMER_FAST) {
@@ -1227,32 +1227,32 @@ out:
 	return retval;
 }
 
-static __poll_t
+static unsigned int
 isdn_poll(struct file *file, poll_table *wait)
 {
-	__poll_t mask = 0;
+	unsigned int mask = 0;
 	unsigned int minor = iminor(file_inode(file));
 	int drvidx = isdn_minor2drv(minor - ISDN_MINOR_CTRL);
 
 	mutex_lock(&isdn_mutex);
 	if (minor == ISDN_MINOR_STATUS) {
 		poll_wait(file, &(dev->info_waitq), wait);
-		/* mask = EPOLLOUT | EPOLLWRNORM; */
+		/* mask = POLLOUT | POLLWRNORM; */
 		if (file->private_data) {
-			mask |= EPOLLIN | EPOLLRDNORM;
+			mask |= POLLIN | POLLRDNORM;
 		}
 		goto out;
 	}
 	if (minor >= ISDN_MINOR_CTRL && minor <= ISDN_MINOR_CTRLMAX) {
 		if (drvidx < 0) {
 			/* driver deregistered while file open */
-			mask = EPOLLHUP;
+			mask = POLLHUP;
 			goto out;
 		}
 		poll_wait(file, &(dev->drv[drvidx]->st_waitq), wait);
-		mask = EPOLLOUT | EPOLLWRNORM;
+		mask = POLLOUT | POLLWRNORM;
 		if (dev->drv[drvidx]->stavail) {
-			mask |= EPOLLIN | EPOLLRDNORM;
+			mask |= POLLIN | POLLRDNORM;
 		}
 		goto out;
 	}
@@ -1262,7 +1262,7 @@ isdn_poll(struct file *file, poll_table *wait)
 		goto out;
 	}
 #endif
-	mask = EPOLLERR;
+	mask = POLLERR;
 out:
 	mutex_unlock(&isdn_mutex);
 	return mask;
@@ -1640,7 +1640,13 @@ isdn_ioctl(struct file *file, uint cmd, ulong arg)
 			} else
 				return -EINVAL;
 		case IIOCDBGVAR:
-			return -EINVAL;
+			if (arg) {
+				if (copy_to_user(argp, &dev, sizeof(ulong)))
+					return -EFAULT;
+				return 0;
+			} else
+				return -EINVAL;
+			break;
 		default:
 			if ((cmd & IIOCDRVCTL) == IIOCDRVCTL)
 				cmd = ((cmd >> _IOC_NRSHIFT) & _IOC_NRMASK) & ISDN_DRVIOCTL_MASK;
@@ -2064,14 +2070,14 @@ isdn_add_channels(isdn_driver_t *d, int drvidx, int n, int adding)
 
 	if ((adding) && (d->rcverr))
 		kfree(d->rcverr);
-	if (!(d->rcverr = kcalloc(m, sizeof(int), GFP_ATOMIC))) {
+	if (!(d->rcverr = kzalloc(sizeof(int) * m, GFP_ATOMIC))) {
 		printk(KERN_WARNING "register_isdn: Could not alloc rcverr\n");
 		return -1;
 	}
 
 	if ((adding) && (d->rcvcount))
 		kfree(d->rcvcount);
-	if (!(d->rcvcount = kcalloc(m, sizeof(int), GFP_ATOMIC))) {
+	if (!(d->rcvcount = kzalloc(sizeof(int) * m, GFP_ATOMIC))) {
 		printk(KERN_WARNING "register_isdn: Could not alloc rcvcount\n");
 		if (!adding)
 			kfree(d->rcverr);
@@ -2083,8 +2089,7 @@ isdn_add_channels(isdn_driver_t *d, int drvidx, int n, int adding)
 			skb_queue_purge(&d->rpqueue[j]);
 		kfree(d->rpqueue);
 	}
-	d->rpqueue = kmalloc_array(m, sizeof(struct sk_buff_head), GFP_ATOMIC);
-	if (!d->rpqueue) {
+	if (!(d->rpqueue = kmalloc(sizeof(struct sk_buff_head) * m, GFP_ATOMIC))) {
 		printk(KERN_WARNING "register_isdn: Could not alloc rpqueue\n");
 		if (!adding) {
 			kfree(d->rcvcount);
@@ -2098,8 +2103,7 @@ isdn_add_channels(isdn_driver_t *d, int drvidx, int n, int adding)
 
 	if ((adding) && (d->rcv_waitq))
 		kfree(d->rcv_waitq);
-	d->rcv_waitq = kmalloc(array3_size(sizeof(wait_queue_head_t), 2, m),
-			       GFP_ATOMIC);
+	d->rcv_waitq = kmalloc(sizeof(wait_queue_head_t) * 2 * m, GFP_ATOMIC);
 	if (!d->rcv_waitq) {
 		printk(KERN_WARNING "register_isdn: Could not alloc rcv_waitq\n");
 		if (!adding) {
@@ -2290,7 +2294,8 @@ static int __init isdn_init(void)
 		printk(KERN_WARNING "isdn: Could not allocate device-struct.\n");
 		return -EIO;
 	}
-	timer_setup(&dev->timer, isdn_timer_funct, 0);
+	init_timer(&dev->timer);
+	dev->timer.function = isdn_timer_funct;
 	spin_lock_init(&dev->lock);
 	spin_lock_init(&dev->timerlock);
 #ifdef MODULE

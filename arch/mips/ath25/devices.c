@@ -73,7 +73,6 @@ const char *get_system_type(void)
 
 void __init ath25_serial_setup(u32 mapbase, int irq, unsigned int uartclk)
 {
-#ifdef CONFIG_SERIAL_8250_CONSOLE
 	struct uart_port s;
 
 	memset(&s, 0, sizeof(s));
@@ -86,7 +85,6 @@ void __init ath25_serial_setup(u32 mapbase, int irq, unsigned int uartclk)
 	s.uartclk = uartclk;
 
 	early_serial_setup(&s);
-#endif /* CONFIG_SERIAL_8250_CONSOLE */
 }
 
 int __init ath25_add_wmac(int nr, u32 base, int irq)

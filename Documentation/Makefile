@@ -97,9 +97,6 @@ endif # HAVE_SPHINX
 # The following targets are independent of HAVE_SPHINX, and the rules should
 # work or silently pass without Sphinx.
 
-refcheckdocs:
-	$(Q)cd $(srctree);scripts/documentation-file-ref-check
-
 cleandocs:
 	$(Q)rm -rf $(BUILDDIR)
 	$(Q)$(MAKE) BUILDDIR=$(abspath $(BUILDDIR)) $(build)=Documentation/media clean
@@ -112,7 +109,6 @@ dochelp:
 	@echo  '  epubdocs        - EPUB'
 	@echo  '  xmldocs         - XML'
 	@echo  '  linkcheckdocs   - check for broken external links (will connect to external hosts)'
-	@echo  '  refcheckdocs    - check for references to non-existing files under Documentation'
 	@echo  '  cleandocs       - clean all generated files'
 	@echo
 	@echo  '  make SPHINXDIRS="s1 s2" [target] Generate only docs of folder s1, s2'
@@ -120,5 +116,3 @@ dochelp:
 	@echo
 	@echo  '  make SPHINX_CONF={conf-file} [target] use *additional* sphinx-build'
 	@echo  '  configuration. This is e.g. useful to build with nit-picking config.'
-	@echo
-	@echo  '  Default location for the generated documents is Documentation/output'

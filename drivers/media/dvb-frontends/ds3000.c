@@ -26,7 +26,7 @@
 #include <linux/init.h>
 #include <linux/firmware.h>
 
-#include <media/dvb_frontend.h>
+#include "dvb_frontend.h"
 #include "ts2020.h"
 #include "ds3000.h"
 
@@ -277,8 +277,10 @@ static int ds3000_writeFW(struct ds3000_state *state, int reg,
 	u8 *buf;
 
 	buf = kmalloc(33, GFP_KERNEL);
-	if (!buf)
+	if (buf == NULL) {
+		printk(KERN_ERR "Unable to kmalloc\n");
 		return -ENOMEM;
+	}
 
 	*(buf) = reg;
 
@@ -833,15 +835,17 @@ static const struct dvb_frontend_ops ds3000_ops;
 struct dvb_frontend *ds3000_attach(const struct ds3000_config *config,
 				    struct i2c_adapter *i2c)
 {
-	struct ds3000_state *state;
+	struct ds3000_state *state = NULL;
 	int ret;
 
 	dprintk("%s\n", __func__);
 
 	/* allocate memory for the internal state */
-	state = kzalloc(sizeof(*state), GFP_KERNEL);
-	if (!state)
-		return NULL;
+	state = kzalloc(sizeof(struct ds3000_state), GFP_KERNEL);
+	if (state == NULL) {
+		printk(KERN_ERR "Unable to kmalloc\n");
+		goto error2;
+	}
 
 	state->config = config;
 	state->i2c = i2c;
@@ -850,9 +854,8 @@ struct dvb_frontend *ds3000_attach(const struct ds3000_config *config,
 	/* check if the demod is present */
 	ret = ds3000_readreg(state, 0x00) & 0xfe;
 	if (ret != 0xe0) {
-		kfree(state);
 		printk(KERN_ERR "Invalid probe, probably not a DS3000\n");
-		return NULL;
+		goto error3;
 	}
 
 	printk(KERN_INFO "DS3000 chip version: %d.%d attached.\n",
@@ -870,6 +873,11 @@ struct dvb_frontend *ds3000_attach(const struct ds3000_config *config,
 	 */
 	ds3000_set_voltage(&state->frontend, SEC_VOLTAGE_OFF);
 	return &state->frontend;
+
+error3:
+	kfree(state);
+error2:
+	return NULL;
 }
 EXPORT_SYMBOL(ds3000_attach);
 
@@ -1100,10 +1108,10 @@ static const struct dvb_frontend_ops ds3000_ops = {
 	.delsys = { SYS_DVBS, SYS_DVBS2 },
 	.info = {
 		.name = "Montage Technology DS3000",
-		.frequency_min_hz =  950 * MHz,
-		.frequency_max_hz = 2150 * MHz,
-		.frequency_stepsize_hz = 1011 * kHz,
-		.frequency_tolerance_hz = 5 * MHz,
+		.frequency_min = 950000,
+		.frequency_max = 2150000,
+		.frequency_stepsize = 1011, /* kHz for QPSK frontends */
+		.frequency_tolerance = 5000,
 		.symbol_rate_min = 1000000,
 		.symbol_rate_max = 45000000,
 		.caps = FE_CAN_INVERSION_AUTO |

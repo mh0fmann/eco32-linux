@@ -11,7 +11,7 @@
  * GNU General Public License for more details.
  */
 
-#include <linux/gpio/driver.h>
+#include <linux/gpio.h>
 #include <linux/module.h>
 #include <linux/of.h>
 #include <linux/of_irq.h>
@@ -390,47 +390,31 @@ static int pmic_gpio_config_get(struct pinctrl_dev *pctldev,
 
 	switch (param) {
 	case PIN_CONFIG_DRIVE_PUSH_PULL:
-		if (pad->buffer_type != PMIC_GPIO_OUT_BUF_CMOS)
-			return -EINVAL;
-		arg = 1;
+		arg = pad->buffer_type == PMIC_GPIO_OUT_BUF_CMOS;
 		break;
 	case PIN_CONFIG_DRIVE_OPEN_DRAIN:
-		if (pad->buffer_type != PMIC_GPIO_OUT_BUF_OPEN_DRAIN_NMOS)
-			return -EINVAL;
-		arg = 1;
+		arg = pad->buffer_type == PMIC_GPIO_OUT_BUF_OPEN_DRAIN_NMOS;
 		break;
 	case PIN_CONFIG_DRIVE_OPEN_SOURCE:
-		if (pad->buffer_type != PMIC_GPIO_OUT_BUF_OPEN_DRAIN_PMOS)
-			return -EINVAL;
-		arg = 1;
+		arg = pad->buffer_type == PMIC_GPIO_OUT_BUF_OPEN_DRAIN_PMOS;
 		break;
 	case PIN_CONFIG_BIAS_PULL_DOWN:
-		if (pad->pullup != PMIC_GPIO_PULL_DOWN)
-			return -EINVAL;
-		arg = 1;
+		arg = pad->pullup == PMIC_GPIO_PULL_DOWN;
 		break;
 	case PIN_CONFIG_BIAS_DISABLE:
-		if (pad->pullup != PMIC_GPIO_PULL_DISABLE)
-			return -EINVAL;
-		arg = 1;
+		arg = pad->pullup = PMIC_GPIO_PULL_DISABLE;
 		break;
 	case PIN_CONFIG_BIAS_PULL_UP:
-		if (pad->pullup != PMIC_GPIO_PULL_UP_30)
-			return -EINVAL;
-		arg = 1;
+		arg = pad->pullup == PMIC_GPIO_PULL_UP_30;
 		break;
 	case PIN_CONFIG_BIAS_HIGH_IMPEDANCE:
-		if (pad->is_enabled)
-			return -EINVAL;
-		arg = 1;
+		arg = !pad->is_enabled;
 		break;
 	case PIN_CONFIG_POWER_SOURCE:
 		arg = pad->power_source;
 		break;
 	case PIN_CONFIG_INPUT_ENABLE:
-		if (!pad->input_enabled)
-			return -EINVAL;
-		arg = 1;
+		arg = pad->input_enabled;
 		break;
 	case PIN_CONFIG_OUTPUT:
 		arg = pad->out_value;
@@ -469,7 +453,6 @@ static int pmic_gpio_config_set(struct pinctrl_dev *pctldev, unsigned int pin,
 
 	pad = pctldev->desc->pins[pin].drv_data;
 
-	pad->is_enabled = true;
 	for (i = 0; i < nconfs; i++) {
 		param = pinconf_to_config_param(configs[i]);
 		arg = pinconf_to_config_argument(configs[i]);
@@ -616,10 +599,6 @@ static int pmic_gpio_config_set(struct pinctrl_dev *pctldev, unsigned int pin,
 		if (ret < 0)
 			return ret;
 	}
-
-	val = pad->is_enabled << PMIC_GPIO_REG_MASTER_EN_SHIFT;
-
-	ret = pmic_gpio_write(state, pad, PMIC_GPIO_REG_EN_CTL, val);
 
 	return ret;
 }
@@ -1053,7 +1032,6 @@ static const struct of_device_id pmic_gpio_of_match[] = {
 	{ .compatible = "qcom,pm8916-gpio" },	/* 4 GPIO's */
 	{ .compatible = "qcom,pm8941-gpio" },	/* 36 GPIO's */
 	{ .compatible = "qcom,pm8994-gpio" },	/* 22 GPIO's */
-	{ .compatible = "qcom,pmi8994-gpio" },  /* 10 GPIO's */
 	{ .compatible = "qcom,pma8084-gpio" },	/* 22 GPIO's */
 	{ .compatible = "qcom,spmi-gpio" }, /* Generic */
 	{ },

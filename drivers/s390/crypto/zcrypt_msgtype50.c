@@ -1,5 +1,6 @@
-// SPDX-License-Identifier: GPL-2.0+
 /*
+ *  zcrypt 2.1.0
+ *
  *  Copyright IBM Corp. 2001, 2012
  *  Author(s): Robert Burroughs
  *	       Eric Rossman (edrossma@us.ibm.com)
@@ -8,6 +9,20 @@
  *  Major cleanup & driver split: Martin Schwidefsky <schwidefsky@de.ibm.com>
  *				  Ralph Wuerthner <rwuerthn@de.ibm.com>
  *  MSGTYPE restruct:		  Holger Dengler <hd@linux.vnet.ibm.com>
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2, or (at your option)
+ * any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
 #define KMSG_COMPONENT "zcrypt"
@@ -25,14 +40,13 @@
 #include "zcrypt_error.h"
 #include "zcrypt_msgtype50.h"
 
-/* >= CEX3A: 4096 bits */
-#define CEX3A_MAX_MOD_SIZE 512
+#define CEX3A_MAX_MOD_SIZE	512	/* 4096 bits	*/
 
-/* CEX2A: max outputdatalength + type80_hdr */
-#define CEX2A_MAX_RESPONSE_SIZE 0x110
+#define CEX2A_MAX_RESPONSE_SIZE 0x110	/* max outputdatalength + type80_hdr */
 
-/* >= CEX3A: 512 bit modulus, (max outputdatalength) + type80_hdr */
-#define CEX3A_MAX_RESPONSE_SIZE 0x210
+#define CEX3A_MAX_RESPONSE_SIZE	0x210	/* 512 bit modulus
+					 * (max outputdatalength) +
+					 * type80_hdr*/
 
 MODULE_AUTHOR("IBM Corporation");
 MODULE_DESCRIPTION("Cryptographic Accelerator (message type 50), " \
@@ -40,7 +54,7 @@ MODULE_DESCRIPTION("Cryptographic Accelerator (message type 50), " \
 MODULE_LICENSE("GPL");
 
 /**
- * The type 50 message family is associated with a CEXxA cards.
+ * The type 50 message family is associated with a CEX2A card.
  *
  * The four members of the family are described below.
  *
@@ -137,7 +151,7 @@ struct type50_crb3_msg {
 } __packed;
 
 /**
- * The type 80 response family is associated with a CEXxA cards.
+ * The type 80 response family is associated with a CEX2A card.
  *
  * Note that all unsigned char arrays are right-justified and left-padded
  * with zeroes.
@@ -208,7 +222,6 @@ static int ICAMEX_msg_to_type50MEX_msg(struct zcrypt_queue *zq,
 
 	if (mod_len <= 128) {
 		struct type50_meb1_msg *meb1 = ap_msg->message;
-
 		memset(meb1, 0, sizeof(*meb1));
 		ap_msg->length = sizeof(*meb1);
 		meb1->header.msg_type_code = TYPE50_TYPE_CODE;
@@ -219,7 +232,6 @@ static int ICAMEX_msg_to_type50MEX_msg(struct zcrypt_queue *zq,
 		inp = meb1->message + sizeof(meb1->message) - mod_len;
 	} else if (mod_len <= 256) {
 		struct type50_meb2_msg *meb2 = ap_msg->message;
-
 		memset(meb2, 0, sizeof(*meb2));
 		ap_msg->length = sizeof(*meb2);
 		meb2->header.msg_type_code = TYPE50_TYPE_CODE;
@@ -228,9 +240,9 @@ static int ICAMEX_msg_to_type50MEX_msg(struct zcrypt_queue *zq,
 		mod = meb2->modulus + sizeof(meb2->modulus) - mod_len;
 		exp = meb2->exponent + sizeof(meb2->exponent) - mod_len;
 		inp = meb2->message + sizeof(meb2->message) - mod_len;
-	} else if (mod_len <= 512) {
+	} else {
+		/* mod_len > 256 = 4096 bit RSA Key */
 		struct type50_meb3_msg *meb3 = ap_msg->message;
-
 		memset(meb3, 0, sizeof(*meb3));
 		ap_msg->length = sizeof(*meb3);
 		meb3->header.msg_type_code = TYPE50_TYPE_CODE;
@@ -239,8 +251,7 @@ static int ICAMEX_msg_to_type50MEX_msg(struct zcrypt_queue *zq,
 		mod = meb3->modulus + sizeof(meb3->modulus) - mod_len;
 		exp = meb3->exponent + sizeof(meb3->exponent) - mod_len;
 		inp = meb3->message + sizeof(meb3->message) - mod_len;
-	} else
-		return -EINVAL;
+	}
 
 	if (copy_from_user(mod, mex->n_modulus, mod_len) ||
 	    copy_from_user(exp, mex->b_key, mod_len) ||
@@ -271,12 +282,11 @@ static int ICACRT_msg_to_type50CRT_msg(struct zcrypt_queue *zq,
 	/*
 	 * CEX2A and CEX3A w/o FW update can handle requests up to
 	 * 256 byte modulus (2k keys).
-	 * CEX3A with FW update and newer CEXxA cards are able to handle
+	 * CEX3A with FW update and CEX4A cards are able to handle
 	 * 512 byte modulus (4k keys).
 	 */
 	if (mod_len <= 128) {		/* up to 1024 bit key size */
 		struct type50_crb1_msg *crb1 = ap_msg->message;
-
 		memset(crb1, 0, sizeof(*crb1));
 		ap_msg->length = sizeof(*crb1);
 		crb1->header.msg_type_code = TYPE50_TYPE_CODE;
@@ -290,7 +300,6 @@ static int ICACRT_msg_to_type50CRT_msg(struct zcrypt_queue *zq,
 		inp = crb1->message + sizeof(crb1->message) - mod_len;
 	} else if (mod_len <= 256) {	/* up to 2048 bit key size */
 		struct type50_crb2_msg *crb2 = ap_msg->message;
-
 		memset(crb2, 0, sizeof(*crb2));
 		ap_msg->length = sizeof(*crb2);
 		crb2->header.msg_type_code = TYPE50_TYPE_CODE;
@@ -305,7 +314,6 @@ static int ICACRT_msg_to_type50CRT_msg(struct zcrypt_queue *zq,
 	} else if ((mod_len <= 512) &&	/* up to 4096 bit key size */
 		   (zq->zcard->max_mod_size == CEX3A_MAX_MOD_SIZE)) {
 		struct type50_crb3_msg *crb3 = ap_msg->message;
-
 		memset(crb3, 0, sizeof(*crb3));
 		ap_msg->length = sizeof(*crb3);
 		crb3->header.msg_type_code = TYPE50_TYPE_CODE;
@@ -354,7 +362,7 @@ static int convert_type80(struct zcrypt_queue *zq,
 	unsigned char *data;
 
 	if (t80h->len < sizeof(*t80h) + outputdatalength) {
-		/* The result is too short, the CEXxA card may not do that.. */
+		/* The result is too short, the CEX2A card may not do that.. */
 		zq->online = 0;
 		pr_err("Cryptographic device %02x.%04x failed and was set offline\n",
 		       AP_QID_CARD(zq->queue->qid),
@@ -445,10 +453,10 @@ out:
 static atomic_t zcrypt_step = ATOMIC_INIT(0);
 
 /**
- * The request distributor calls this function if it picked the CEXxA
+ * The request distributor calls this function if it picked the CEX2A
  * device to handle a modexpo request.
  * @zq: pointer to zcrypt_queue structure that identifies the
- *	CEXxA device to the request distributor
+ *	  CEX2A device to the request distributor
  * @mex: pointer to the modexpo request buffer
  */
 static long zcrypt_cex2a_modexpo(struct zcrypt_queue *zq,
@@ -491,10 +499,10 @@ out_free:
 }
 
 /**
- * The request distributor calls this function if it picked the CEXxA
+ * The request distributor calls this function if it picked the CEX2A
  * device to handle a modexpo_crt request.
  * @zq: pointer to zcrypt_queue structure that identifies the
- *	CEXxA device to the request distributor
+ *	  CEX2A device to the request distributor
  * @crt: pointer to the modexpoc_crt request buffer
  */
 static long zcrypt_cex2a_modexpo_crt(struct zcrypt_queue *zq,

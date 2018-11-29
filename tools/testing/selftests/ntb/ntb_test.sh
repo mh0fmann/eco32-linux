@@ -18,6 +18,7 @@ LIST_DEVS=FALSE
 
 DEBUGFS=${DEBUGFS-/sys/kernel/debug}
 
+DB_BITMASK=0x7FFF
 PERF_RUN_ORDER=32
 MAX_MW_SIZE=0
 RUN_DMA_TESTS=
@@ -38,17 +39,15 @@ function show_help()
 	echo "be highly recommended."
 	echo
 	echo "Options:"
+	echo "  -b BITMASK      doorbell clear bitmask for ntb_tool"
 	echo "  -C              don't cleanup ntb modules on exit"
+	echo "  -d              run dma tests"
 	echo "  -h              show this help message"
 	echo "  -l              list available local and remote PCI ids"
 	echo "  -r REMOTE_HOST  specify the remote's hostname to connect"
-	echo "                  to for the test (using ssh)"
-	echo "  -m MW_SIZE      memory window size for ntb_tool"
-	echo "                  (default: $MW_SIZE)"
-	echo "  -d              run dma tests for ntb_perf"
-	echo "  -p ORDER        total data order for ntb_perf"
-	echo "                  (default: $PERF_RUN_ORDER)"
-	echo "  -w MAX_MW_SIZE  maxmium memory window size for ntb_perf"
+        echo "                  to for the test (using ssh)"
+	echo "  -p NUM          ntb_perf run order (default: $PERF_RUN_ORDER)"
+	echo "  -w max_mw_size  maxmium memory window size"
 	echo
 }
 
@@ -57,6 +56,7 @@ function parse_args()
 	OPTIND=0
 	while getopts "b:Cdhlm:r:p:w:" opt; do
 		case "$opt" in
+		b)  DB_BITMASK=${OPTARG} ;;
 		C)  DONT_CLEANUP=1 ;;
 		d)  RUN_DMA_TESTS=1 ;;
 		h)  show_help; exit 0 ;;
@@ -87,7 +87,7 @@ set -e
 
 function _modprobe()
 {
-	modprobe "$@"
+        modprobe "$@"
 
 	if [[ "$REMOTE_HOST" != "" ]]; then
 		ssh "$REMOTE_HOST" modprobe "$@"
@@ -127,70 +127,15 @@ function write_file()
 	fi
 }
 
-function check_file()
-{
-	split_remote $1
-
-	if [[ "$REMOTE" != "" ]]; then
-		ssh "$REMOTE" "[[ -e ${VPATH} ]]"
-	else
-		[[ -e ${VPATH} ]]
-	fi
-}
-
-function subdirname()
-{
-	echo $(basename $(dirname $1)) 2> /dev/null
-}
-
-function find_pidx()
-{
-	PORT=$1
-	PPATH=$2
-
-	for ((i = 0; i < 64; i++)); do
-		PEER_DIR="$PPATH/peer$i"
-
-		check_file ${PEER_DIR} || break
-
-		PEER_PORT=$(read_file "${PEER_DIR}/port")
-		if [[ ${PORT} -eq $PEER_PORT ]]; then
-			echo $i
-			return 0
-		fi
-	done
-
-	return 1
-}
-
-function port_test()
-{
-	LOC=$1
-	REM=$2
-
-	echo "Running port tests on: $(basename $LOC) / $(basename $REM)"
-
-	LOCAL_PORT=$(read_file "$LOC/port")
-	REMOTE_PORT=$(read_file "$REM/port")
-
-	LOCAL_PIDX=$(find_pidx ${REMOTE_PORT} "$LOC")
-	REMOTE_PIDX=$(find_pidx ${LOCAL_PORT} "$REM")
-
-	echo "Local port ${LOCAL_PORT} with index ${REMOTE_PIDX} on remote host"
-	echo "Peer port ${REMOTE_PORT} with index ${LOCAL_PIDX} on local host"
-
-	echo "  Passed"
-}
-
 function link_test()
 {
 	LOC=$1
 	REM=$2
 	EXP=0
 
-	echo "Running link tests on: $(subdirname $LOC) / $(subdirname $REM)"
+	echo "Running link tests on: $(basename $LOC) / $(basename $REM)"
 
-	if ! write_file "N" "$LOC/../link" 2> /dev/null; then
+	if ! write_file "N" "$LOC/link" 2> /dev/null; then
 		echo "  Unsupported"
 		return
 	fi
@@ -198,11 +143,12 @@ function link_test()
 	write_file "N" "$LOC/link_event"
 
 	if [[ $(read_file "$REM/link") != "N" ]]; then
-		echo "Expected link to be down in $REM/link" >&2
+		echo "Expected remote link to be down in $REM/link" >&2
 		exit -1
 	fi
 
-	write_file "Y" "$LOC/../link"
+	write_file "Y" "$LOC/link"
+	write_file "Y" "$LOC/link_event"
 
 	echo "  Passed"
 }
@@ -215,134 +161,56 @@ function doorbell_test()
 
 	echo "Running db tests on: $(basename $LOC) / $(basename $REM)"
 
-	DB_VALID_MASK=$(read_file "$LOC/db_valid_mask")
+	write_file "c $DB_BITMASK" "$REM/db"
 
-	write_file "c $DB_VALID_MASK" "$REM/db"
-
-	for ((i = 0; i < 64; i++)); do
-		DB=$(read_file "$REM/db")
-		if [[ "$DB" -ne "$EXP" ]]; then
+	for ((i=1; i <= 8; i++)); do
+		let DB=$(read_file "$REM/db") || true
+		if [[ "$DB" != "$EXP" ]]; then
 			echo "Doorbell doesn't match expected value $EXP " \
 			     "in $REM/db" >&2
 			exit -1
 		fi
 
-		let "MASK = (1 << $i) & $DB_VALID_MASK" || true
-		let "EXP = $EXP | $MASK" || true
-
+		let "MASK=1 << ($i-1)" || true
+		let "EXP=$EXP | $MASK" || true
 		write_file "s $MASK" "$LOC/peer_db"
 	done
-
-	write_file "c $DB_VALID_MASK" "$REM/db_mask"
-	write_file $DB_VALID_MASK "$REM/db_event"
-	write_file "s $DB_VALID_MASK" "$REM/db_mask"
-
-	write_file "c $DB_VALID_MASK" "$REM/db"
 
 	echo "  Passed"
 }
 
-function get_files_count()
+function read_spad()
 {
-	NAME=$1
-	LOC=$2
+       VPATH=$1
+       IDX=$2
 
-	split_remote $LOC
-
-	if [[ "$REMOTE" == "" ]]; then
-		echo $(ls -1 "$LOC"/${NAME}* 2>/dev/null | wc -l)
-	else
-		echo $(ssh "$REMOTE" "ls -1 \"$VPATH\"/${NAME}* | \
-		       wc -l" 2> /dev/null)
-	fi
+       ROW=($(read_file "$VPATH" | grep -e "^$IDX"))
+       let VAL=${ROW[1]} || true
+       echo $VAL
 }
 
 function scratchpad_test()
 {
 	LOC=$1
 	REM=$2
+	CNT=$(read_file "$LOC/spad" | wc -l)
 
-	echo "Running spad tests on: $(subdirname $LOC) / $(subdirname $REM)"
-
-	CNT=$(get_files_count "spad" "$LOC")
-
-	if [[ $CNT -eq 0 ]]; then
-		echo "  Unsupported"
-		return
-	fi
+	echo "Running spad tests on: $(basename $LOC) / $(basename $REM)"
 
 	for ((i = 0; i < $CNT; i++)); do
 		VAL=$RANDOM
-		write_file "$VAL" "$LOC/spad$i"
-		RVAL=$(read_file "$REM/../spad$i")
+		write_file "$i $VAL" "$LOC/peer_spad"
+		RVAL=$(read_spad "$REM/spad" $i)
 
-		if [[ "$VAL" -ne "$RVAL" ]]; then
-			echo "Scratchpad $i value $RVAL doesn't match $VAL" >&2
+		if [[ "$VAL" != "$RVAL" ]]; then
+			echo "Scratchpad doesn't match expected value $VAL " \
+			     "in $REM/spad, got $RVAL" >&2
 			exit -1
 		fi
+
 	done
 
 	echo "  Passed"
-}
-
-function message_test()
-{
-	LOC=$1
-	REM=$2
-
-	echo "Running msg tests on: $(subdirname $LOC) / $(subdirname $REM)"
-
-	CNT=$(get_files_count "msg" "$LOC")
-
-	if [[ $CNT -eq 0 ]]; then
-		echo "  Unsupported"
-		return
-	fi
-
-	MSG_OUTBITS_MASK=$(read_file "$LOC/../msg_inbits")
-	MSG_INBITS_MASK=$(read_file "$REM/../msg_inbits")
-
-	write_file "c $MSG_OUTBITS_MASK" "$LOC/../msg_sts"
-	write_file "c $MSG_INBITS_MASK" "$REM/../msg_sts"
-
-	for ((i = 0; i < $CNT; i++)); do
-		VAL=$RANDOM
-		write_file "$VAL" "$LOC/msg$i"
-		RVAL=$(read_file "$REM/../msg$i")
-
-		if [[ "$VAL" -ne "${RVAL%%<-*}" ]]; then
-			echo "Message $i value $RVAL doesn't match $VAL" >&2
-			exit -1
-		fi
-	done
-
-	echo "  Passed"
-}
-
-function get_number()
-{
-	KEY=$1
-
-	sed -n "s/^\(${KEY}\)[ \t]*\(0x[0-9a-fA-F]*\)\(\[p\]\)\?$/\2/p"
-}
-
-function mw_alloc()
-{
-	IDX=$1
-	LOC=$2
-	REM=$3
-
-	write_file $MW_SIZE "$LOC/mw_trans$IDX"
-
-	INB_MW=$(read_file "$LOC/mw_trans$IDX")
-	MW_ALIGNED_SIZE=$(echo "$INB_MW" | get_number "Window Size")
-	MW_DMA_ADDR=$(echo "$INB_MW" | get_number "DMA Address")
-
-	write_file "$MW_DMA_ADDR:$(($MW_ALIGNED_SIZE))" "$REM/peer_mw_trans$IDX"
-
-	if [[ $MW_SIZE -ne $MW_ALIGNED_SIZE ]]; then
-		echo "MW $IDX size aligned to $MW_ALIGNED_SIZE"
-	fi
 }
 
 function write_mw()
@@ -357,15 +225,17 @@ function write_mw()
 	fi
 }
 
-function mw_check()
+function mw_test()
 {
 	IDX=$1
 	LOC=$2
 	REM=$3
 
-	write_mw "$LOC/mw$IDX"
+	echo "Running $IDX tests on: $(basename $LOC) / $(basename $REM)"
 
-	split_remote "$LOC/mw$IDX"
+	write_mw "$LOC/$IDX"
+
+	split_remote "$LOC/$IDX"
 	if [[ "$REMOTE" == "" ]]; then
 		A=$VPATH
 	else
@@ -373,7 +243,7 @@ function mw_check()
 		ssh "$REMOTE" cat "$VPATH" > "$A"
 	fi
 
-	split_remote "$REM/peer_mw$IDX"
+	split_remote "$REM/peer_$IDX"
 	if [[ "$REMOTE" == "" ]]; then
 		B=$VPATH
 	else
@@ -381,7 +251,7 @@ function mw_check()
 		ssh "$REMOTE" cat "$VPATH" > "$B"
 	fi
 
-	cmp -n $MW_ALIGNED_SIZE "$A" "$B"
+	cmp -n $MW_SIZE "$A" "$B"
 	if [[ $? != 0 ]]; then
 		echo "Memory window $MW did not match!" >&2
 	fi
@@ -393,39 +263,8 @@ function mw_check()
 	if [[ "$B" == "/tmp/*" ]]; then
 		rm "$B"
 	fi
-}
 
-function mw_free()
-{
-	IDX=$1
-	LOC=$2
-	REM=$3
-
-	write_file "$MW_DMA_ADDR:0" "$REM/peer_mw_trans$IDX"
-
-	write_file 0 "$LOC/mw_trans$IDX"
-}
-
-function mw_test()
-{
-	LOC=$1
-	REM=$2
-
-	CNT=$(get_files_count "mw_trans" "$LOC")
-
-	for ((i = 0; i < $CNT; i++)); do
-		echo "Running mw$i tests on: $(subdirname $LOC) / " \
-		     "$(subdirname $REM)"
-
-		mw_alloc $i $LOC $REM
-
-		mw_check $i $LOC $REM
-
-		mw_free $i $LOC  $REM
-
-		echo "  Passed"
-	done
-
+	echo "  Passed"
 }
 
 function pingpong_test()
@@ -435,13 +274,13 @@ function pingpong_test()
 
 	echo "Running ping pong tests on: $(basename $LOC) / $(basename $REM)"
 
-	LOC_START=$(read_file "$LOC/count")
-	REM_START=$(read_file "$REM/count")
+	LOC_START=$(read_file $LOC/count)
+	REM_START=$(read_file $REM/count)
 
 	sleep 7
 
-	LOC_END=$(read_file "$LOC/count")
-	REM_END=$(read_file "$REM/count")
+	LOC_END=$(read_file $LOC/count)
+	REM_END=$(read_file $REM/count)
 
 	if [[ $LOC_START == $LOC_END ]] || [[ $REM_START == $REM_END ]]; then
 		echo "Ping pong counter not incrementing!" >&2
@@ -461,19 +300,19 @@ function perf_test()
 		WITH="without"
 	fi
 
-	_modprobe ntb_perf total_order=$PERF_RUN_ORDER \
+	_modprobe ntb_perf run_order=$PERF_RUN_ORDER \
 		max_mw_size=$MAX_MW_SIZE use_dma=$USE_DMA
 
 	echo "Running local perf test $WITH DMA"
-	write_file "$LOCAL_PIDX" "$LOCAL_PERF/run"
+	write_file "" $LOCAL_PERF/run
 	echo -n "  "
-	read_file "$LOCAL_PERF/run"
+	read_file $LOCAL_PERF/run
 	echo "  Passed"
 
 	echo "Running remote perf test $WITH DMA"
-	write_file "$REMOTE_PIDX" "$REMOTE_PERF/run"
+	write_file "" $REMOTE_PERF/run
 	echo -n "  "
-	read_file "$REMOTE_PERF/run"
+	read_file $REMOTE_PERF/run
 	echo "  Passed"
 
 	_modprobe -r ntb_perf
@@ -481,44 +320,48 @@ function perf_test()
 
 function ntb_tool_tests()
 {
-	LOCAL_TOOL="$DEBUGFS/ntb_tool/$LOCAL_DEV"
-	REMOTE_TOOL="$REMOTE_HOST:$DEBUGFS/ntb_tool/$REMOTE_DEV"
+	LOCAL_TOOL=$DEBUGFS/ntb_tool/$LOCAL_DEV
+	REMOTE_TOOL=$REMOTE_HOST:$DEBUGFS/ntb_tool/$REMOTE_DEV
 
 	echo "Starting ntb_tool tests..."
 
 	_modprobe ntb_tool
 
-	port_test "$LOCAL_TOOL" "$REMOTE_TOOL"
+	write_file Y $LOCAL_TOOL/link_event
+	write_file Y $REMOTE_TOOL/link_event
 
-	LOCAL_PEER_TOOL="$LOCAL_TOOL/peer$LOCAL_PIDX"
-	REMOTE_PEER_TOOL="$REMOTE_TOOL/peer$REMOTE_PIDX"
-
-	link_test "$LOCAL_PEER_TOOL" "$REMOTE_PEER_TOOL"
-	link_test "$REMOTE_PEER_TOOL" "$LOCAL_PEER_TOOL"
+	link_test $LOCAL_TOOL $REMOTE_TOOL
+	link_test $REMOTE_TOOL $LOCAL_TOOL
 
 	#Ensure the link is up on both sides before continuing
-	write_file "Y" "$LOCAL_PEER_TOOL/link_event"
-	write_file "Y" "$REMOTE_PEER_TOOL/link_event"
+	write_file Y $LOCAL_TOOL/link_event
+	write_file Y $REMOTE_TOOL/link_event
 
-	doorbell_test "$LOCAL_TOOL" "$REMOTE_TOOL"
-	doorbell_test "$REMOTE_TOOL" "$LOCAL_TOOL"
+	for PEER_TRANS in $(ls $LOCAL_TOOL/peer_trans*); do
+		PT=$(basename $PEER_TRANS)
+		write_file $MW_SIZE $LOCAL_TOOL/$PT
+		write_file $MW_SIZE $REMOTE_TOOL/$PT
+	done
 
-	scratchpad_test "$LOCAL_PEER_TOOL" "$REMOTE_PEER_TOOL"
-	scratchpad_test "$REMOTE_PEER_TOOL" "$LOCAL_PEER_TOOL"
+	doorbell_test $LOCAL_TOOL $REMOTE_TOOL
+	doorbell_test $REMOTE_TOOL $LOCAL_TOOL
+	scratchpad_test $LOCAL_TOOL $REMOTE_TOOL
+	scratchpad_test $REMOTE_TOOL $LOCAL_TOOL
 
-	message_test "$LOCAL_PEER_TOOL" "$REMOTE_PEER_TOOL"
-	message_test "$REMOTE_PEER_TOOL" "$LOCAL_PEER_TOOL"
+	for MW in $(ls $LOCAL_TOOL/mw*); do
+		MW=$(basename $MW)
 
-	mw_test "$LOCAL_PEER_TOOL" "$REMOTE_PEER_TOOL"
-	mw_test "$REMOTE_PEER_TOOL" "$LOCAL_PEER_TOOL"
+		mw_test $MW $LOCAL_TOOL $REMOTE_TOOL
+		mw_test $MW $REMOTE_TOOL $LOCAL_TOOL
+	done
 
 	_modprobe -r ntb_tool
 }
 
 function ntb_pingpong_tests()
 {
-	LOCAL_PP="$DEBUGFS/ntb_pingpong/$LOCAL_DEV"
-	REMOTE_PP="$REMOTE_HOST:$DEBUGFS/ntb_pingpong/$REMOTE_DEV"
+	LOCAL_PP=$DEBUGFS/ntb_pingpong/$LOCAL_DEV
+	REMOTE_PP=$REMOTE_HOST:$DEBUGFS/ntb_pingpong/$REMOTE_DEV
 
 	echo "Starting ntb_pingpong tests..."
 
@@ -531,8 +374,8 @@ function ntb_pingpong_tests()
 
 function ntb_perf_tests()
 {
-	LOCAL_PERF="$DEBUGFS/ntb_perf/$LOCAL_DEV"
-	REMOTE_PERF="$REMOTE_HOST:$DEBUGFS/ntb_perf/$REMOTE_DEV"
+	LOCAL_PERF=$DEBUGFS/ntb_perf/$LOCAL_DEV
+	REMOTE_PERF=$REMOTE_HOST:$DEBUGFS/ntb_perf/$REMOTE_DEV
 
 	echo "Starting ntb_perf tests..."
 

@@ -52,17 +52,17 @@ static long hwdep_read(struct snd_hwdep *hwdep, char __user *buf,  long count,
 	return count;
 }
 
-static __poll_t hwdep_poll(struct snd_hwdep *hwdep, struct file *file,
+static unsigned int hwdep_poll(struct snd_hwdep *hwdep, struct file *file,
 			       poll_table *wait)
 {
 	struct snd_ff *ff = hwdep->private_data;
-	__poll_t events;
+	unsigned int events;
 
 	poll_wait(file, &ff->hwdep_wait, wait);
 
 	spin_lock_irq(&ff->lock);
 	if (ff->dev_lock_changed)
-		events = EPOLLIN | EPOLLRDNORM;
+		events = POLLIN | POLLRDNORM;
 	else
 		events = 0;
 	spin_unlock_irq(&ff->lock);

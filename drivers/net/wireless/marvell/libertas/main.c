@@ -722,9 +722,9 @@ EXPORT_SYMBOL_GPL(lbs_resume);
  *
  * @data: &struct lbs_private pointer
  */
-static void lbs_cmd_timeout_handler(struct timer_list *t)
+static void lbs_cmd_timeout_handler(unsigned long data)
 {
-	struct lbs_private *priv = from_timer(priv, t, command_timer);
+	struct lbs_private *priv = (struct lbs_private *)data;
 	unsigned long flags;
 
 	spin_lock_irqsave(&priv->driver_lock, flags);
@@ -756,9 +756,9 @@ out:
  *
  * @data: &struct lbs_private pointer
  */
-static void lbs_tx_lockup_handler(struct timer_list *t)
+static void lbs_tx_lockup_handler(unsigned long data)
 {
-	struct lbs_private *priv = from_timer(priv, t, tx_lockup_timer);
+	struct lbs_private *priv = (struct lbs_private *)data;
 	unsigned long flags;
 
 	spin_lock_irqsave(&priv->driver_lock, flags);
@@ -779,9 +779,9 @@ static void lbs_tx_lockup_handler(struct timer_list *t)
  * @data:	&struct lbs_private pointer
  * returns:	N/A
  */
-static void auto_deepsleep_timer_fn(struct timer_list *t)
+static void auto_deepsleep_timer_fn(unsigned long data)
 {
-	struct lbs_private *priv = from_timer(priv, t, auto_deepsleep_timer);
+	struct lbs_private *priv = (struct lbs_private *)data;
 
 	if (priv->is_activity_detected) {
 		priv->is_activity_detected = 0;
@@ -847,9 +847,12 @@ static int lbs_init_adapter(struct lbs_private *priv)
 	init_waitqueue_head(&priv->fw_waitq);
 	mutex_init(&priv->lock);
 
-	timer_setup(&priv->command_timer, lbs_cmd_timeout_handler, 0);
-	timer_setup(&priv->tx_lockup_timer, lbs_tx_lockup_handler, 0);
-	timer_setup(&priv->auto_deepsleep_timer, auto_deepsleep_timer_fn, 0);
+	setup_timer(&priv->command_timer, lbs_cmd_timeout_handler,
+		(unsigned long)priv);
+	setup_timer(&priv->tx_lockup_timer, lbs_tx_lockup_handler,
+		(unsigned long)priv);
+	setup_timer(&priv->auto_deepsleep_timer, auto_deepsleep_timer_fn,
+			(unsigned long)priv);
 
 	INIT_LIST_HEAD(&priv->cmdfreeq);
 	INIT_LIST_HEAD(&priv->cmdpendingq);
@@ -907,29 +910,25 @@ struct lbs_private *lbs_add_card(void *card, struct device *dmdev)
 	struct net_device *dev;
 	struct wireless_dev *wdev;
 	struct lbs_private *priv = NULL;
-	int err;
 
 	/* Allocate an Ethernet device and register it */
 	wdev = lbs_cfg_alloc(dmdev);
 	if (IS_ERR(wdev)) {
-		err = PTR_ERR(wdev);
 		pr_err("cfg80211 init failed\n");
-		goto err_cfg;
+		goto done;
 	}
 
 	wdev->iftype = NL80211_IFTYPE_STATION;
 	priv = wdev_priv(wdev);
 	priv->wdev = wdev;
 
-	err = lbs_init_adapter(priv);
-	if (err) {
+	if (lbs_init_adapter(priv)) {
 		pr_err("failed to initialize adapter structure\n");
 		goto err_wdev;
 	}
 
 	dev = alloc_netdev(0, "wlan%d", NET_NAME_UNKNOWN, ether_setup);
 	if (!dev) {
-		err = -ENOMEM;
 		dev_err(dmdev, "no memory for network device instance\n");
 		goto err_adapter;
 	}
@@ -953,7 +952,6 @@ struct lbs_private *lbs_add_card(void *card, struct device *dmdev)
 	init_waitqueue_head(&priv->waitq);
 	priv->main_thread = kthread_run(lbs_thread, dev, "lbs_main");
 	if (IS_ERR(priv->main_thread)) {
-		err = PTR_ERR(priv->main_thread);
 		lbs_deb_thread("Error creating main thread.\n");
 		goto err_ndev;
 	}
@@ -966,7 +964,7 @@ struct lbs_private *lbs_add_card(void *card, struct device *dmdev)
 	priv->wol_gap = 20;
 	priv->ehs_remove_supported = true;
 
-	return priv;
+	goto done;
 
  err_ndev:
 	free_netdev(dev);
@@ -977,8 +975,10 @@ struct lbs_private *lbs_add_card(void *card, struct device *dmdev)
  err_wdev:
 	lbs_cfg_free(priv);
 
- err_cfg:
-	return ERR_PTR(err);
+	priv = NULL;
+
+done:
+	return priv;
 }
 EXPORT_SYMBOL_GPL(lbs_add_card);
 

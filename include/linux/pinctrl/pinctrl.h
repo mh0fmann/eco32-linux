@@ -18,7 +18,6 @@
 #include <linux/list.h>
 #include <linux/seq_file.h>
 #include <linux/pinctrl/pinctrl-state.h>
-#include <linux/pinctrl/devinfo.h>
 
 struct device;
 struct pinctrl_dev;

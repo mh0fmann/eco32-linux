@@ -30,7 +30,11 @@
 
 #endif /* CONFIG_X86_32 */
 
+#ifdef CONFIG_X86_PPRO_FENCE
+#define dma_rmb()	rmb()
+#else /* CONFIG_X86_PPRO_FENCE */
 #define dma_rmb()	barrier()
+#endif /* CONFIG_X86_PPRO_FENCE */
 #define dma_wmb()	barrier()
 
 #include <asm-generic/barrier.h>

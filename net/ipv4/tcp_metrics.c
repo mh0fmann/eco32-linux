@@ -21,6 +21,8 @@
 #include <net/tcp.h>
 #include <net/genetlink.h>
 
+int sysctl_tcp_nometrics_save __read_mostly;
+
 static struct tcp_metrics_block *__tcp_get_metrics(const struct inetpeer_addr *saddr,
 						   const struct inetpeer_addr *daddr,
 						   struct net *net, unsigned int hash);
@@ -329,7 +331,7 @@ void tcp_update_metrics(struct sock *sk)
 	int m;
 
 	sk_dst_confirm(sk);
-	if (net->ipv4.sysctl_tcp_nometrics_save || !dst)
+	if (sysctl_tcp_nometrics_save || !dst)
 		return;
 
 	rcu_read_lock();
@@ -470,8 +472,10 @@ void tcp_init_metrics(struct sock *sk)
 		tp->snd_ssthresh = TCP_INFINITE_SSTHRESH;
 	}
 	val = tcp_metric_get(tm, TCP_METRIC_REORDERING);
-	if (val && tp->reordering != val)
+	if (val && tp->reordering != val) {
+		tcp_disable_fack(tp);
 		tp->reordering = val;
+	}
 
 	crtt = tcp_metric_get(tm, TCP_METRIC_RTT);
 	rcu_read_unlock();
@@ -546,7 +550,8 @@ bool tcp_peer_is_proven(struct request_sock *req, struct dst_entry *dst)
 static DEFINE_SEQLOCK(fastopen_seqlock);
 
 void tcp_fastopen_cache_get(struct sock *sk, u16 *mss,
-			    struct tcp_fastopen_cookie *cookie)
+			    struct tcp_fastopen_cookie *cookie,
+			    int *syn_loss, unsigned long *last_syn_loss)
 {
 	struct tcp_metrics_block *tm;
 
@@ -563,6 +568,8 @@ void tcp_fastopen_cache_get(struct sock *sk, u16 *mss,
 			*cookie = tfom->cookie;
 			if (cookie->len <= 0 && tfom->try_exp == 1)
 				cookie->exp = true;
+			*syn_loss = tfom->syn_loss;
+			*last_syn_loss = *syn_loss ? tfom->last_syn_loss : 0;
 		} while (read_seqretry(&fastopen_seqlock, seq));
 	}
 	rcu_read_unlock();
@@ -886,14 +893,10 @@ static void tcp_metrics_flush_all(struct net *net)
 
 	for (row = 0; row < max_rows; row++, hb++) {
 		struct tcp_metrics_block __rcu **pp;
-		bool match;
-
 		spin_lock_bh(&tcp_metrics_lock);
 		pp = &hb->chain;
 		for (tm = deref_locked(*pp); tm; tm = deref_locked(*pp)) {
-			match = net ? net_eq(tm_net(tm), net) :
-				!refcount_read(&tm_net(tm)->count);
-			if (match) {
+			if (net_eq(tm_net(tm), net)) {
 				*pp = tm->tcpm_next;
 				kfree_rcu(tm, rcu_head);
 			} else {
@@ -1016,14 +1019,14 @@ static int __net_init tcp_net_metrics_init(struct net *net)
 	return 0;
 }
 
-static void __net_exit tcp_net_metrics_exit_batch(struct list_head *net_exit_list)
+static void __net_exit tcp_net_metrics_exit(struct net *net)
 {
-	tcp_metrics_flush_all(NULL);
+	tcp_metrics_flush_all(net);
 }
 
 static __net_initdata struct pernet_operations tcp_net_metrics_ops = {
-	.init		=	tcp_net_metrics_init,
-	.exit_batch	=	tcp_net_metrics_exit_batch,
+	.init	=	tcp_net_metrics_init,
+	.exit	=	tcp_net_metrics_exit,
 };
 
 void __init tcp_metrics_init(void)

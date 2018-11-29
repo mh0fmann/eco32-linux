@@ -36,7 +36,7 @@ MODULE_ALIAS("ip6t_addrtype");
 static u32 match_lookup_rt6(struct net *net, const struct net_device *dev,
 			    const struct in6_addr *addr, u16 mask)
 {
-	const struct nf_ipv6_ops *v6ops;
+	const struct nf_afinfo *afinfo;
 	struct flowi6 flow;
 	struct rt6_info *rt;
 	u32 ret = 0;
@@ -47,14 +47,17 @@ static u32 match_lookup_rt6(struct net *net, const struct net_device *dev,
 	if (dev)
 		flow.flowi6_oif = dev->ifindex;
 
-	v6ops = nf_get_ipv6_ops();
-	if (v6ops) {
+	afinfo = nf_get_afinfo(NFPROTO_IPV6);
+	if (afinfo != NULL) {
+		const struct nf_ipv6_ops *v6ops;
+
 		if (dev && (mask & XT_ADDRTYPE_LOCAL)) {
-			if (v6ops->chk_addr(net, addr, dev, true))
+			v6ops = nf_get_ipv6_ops();
+			if (v6ops && v6ops->chk_addr(net, addr, dev, true))
 				ret = XT_ADDRTYPE_LOCAL;
 		}
-		route_err = v6ops->route(net, (struct dst_entry **)&rt,
-					 flowi6_to_flowi(&flow), false);
+		route_err = afinfo->route(net, (struct dst_entry **)&rt,
+					  flowi6_to_flowi(&flow), false);
 	} else {
 		route_err = 1;
 	}
@@ -164,47 +167,48 @@ addrtype_mt_v1(const struct sk_buff *skb, struct xt_action_param *par)
 
 static int addrtype_mt_checkentry_v1(const struct xt_mtchk_param *par)
 {
-	const char *errmsg = "both incoming and outgoing interface limitation cannot be selected";
 	struct xt_addrtype_info_v1 *info = par->matchinfo;
 
 	if (info->flags & XT_ADDRTYPE_LIMIT_IFACE_IN &&
-	    info->flags & XT_ADDRTYPE_LIMIT_IFACE_OUT)
-		goto err;
+	    info->flags & XT_ADDRTYPE_LIMIT_IFACE_OUT) {
+		pr_info("both incoming and outgoing "
+			"interface limitation cannot be selected\n");
+		return -EINVAL;
+	}
 
 	if (par->hook_mask & ((1 << NF_INET_PRE_ROUTING) |
 	    (1 << NF_INET_LOCAL_IN)) &&
 	    info->flags & XT_ADDRTYPE_LIMIT_IFACE_OUT) {
-		errmsg = "output interface limitation not valid in PREROUTING and INPUT";
-		goto err;
+		pr_info("output interface limitation "
+			"not valid in PREROUTING and INPUT\n");
+		return -EINVAL;
 	}
 
 	if (par->hook_mask & ((1 << NF_INET_POST_ROUTING) |
 	    (1 << NF_INET_LOCAL_OUT)) &&
 	    info->flags & XT_ADDRTYPE_LIMIT_IFACE_IN) {
-		errmsg = "input interface limitation not valid in POSTROUTING and OUTPUT";
-		goto err;
+		pr_info("input interface limitation "
+			"not valid in POSTROUTING and OUTPUT\n");
+		return -EINVAL;
 	}
 
 #if IS_ENABLED(CONFIG_IP6_NF_IPTABLES)
 	if (par->family == NFPROTO_IPV6) {
 		if ((info->source | info->dest) & XT_ADDRTYPE_BLACKHOLE) {
-			errmsg = "ipv6 BLACKHOLE matching not supported";
-			goto err;
+			pr_err("ipv6 BLACKHOLE matching not supported\n");
+			return -EINVAL;
 		}
 		if ((info->source | info->dest) >= XT_ADDRTYPE_PROHIBIT) {
-			errmsg = "ipv6 PROHIBIT (THROW, NAT ..) matching not supported";
-			goto err;
+			pr_err("ipv6 PROHIBIT (THROW, NAT ..) matching not supported\n");
+			return -EINVAL;
 		}
 		if ((info->source | info->dest) & XT_ADDRTYPE_BROADCAST) {
-			errmsg = "ipv6 does not support BROADCAST matching";
-			goto err;
+			pr_err("ipv6 does not support BROADCAST matching\n");
+			return -EINVAL;
 		}
 	}
 #endif
 	return 0;
-err:
-	pr_info_ratelimited("%s\n", errmsg);
-	return -EINVAL;
 }
 
 static struct xt_match addrtype_mt_reg[] __read_mostly = {

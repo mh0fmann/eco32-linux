@@ -134,6 +134,7 @@ EXPORT_SYMBOL(drm_scdc_write);
  * Returns:
  * True if the scrambling is enabled, false otherwise.
  */
+
 bool drm_scdc_get_scrambling_status(struct i2c_adapter *adapter)
 {
 	u8 status;
@@ -141,7 +142,7 @@ bool drm_scdc_get_scrambling_status(struct i2c_adapter *adapter)
 
 	ret = drm_scdc_readb(adapter, SCDC_SCRAMBLER_STATUS, &status);
 	if (ret < 0) {
-		DRM_DEBUG_KMS("Failed to read scrambling status: %d\n", ret);
+		DRM_ERROR("Failed to read scrambling status, error %d\n", ret);
 		return false;
 	}
 
@@ -161,6 +162,7 @@ EXPORT_SYMBOL(drm_scdc_get_scrambling_status);
  * Returns:
  * True if scrambling is set/reset successfully, false otherwise.
  */
+
 bool drm_scdc_set_scrambling(struct i2c_adapter *adapter, bool enable)
 {
 	u8 config;
@@ -168,7 +170,7 @@ bool drm_scdc_set_scrambling(struct i2c_adapter *adapter, bool enable)
 
 	ret = drm_scdc_readb(adapter, SCDC_TMDS_CONFIG, &config);
 	if (ret < 0) {
-		DRM_DEBUG_KMS("Failed to read TMDS config: %d\n", ret);
+		DRM_ERROR("Failed to read tmds config, err=%d\n", ret);
 		return false;
 	}
 
@@ -179,7 +181,7 @@ bool drm_scdc_set_scrambling(struct i2c_adapter *adapter, bool enable)
 
 	ret = drm_scdc_writeb(adapter, SCDC_TMDS_CONFIG, config);
 	if (ret < 0) {
-		DRM_DEBUG_KMS("Failed to enable scrambling: %d\n", ret);
+		DRM_ERROR("Failed to enable scrambling, error %d\n", ret);
 		return false;
 	}
 
@@ -223,7 +225,7 @@ bool drm_scdc_set_high_tmds_clock_ratio(struct i2c_adapter *adapter, bool set)
 
 	ret = drm_scdc_readb(adapter, SCDC_TMDS_CONFIG, &config);
 	if (ret < 0) {
-		DRM_DEBUG_KMS("Failed to read TMDS config: %d\n", ret);
+		DRM_ERROR("Failed to read tmds config, err=%d\n", ret);
 		return false;
 	}
 
@@ -234,7 +236,7 @@ bool drm_scdc_set_high_tmds_clock_ratio(struct i2c_adapter *adapter, bool set)
 
 	ret = drm_scdc_writeb(adapter, SCDC_TMDS_CONFIG, config);
 	if (ret < 0) {
-		DRM_DEBUG_KMS("Failed to set TMDS clock ratio: %d\n", ret);
+		DRM_ERROR("Failed to set TMDS clock ratio, error %d\n", ret);
 		return false;
 	}
 

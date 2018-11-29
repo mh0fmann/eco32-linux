@@ -24,7 +24,6 @@
 #include <linux/elf.h>
 #include <linux/ptrace.h>
 #include <linux/ratelimit.h>
-#include <linux/syscalls.h>
 
 #include <asm/sigcontext.h>
 #include <asm/ucontext.h>
@@ -111,8 +110,6 @@ static long setup_sigcontext(struct sigcontext __user *sc,
 	struct pt_regs *regs = tsk->thread.regs;
 	unsigned long msr = regs->msr;
 	long err = 0;
-	/* Force usr to alway see softe as 1 (interrupts enabled) */
-	unsigned long softe = 0x1;
 
 	BUG_ON(tsk != current);
 
@@ -172,7 +169,6 @@ static long setup_sigcontext(struct sigcontext __user *sc,
 	WARN_ON(!FULL_REGS(regs));
 	err |= __copy_to_user(&sc->gp_regs, regs, GP_REGS_SIZE);
 	err |= __put_user(msr, &sc->gp_regs[PT_MSR]);
-	err |= __put_user(softe, &sc->gp_regs[PT_SOFTE]);
 	err |= __put_user(signr, &sc->signal);
 	err |= __put_user(handler, &sc->handler);
 	if (set != NULL)
@@ -211,20 +207,12 @@ static long setup_tm_sigcontexts(struct sigcontext __user *sc,
 	elf_vrreg_t __user *tm_v_regs = sigcontext_vmx_regs(tm_sc);
 #endif
 	struct pt_regs *regs = tsk->thread.regs;
-	unsigned long msr = tsk->thread.regs->msr;
+	unsigned long msr = tsk->thread.ckpt_regs.msr;
 	long err = 0;
 
 	BUG_ON(tsk != current);
 
 	BUG_ON(!MSR_TM_ACTIVE(regs->msr));
-
-	WARN_ON(tm_suspend_disabled);
-
-	/* Restore checkpointed FP, VEC, and VSX bits from ckpt_regs as
-	 * it contains the correct FP, VEC, VSX state after we treclaimed
-	 * the transaction and giveup_all() was called on reclaiming.
-	 */
-	msr |= tsk->thread.ckpt_regs.msr & (MSR_FP | MSR_VEC | MSR_VSX);
 
 	/* Remove TM bits from thread's MSR.  The MSR in the sigcontext
 	 * just indicates to userland that we were doing a transaction, but we
@@ -442,9 +430,6 @@ static long restore_tm_sigcontexts(struct task_struct *tsk,
 
 	BUG_ON(tsk != current);
 
-	if (tm_suspend_disabled)
-		return -EINVAL;
-
 	/* copy the GPRs */
 	err |= __copy_from_user(regs->gpr, tm_sc->gp_regs, sizeof(regs->gpr));
 	err |= __copy_from_user(&tsk->thread.ckpt_regs, sc->gp_regs,
@@ -573,7 +558,7 @@ static long restore_tm_sigcontexts(struct task_struct *tsk,
 	/* Make sure the transaction is marked as failed */
 	tsk->thread.tm_texasr |= TEXASR_FS;
 	/* This loads the checkpointed FP/VEC state, if used */
-	tm_recheckpoint(&tsk->thread);
+	tm_recheckpoint(&tsk->thread, msr);
 
 	msr_check_and_set(msr & (MSR_FP | MSR_VEC));
 	if (msr & MSR_FP) {
@@ -625,13 +610,16 @@ static long setup_trampoline(unsigned int syscall, unsigned int __user *tramp)
 /*
  * Handle {get,set,swap}_context operations
  */
-SYSCALL_DEFINE3(swapcontext, struct ucontext __user *, old_ctx,
-		struct ucontext __user *, new_ctx, long, ctx_size)
+int sys_swapcontext(struct ucontext __user *old_ctx,
+		    struct ucontext __user *new_ctx,
+		    long ctx_size, long r6, long r7, long r8, struct pt_regs *regs)
 {
 	unsigned char tmp;
 	sigset_t set;
 	unsigned long new_msr = 0;
 	int ctx_has_vsx_region = 0;
+
+	BUG_ON(regs != current->thread.regs);
 
 	if (new_ctx &&
 	    get_user(new_msr, &new_ctx->uc_mcontext.gp_regs[PT_MSR]))
@@ -696,14 +684,17 @@ SYSCALL_DEFINE3(swapcontext, struct ucontext __user *, old_ctx,
  * Do a signal return; undo the signal stack.
  */
 
-SYSCALL_DEFINE0(rt_sigreturn)
+int sys_rt_sigreturn(unsigned long r3, unsigned long r4, unsigned long r5,
+		     unsigned long r6, unsigned long r7, unsigned long r8,
+		     struct pt_regs *regs)
 {
-	struct pt_regs *regs = current_pt_regs();
 	struct ucontext __user *uc = (struct ucontext __user *)regs->gpr[1];
 	sigset_t set;
 #ifdef CONFIG_PPC_TRANSACTIONAL_MEM
 	unsigned long msr;
 #endif
+
+	BUG_ON(current->thread.regs != regs);
 
 	/* Always make any pending restarted system calls return -EINTR */
 	current->restart_block.fn = do_no_restart_syscall;

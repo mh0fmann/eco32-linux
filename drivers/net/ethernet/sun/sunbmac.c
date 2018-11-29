@@ -1,4 +1,3 @@
-// SPDX-License-Identifier: GPL-2.0
 /* sunbmac.c: Driver for Sparc BigMAC 100baseT ethernet adapters.
  *
  * Copyright (C) 1997, 1998, 1999, 2003, 2008 David S. Miller (davem@davemloft.net)
@@ -524,9 +523,9 @@ static int try_next_permutation(struct bigmac *bp, void __iomem *tregs)
 	return -1;
 }
 
-static void bigmac_timer(struct timer_list *t)
+static void bigmac_timer(unsigned long data)
 {
-	struct bigmac *bp = from_timer(bp, t, bigmac_timer);
+	struct bigmac *bp = (struct bigmac *) data;
 	void __iomem *tregs = bp->tregs;
 	int restart_timer = 0;
 
@@ -614,6 +613,8 @@ static void bigmac_begin_auto_negotiation(struct bigmac *bp)
 	bp->timer_state = ltrywait;
 	bp->timer_ticks = 0;
 	bp->bigmac_timer.expires = jiffies + (12 * HZ) / 10;
+	bp->bigmac_timer.data = (unsigned long) bp;
+	bp->bigmac_timer.function = bigmac_timer;
 	add_timer(&bp->bigmac_timer);
 }
 
@@ -920,7 +921,7 @@ static int bigmac_open(struct net_device *dev)
 		printk(KERN_ERR "BIGMAC: Can't order irq %d to go.\n", dev->irq);
 		return ret;
 	}
-	timer_setup(&bp->bigmac_timer, bigmac_timer, 0);
+	init_timer(&bp->bigmac_timer);
 	ret = bigmac_init_hw(bp, 0);
 	if (ret)
 		free_irq(dev->irq, bp);
@@ -950,8 +951,7 @@ static void bigmac_tx_timeout(struct net_device *dev)
 }
 
 /* Put a packet on the wire. */
-static netdev_tx_t
-bigmac_start_xmit(struct sk_buff *skb, struct net_device *dev)
+static int bigmac_start_xmit(struct sk_buff *skb, struct net_device *dev)
 {
 	struct bigmac *bp = netdev_priv(dev);
 	int len, entry;
@@ -1172,7 +1172,7 @@ static int bigmac_ether_init(struct platform_device *op,
 					      "board-version", 1);
 
 	/* Init auto-negotiation timer state. */
-	timer_setup(&bp->bigmac_timer, bigmac_timer, 0);
+	init_timer(&bp->bigmac_timer);
 	bp->timer_state = asleep;
 	bp->timer_ticks = 0;
 

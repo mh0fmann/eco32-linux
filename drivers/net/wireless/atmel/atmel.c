@@ -586,7 +586,7 @@ static int atmel_validate_channel(struct atmel_private *priv, int channel);
 static void atmel_management_frame(struct atmel_private *priv,
 				   struct ieee80211_hdr *header,
 				   u16 frame_len, u8 rssi);
-static void atmel_management_timer(struct timer_list *t);
+static void atmel_management_timer(u_long a);
 static void atmel_send_command(struct atmel_private *priv, int command,
 			       void *cmd, int cmd_size);
 static int atmel_send_command_wait(struct atmel_private *priv, int command,
@@ -1399,7 +1399,6 @@ static int atmel_validate_channel(struct atmel_private *priv, int channel)
 	return 0;
 }
 
-#ifdef CONFIG_PROC_FS
 static int atmel_proc_show(struct seq_file *m, void *v)
 {
 	struct atmel_private *priv = m->private;
@@ -1482,7 +1481,18 @@ static int atmel_proc_show(struct seq_file *m, void *v)
 	seq_printf(m, "Current state:\t\t%s\n", s);
 	return 0;
 }
-#endif
+
+static int atmel_proc_open(struct inode *inode, struct file *file)
+{
+	return single_open(file, atmel_proc_show, PDE_DATA(inode));
+}
+
+static const struct file_operations atmel_proc_fops = {
+	.open		= atmel_proc_open,
+	.read		= seq_read,
+	.llseek		= seq_lseek,
+	.release	= single_release,
+};
 
 static const struct net_device_ops atmel_netdev_ops = {
 	.ndo_open 		= atmel_open,
@@ -1518,9 +1528,10 @@ struct net_device *init_atmel_card(unsigned short irq, unsigned long port,
 	priv->present_callback = card_present;
 	priv->card = card;
 	priv->firmware = NULL;
+	priv->firmware_id[0] = '\0';
 	priv->firmware_type = fw_type;
 	if (firmware) /* module parameter */
-		strlcpy(priv->firmware_id, firmware, sizeof(priv->firmware_id));
+		strcpy(priv->firmware_id, firmware);
 	priv->bus_type = card_present ? BUS_TYPE_PCCARD : BUS_TYPE_PCI;
 	priv->station_state = STATION_STATE_DOWN;
 	priv->do_rx_crc = 0;
@@ -1568,9 +1579,11 @@ struct net_device *init_atmel_card(unsigned short irq, unsigned long port,
 	priv->default_beacon_period = priv->beacon_period = 100;
 	priv->listen_interval = 1;
 
-	timer_setup(&priv->management_timer, atmel_management_timer, 0);
+	init_timer(&priv->management_timer);
 	spin_lock_init(&priv->irqlock);
 	spin_lock_init(&priv->timerlock);
+	priv->management_timer.function = atmel_management_timer;
+	priv->management_timer.data = (unsigned long) dev;
 
 	dev->netdev_ops = &atmel_netdev_ops;
 	dev->wireless_handlers = &atmel_handler_def;
@@ -1603,8 +1616,7 @@ struct net_device *init_atmel_card(unsigned short irq, unsigned long port,
 
 	netif_carrier_off(dev);
 
-	if (!proc_create_single_data("driver/atmel", 0, NULL, atmel_proc_show,
-			priv))
+	if (!proc_create_data("driver/atmel", 0, NULL, &atmel_proc_fops, priv))
 		printk(KERN_WARNING "atmel: unable to create /proc entry.\n");
 
 	printk(KERN_INFO "%s: Atmel at76c50x. Version %d.%d. MAC %pM\n",
@@ -2647,9 +2659,14 @@ static int atmel_ioctl(struct net_device *dev, struct ifreq *rq, int cmd)
 			break;
 		}
 
-		new_firmware = memdup_user(com.data, com.len);
-		if (IS_ERR(new_firmware)) {
-			rc = PTR_ERR(new_firmware);
+		if (!(new_firmware = kmalloc(com.len, GFP_KERNEL))) {
+			rc = -ENOMEM;
+			break;
+		}
+
+		if (copy_from_user(new_firmware, com.data, com.len)) {
+			kfree(new_firmware);
+			rc = -EFAULT;
 			break;
 		}
 
@@ -3418,9 +3435,10 @@ static void atmel_management_frame(struct atmel_private *priv,
 }
 
 /* run when timer expires */
-static void atmel_management_timer(struct timer_list *t)
+static void atmel_management_timer(u_long a)
 {
-	struct atmel_private *priv = from_timer(priv, t, management_timer);
+	struct net_device *dev = (struct net_device *) a;
+	struct atmel_private *priv = netdev_priv(dev);
 	unsigned long flags;
 
 	/* Check if the card has been yanked. */
@@ -3677,7 +3695,7 @@ static int probe_atmel_card(struct net_device *dev)
 		atmel_write16(dev, GCR, 0x0060);
 
 	atmel_write16(dev, GCR, 0x0040);
-	msleep(500);
+	mdelay(500);
 
 	if (atmel_read16(dev, MR2) == 0) {
 		/* No stored firmware so load a small stub which just
@@ -3846,7 +3864,7 @@ static int reset_atmel_card(struct net_device *dev)
 
 	   set all the Mib values which matter in the card to match
 	   their settings in the atmel_private structure. Some of these
-	   can be altered on the fly, but many (WEP, infrastructure or ad-hoc)
+	   can be altered on the fly, but many (WEP, infrastucture or ad-hoc)
 	   can only be changed by tearing down the world and coming back through
 	   here.
 

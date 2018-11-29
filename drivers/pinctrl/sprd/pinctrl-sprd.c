@@ -818,7 +818,7 @@ static void sprd_pinconf_group_dbg_show(struct pinctrl_dev *pctldev,
 
 	grp = &info->groups[selector];
 
-	seq_putc(s, '\n');
+	seq_printf(s, "\n");
 	for (i = 0; i < grp->npins; i++, config++) {
 		unsigned int pin_id = grp->pins[i];
 
@@ -879,9 +879,8 @@ static int sprd_pinctrl_parse_groups(struct device_node *np,
 
 	grp->name = np->name;
 	grp->npins = ret;
-	grp->pins = devm_kcalloc(sprd_pctl->dev,
-				 grp->npins, sizeof(unsigned int),
-				 GFP_KERNEL);
+	grp->pins = devm_kzalloc(sprd_pctl->dev, grp->npins *
+				 sizeof(unsigned int), GFP_KERNEL);
 	if (!grp->pins)
 		return -ENOMEM;
 
@@ -932,15 +931,14 @@ static int sprd_pinctrl_parse_dt(struct sprd_pinctrl *sprd_pctl)
 	if (!info->ngroups)
 		return 0;
 
-	info->groups = devm_kcalloc(sprd_pctl->dev,
-				    info->ngroups,
+	info->groups = devm_kzalloc(sprd_pctl->dev, info->ngroups *
 				    sizeof(struct sprd_pin_group),
 				    GFP_KERNEL);
 	if (!info->groups)
 		return -ENOMEM;
 
-	info->grp_names = devm_kcalloc(sprd_pctl->dev,
-				       info->ngroups, sizeof(char *),
+	info->grp_names = devm_kzalloc(sprd_pctl->dev,
+				       info->ngroups * sizeof(char *),
 				       GFP_KERNEL);
 	if (!info->grp_names)
 		return -ENOMEM;
@@ -982,8 +980,8 @@ static int sprd_pinctrl_add_pins(struct sprd_pinctrl *sprd_pctl,
 	int i;
 
 	info->npins = pins_cnt;
-	info->pins = devm_kcalloc(sprd_pctl->dev,
-				  info->npins, sizeof(struct sprd_pin),
+	info->pins = devm_kzalloc(sprd_pctl->dev,
+				  info->npins * sizeof(struct sprd_pin),
 				  GFP_KERNEL);
 	if (!info->pins)
 		return -ENOMEM;
@@ -1059,14 +1057,7 @@ int sprd_pinctrl_core_probe(struct platform_device *pdev,
 		return ret;
 	}
 
-	ret = sprd_pinctrl_parse_dt(sprd_pctl);
-	if (ret) {
-		dev_err(&pdev->dev, "fail to parse dt properties\n");
-		return ret;
-	}
-
-	pin_desc = devm_kcalloc(&pdev->dev,
-				pinctrl_info->npins,
+	pin_desc = devm_kzalloc(&pdev->dev, pinctrl_info->npins *
 				sizeof(struct pinctrl_pin_desc),
 				GFP_KERNEL);
 	if (!pin_desc)
@@ -1087,6 +1078,13 @@ int sprd_pinctrl_core_probe(struct platform_device *pdev,
 	if (IS_ERR(sprd_pctl->pctl)) {
 		dev_err(&pdev->dev, "could not register pinctrl driver\n");
 		return PTR_ERR(sprd_pctl->pctl);
+	}
+
+	ret = sprd_pinctrl_parse_dt(sprd_pctl);
+	if (ret) {
+		dev_err(&pdev->dev, "fail to parse dt properties\n");
+		pinctrl_unregister(sprd_pctl->pctl);
+		return ret;
 	}
 
 	return 0;

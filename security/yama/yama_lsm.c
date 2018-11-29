@@ -250,10 +250,15 @@ int yama_task_prctl(int option, unsigned long arg2, unsigned long arg3,
 		} else {
 			struct task_struct *tracer;
 
-			tracer = find_get_task_by_vpid(arg2);
-			if (!tracer) {
+			rcu_read_lock();
+			tracer = find_task_by_vpid(arg2);
+			if (tracer)
+				get_task_struct(tracer);
+			else
 				rc = -EINVAL;
-			} else {
+			rcu_read_unlock();
+
+			if (tracer) {
 				rc = yama_ptracer_add(tracer, myself);
 				put_task_struct(tracer);
 			}

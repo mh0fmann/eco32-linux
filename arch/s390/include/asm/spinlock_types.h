@@ -13,8 +13,8 @@ typedef struct {
 #define __ARCH_SPIN_LOCK_UNLOCKED { .lock = 0, }
 
 typedef struct {
-	int cnts;
-	arch_spinlock_t wait;
+	int lock;
+	int owner;
 } arch_rwlock_t;
 
 #define __ARCH_RW_LOCK_UNLOCKED		{ 0 }

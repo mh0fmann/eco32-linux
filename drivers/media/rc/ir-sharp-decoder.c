@@ -39,7 +39,7 @@ enum sharp_state {
 /**
  * ir_sharp_decode() - Decode one Sharp pulse or space
  * @dev:	the struct rc_dev descriptor of the device
- * @ev:		the struct ir_raw_event descriptor of the pulse/space
+ * @duration:	the struct ir_raw_event descriptor of the pulse/space
  *
  * This function returns -EINVAL if the pulse violates the state machine
  */
@@ -54,8 +54,8 @@ static int ir_sharp_decode(struct rc_dev *dev, struct ir_raw_event ev)
 		return 0;
 	}
 
-	dev_dbg(&dev->dev, "Sharp decode started at state %d (%uus %s)\n",
-		data->state, TO_US(ev.duration), TO_STR(ev.pulse));
+	IR_dprintk(2, "Sharp decode started at state %d (%uus %s)\n",
+		   data->state, TO_US(ev.duration), TO_STR(ev.pulse));
 
 	switch (data->state) {
 
@@ -149,9 +149,9 @@ static int ir_sharp_decode(struct rc_dev *dev, struct ir_raw_event ev)
 		msg = (data->bits >> 15) & 0x7fff;
 		echo = data->bits & 0x7fff;
 		if ((msg ^ echo) != 0x3ff) {
-			dev_dbg(&dev->dev,
-				"Sharp checksum error: received 0x%04x, 0x%04x\n",
-				msg, echo);
+			IR_dprintk(1,
+				   "Sharp checksum error: received 0x%04x, 0x%04x\n",
+				   msg, echo);
 			break;
 		}
 
@@ -159,15 +159,16 @@ static int ir_sharp_decode(struct rc_dev *dev, struct ir_raw_event ev)
 		command = bitrev8((msg >> 2) & 0xff);
 
 		scancode = address << 8 | command;
-		dev_dbg(&dev->dev, "Sharp scancode 0x%04x\n", scancode);
+		IR_dprintk(1, "Sharp scancode 0x%04x\n", scancode);
 
 		rc_keydown(dev, RC_PROTO_SHARP, scancode, 0);
 		data->state = STATE_INACTIVE;
 		return 0;
 	}
 
-	dev_dbg(&dev->dev, "Sharp decode failed at count %d state %d (%uus %s)\n",
-		data->count, data->state, TO_US(ev.duration), TO_STR(ev.pulse));
+	IR_dprintk(1, "Sharp decode failed at count %d state %d (%uus %s)\n",
+		   data->count, data->state, TO_US(ev.duration),
+		   TO_STR(ev.pulse));
 	data->state = STATE_INACTIVE;
 	return -EINVAL;
 }
@@ -225,8 +226,6 @@ static struct ir_raw_handler sharp_handler = {
 	.protocols	= RC_PROTO_BIT_SHARP,
 	.decode		= ir_sharp_decode,
 	.encode		= ir_sharp_encode,
-	.carrier	= 38000,
-	.min_timeout	= SHARP_ECHO_SPACE + SHARP_ECHO_SPACE / 4,
 };
 
 static int __init ir_sharp_decode_init(void)

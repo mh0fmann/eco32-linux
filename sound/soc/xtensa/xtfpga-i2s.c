@@ -165,7 +165,7 @@ static bool xtfpga_pcm_push_tx(struct xtfpga_i2s *i2s)
 	tx_substream = rcu_dereference(i2s->tx_substream);
 	tx_active = tx_substream && snd_pcm_running(tx_substream);
 	if (tx_active) {
-		unsigned tx_ptr = READ_ONCE(i2s->tx_ptr);
+		unsigned tx_ptr = ACCESS_ONCE(i2s->tx_ptr);
 		unsigned new_tx_ptr = i2s->tx_fn(i2s, tx_substream->runtime,
 						 tx_ptr);
 
@@ -437,7 +437,7 @@ static int xtfpga_pcm_trigger(struct snd_pcm_substream *substream, int cmd)
 	case SNDRV_PCM_TRIGGER_START:
 	case SNDRV_PCM_TRIGGER_RESUME:
 	case SNDRV_PCM_TRIGGER_PAUSE_RELEASE:
-		WRITE_ONCE(i2s->tx_ptr, 0);
+		ACCESS_ONCE(i2s->tx_ptr) = 0;
 		rcu_assign_pointer(i2s->tx_substream, substream);
 		xtfpga_pcm_refill_fifo(i2s);
 		break;
@@ -459,7 +459,7 @@ static snd_pcm_uframes_t xtfpga_pcm_pointer(struct snd_pcm_substream *substream)
 {
 	struct snd_pcm_runtime *runtime = substream->runtime;
 	struct xtfpga_i2s *i2s = runtime->private_data;
-	snd_pcm_uframes_t pos = READ_ONCE(i2s->tx_ptr);
+	snd_pcm_uframes_t pos = ACCESS_ONCE(i2s->tx_ptr);
 
 	return pos < runtime->buffer_size ? pos : 0;
 }
@@ -483,10 +483,13 @@ static const struct snd_pcm_ops xtfpga_pcm_ops = {
 	.pointer	= xtfpga_pcm_pointer,
 };
 
-static const struct snd_soc_component_driver xtfpga_i2s_component = {
-	.name		= DRV_NAME,
+static const struct snd_soc_platform_driver xtfpga_soc_platform = {
 	.pcm_new	= xtfpga_pcm_new,
 	.ops		= &xtfpga_pcm_ops,
+};
+
+static const struct snd_soc_component_driver xtfpga_i2s_component = {
+	.name		= DRV_NAME,
 };
 
 static const struct snd_soc_dai_ops xtfpga_i2s_dai_ops = {
@@ -588,13 +591,18 @@ static int xtfpga_i2s_probe(struct platform_device *pdev)
 		goto err;
 	}
 
+	err = snd_soc_register_platform(&pdev->dev, &xtfpga_soc_platform);
+	if (err < 0) {
+		dev_err(&pdev->dev, "couldn't register platform\n");
+		goto err;
+	}
 	err = devm_snd_soc_register_component(&pdev->dev,
 					      &xtfpga_i2s_component,
 					      xtfpga_i2s_dai,
 					      ARRAY_SIZE(xtfpga_i2s_dai));
 	if (err < 0) {
 		dev_err(&pdev->dev, "couldn't register component\n");
-		goto err;
+		goto err_unregister_platform;
 	}
 
 	pm_runtime_enable(&pdev->dev);
@@ -607,6 +615,8 @@ static int xtfpga_i2s_probe(struct platform_device *pdev)
 
 err_pm_disable:
 	pm_runtime_disable(&pdev->dev);
+err_unregister_platform:
+	snd_soc_unregister_platform(&pdev->dev);
 err:
 	dev_err(&pdev->dev, "%s: err = %d\n", __func__, err);
 	return err;
@@ -616,6 +626,7 @@ static int xtfpga_i2s_remove(struct platform_device *pdev)
 {
 	struct xtfpga_i2s *i2s = dev_get_drvdata(&pdev->dev);
 
+	snd_soc_unregister_platform(&pdev->dev);
 	if (i2s->regmap && !IS_ERR(i2s->regmap)) {
 		regmap_write(i2s->regmap, XTFPGA_I2S_CONFIG, 0);
 		regmap_write(i2s->regmap, XTFPGA_I2S_INT_MASK, 0);

@@ -49,7 +49,7 @@ struct st_rc_device {
 #define IRB_RX_NOISE_SUPPR      0x5c	/* noise suppression  */
 #define IRB_RX_POLARITY_INV     0x68	/* polarity inverter  */
 
-/*
+/**
  * IRQ set: Enable full FIFO                 1  -> bit  3;
  *          Enable overrun IRQ               1  -> bit  2;
  *          Enable last symbol IRQ           1  -> bit  1:
@@ -67,11 +67,12 @@ struct st_rc_device {
 
 static void st_rc_send_lirc_timeout(struct rc_dev *rdev)
 {
-	struct ir_raw_event ev = { .timeout = true, .duration = rdev->timeout };
+	DEFINE_IR_RAW_EVENT(ev);
+	ev.timeout = true;
 	ir_raw_event_store(rdev, &ev);
 }
 
-/*
+/**
  * RX graphical example to better understand the difference between ST IR block
  * output and standard definition used by LIRC (and most of the world!)
  *
@@ -95,24 +96,19 @@ static void st_rc_send_lirc_timeout(struct rc_dev *rdev)
 
 static irqreturn_t st_rc_rx_interrupt(int irq, void *data)
 {
-	unsigned long timeout;
 	unsigned int symbol, mark = 0;
 	struct st_rc_device *dev = data;
 	int last_symbol = 0;
-	u32 status, int_status;
-	struct ir_raw_event ev = {};
+	u32 status;
+	DEFINE_IR_RAW_EVENT(ev);
 
 	if (dev->irq_wake)
 		pm_wakeup_event(dev->dev, 0);
 
-	/* FIXME: is 10ms good enough ? */
-	timeout = jiffies +  msecs_to_jiffies(10);
-	do {
-		status  = readl(dev->rx_base + IRB_RX_STATUS);
-		if (!(status & (IRB_FIFO_NOT_EMPTY | IRB_OVERFLOW)))
-			break;
+	status  = readl(dev->rx_base + IRB_RX_STATUS);
 
-		int_status = readl(dev->rx_base + IRB_RX_INT_STATUS);
+	while (status & (IRB_FIFO_NOT_EMPTY | IRB_OVERFLOW)) {
+		u32 int_status = readl(dev->rx_base + IRB_RX_INT_STATUS);
 		if (unlikely(int_status & IRB_RX_OVERRUN_INT)) {
 			/* discard the entire collection in case of errors!  */
 			ir_raw_event_reset(dev->rdev);
@@ -152,7 +148,8 @@ static irqreturn_t st_rc_rx_interrupt(int irq, void *data)
 
 		}
 		last_symbol = 0;
-	} while (time_is_after_jiffies(timeout));
+		status  = readl(dev->rx_base + IRB_RX_STATUS);
+	}
 
 	writel(IRB_RX_INTS, dev->rx_base + IRB_RX_INT_CLEAR);
 
@@ -320,7 +317,7 @@ static int st_rc_probe(struct platform_device *pdev)
 	device_init_wakeup(dev, true);
 	dev_pm_set_wake_irq(dev, rc_dev->irq);
 
-	/*
+	/**
 	 * for LIRC_MODE_MODE2 or LIRC_MODE_PULSE or LIRC_MODE_RAW
 	 * lircd expects a long space first before a signal train to sync.
 	 */

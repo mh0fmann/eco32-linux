@@ -92,7 +92,8 @@ static int msm_fbdev_create(struct drm_fb_helper *helper,
 
 	if (IS_ERR(fb)) {
 		dev_err(dev->dev, "failed to allocate fb\n");
-		return PTR_ERR(fb);
+		ret = PTR_ERR(fb);
+		goto fail;
 	}
 
 	bo = msm_framebuffer_bo(fb, 0);
@@ -150,7 +151,13 @@ static int msm_fbdev_create(struct drm_fb_helper *helper,
 
 fail_unlock:
 	mutex_unlock(&dev->struct_mutex);
-	drm_framebuffer_remove(fb);
+fail:
+
+	if (ret) {
+		if (fb)
+			drm_framebuffer_remove(fb);
+	}
+
 	return ret;
 }
 

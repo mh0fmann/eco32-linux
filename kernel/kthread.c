@@ -20,6 +20,7 @@
 #include <linux/freezer.h>
 #include <linux/ptrace.h>
 #include <linux/uaccess.h>
+#include <linux/cgroup.h>
 #include <trace/events/sched.h>
 
 static DEFINE_SPINLOCK(kthread_create_lock);
@@ -46,15 +47,13 @@ struct kthread {
 	void *data;
 	struct completion parked;
 	struct completion exited;
-#ifdef CONFIG_BLK_CGROUP
-	struct cgroup_subsys_state *blkcg_css;
-#endif
 };
 
 enum KTHREAD_BITS {
 	KTHREAD_IS_PER_CPU = 0,
 	KTHREAD_SHOULD_STOP,
 	KTHREAD_SHOULD_PARK,
+	KTHREAD_IS_PARKED,
 };
 
 static inline void set_kthread_struct(void *kthread)
@@ -75,17 +74,11 @@ static inline struct kthread *to_kthread(struct task_struct *k)
 
 void free_kthread_struct(struct task_struct *k)
 {
-	struct kthread *kthread;
-
 	/*
 	 * Can be NULL if this kthread was created by kernel_thread()
 	 * or if kmalloc() in kthread() failed.
 	 */
-	kthread = to_kthread(k);
-#ifdef CONFIG_BLK_CGROUP
-	WARN_ON_ONCE(kthread && kthread->blkcg_css);
-#endif
-	kfree(kthread);
+	kfree(to_kthread(k));
 }
 
 /**
@@ -176,23 +169,14 @@ void *kthread_probe_data(struct task_struct *task)
 
 static void __kthread_parkme(struct kthread *self)
 {
-	for (;;) {
-		/*
-		 * TASK_PARKED is a special state; we must serialize against
-		 * possible pending wakeups to avoid store-store collisions on
-		 * task->state.
-		 *
-		 * Such a collision might possibly result in the task state
-		 * changin from TASK_PARKED and us failing the
-		 * wait_task_inactive() in kthread_park().
-		 */
-		set_special_state(TASK_PARKED);
-		if (!test_bit(KTHREAD_SHOULD_PARK, &self->flags))
-			break;
-
-		complete(&self->parked);
+	__set_current_state(TASK_PARKED);
+	while (test_bit(KTHREAD_SHOULD_PARK, &self->flags)) {
+		if (!test_and_set_bit(KTHREAD_IS_PARKED, &self->flags))
+			complete(&self->parked);
 		schedule();
+		__set_current_state(TASK_PARKED);
 	}
+	clear_bit(KTHREAD_IS_PARKED, &self->flags);
 	__set_current_state(TASK_RUNNING);
 }
 
@@ -212,7 +196,7 @@ static int kthread(void *_create)
 	struct kthread *self;
 	int ret;
 
-	self = kzalloc(sizeof(*self), GFP_KERNEL);
+	self = kmalloc(sizeof(*self), GFP_KERNEL);
 	set_kthread_struct(self);
 
 	/* If user was SIGKILLed, I release the structure. */
@@ -228,6 +212,7 @@ static int kthread(void *_create)
 		do_exit(-ENOMEM);
 	}
 
+	self->flags = 0;
 	self->data = data;
 	init_completion(&self->exited);
 	init_completion(&self->parked);
@@ -325,14 +310,8 @@ struct task_struct *__kthread_create_on_node(int (*threadfn)(void *data),
 	task = create->result;
 	if (!IS_ERR(task)) {
 		static const struct sched_param param = { .sched_priority = 0 };
-		char name[TASK_COMM_LEN];
 
-		/*
-		 * task is already visible to other tasks, so updating
-		 * COMM must be protected.
-		 */
-		vsnprintf(name, sizeof(name), namefmt, args);
-		set_task_comm(task, name);
+		vsnprintf(task->comm, sizeof(task->comm), namefmt, args);
 		/*
 		 * root may have changed our (kthreadd's) priority or CPU mask.
 		 * The kernel thread should not inherit these properties.
@@ -464,18 +443,22 @@ void kthread_unpark(struct task_struct *k)
 {
 	struct kthread *kthread = to_kthread(k);
 
-	/*
-	 * Newly created kthread was parked when the CPU was offline.
-	 * The binding was lost and we need to set it again.
-	 */
-	if (test_bit(KTHREAD_IS_PER_CPU, &kthread->flags))
-		__kthread_bind(k, kthread->cpu, TASK_PARKED);
-
 	clear_bit(KTHREAD_SHOULD_PARK, &kthread->flags);
 	/*
-	 * __kthread_parkme() will either see !SHOULD_PARK or get the wakeup.
+	 * We clear the IS_PARKED bit here as we don't wait
+	 * until the task has left the park code. So if we'd
+	 * park before that happens we'd see the IS_PARKED bit
+	 * which might be about to be cleared.
 	 */
-	wake_up_state(k, TASK_PARKED);
+	if (test_and_clear_bit(KTHREAD_IS_PARKED, &kthread->flags)) {
+		/*
+		 * Newly created kthread was parked when the CPU was offline.
+		 * The binding was lost and we need to set it again.
+		 */
+		if (test_bit(KTHREAD_IS_PER_CPU, &kthread->flags))
+			__kthread_bind(k, kthread->cpu, TASK_PARKED);
+		wake_up_state(k, TASK_PARKED);
+	}
 }
 EXPORT_SYMBOL_GPL(kthread_unpark);
 
@@ -498,22 +481,12 @@ int kthread_park(struct task_struct *k)
 	if (WARN_ON(k->flags & PF_EXITING))
 		return -ENOSYS;
 
-	if (WARN_ON_ONCE(test_bit(KTHREAD_SHOULD_PARK, &kthread->flags)))
-		return -EBUSY;
-
-	set_bit(KTHREAD_SHOULD_PARK, &kthread->flags);
-	if (k != current) {
-		wake_up_process(k);
-		/*
-		 * Wait for __kthread_parkme() to complete(), this means we
-		 * _will_ have TASK_PARKED and are about to call schedule().
-		 */
-		wait_for_completion(&kthread->parked);
-		/*
-		 * Now wait for that schedule() to complete and the task to
-		 * get scheduled out.
-		 */
-		WARN_ON_ONCE(!wait_task_inactive(k, TASK_PARKED));
+	if (!test_bit(KTHREAD_IS_PARKED, &kthread->flags)) {
+		set_bit(KTHREAD_SHOULD_PARK, &kthread->flags);
+		if (k != current) {
+			wake_up_process(k);
+			wait_for_completion(&kthread->parked);
+		}
 	}
 
 	return 0;
@@ -825,14 +798,15 @@ EXPORT_SYMBOL_GPL(kthread_queue_work);
 /**
  * kthread_delayed_work_timer_fn - callback that queues the associated kthread
  *	delayed work when the timer expires.
- * @t: pointer to the expired timer
+ * @__data: pointer to the data associated with the timer
  *
  * The format of the function is defined by struct timer_list.
  * It should have been called from irqsafe timer with irq already off.
  */
-void kthread_delayed_work_timer_fn(struct timer_list *t)
+void kthread_delayed_work_timer_fn(unsigned long __data)
 {
-	struct kthread_delayed_work *dwork = from_timer(dwork, t, timer);
+	struct kthread_delayed_work *dwork =
+		(struct kthread_delayed_work *)__data;
 	struct kthread_work *work = &dwork->work;
 	struct kthread_worker *worker = work->worker;
 
@@ -863,7 +837,8 @@ void __kthread_queue_delayed_work(struct kthread_worker *worker,
 	struct timer_list *timer = &dwork->timer;
 	struct kthread_work *work = &dwork->work;
 
-	WARN_ON_ONCE(timer->function != kthread_delayed_work_timer_fn);
+	WARN_ON_ONCE(timer->function != kthread_delayed_work_timer_fn ||
+		     timer->data != (unsigned long)dwork);
 
 	/*
 	 * If @delay is 0, queue @dwork->work immediately.  This is for
@@ -1179,54 +1154,3 @@ void kthread_destroy_worker(struct kthread_worker *worker)
 	kfree(worker);
 }
 EXPORT_SYMBOL(kthread_destroy_worker);
-
-#ifdef CONFIG_BLK_CGROUP
-/**
- * kthread_associate_blkcg - associate blkcg to current kthread
- * @css: the cgroup info
- *
- * Current thread must be a kthread. The thread is running jobs on behalf of
- * other threads. In some cases, we expect the jobs attach cgroup info of
- * original threads instead of that of current thread. This function stores
- * original thread's cgroup info in current kthread context for later
- * retrieval.
- */
-void kthread_associate_blkcg(struct cgroup_subsys_state *css)
-{
-	struct kthread *kthread;
-
-	if (!(current->flags & PF_KTHREAD))
-		return;
-	kthread = to_kthread(current);
-	if (!kthread)
-		return;
-
-	if (kthread->blkcg_css) {
-		css_put(kthread->blkcg_css);
-		kthread->blkcg_css = NULL;
-	}
-	if (css) {
-		css_get(css);
-		kthread->blkcg_css = css;
-	}
-}
-EXPORT_SYMBOL(kthread_associate_blkcg);
-
-/**
- * kthread_blkcg - get associated blkcg css of current kthread
- *
- * Current thread must be a kthread.
- */
-struct cgroup_subsys_state *kthread_blkcg(void)
-{
-	struct kthread *kthread;
-
-	if (current->flags & PF_KTHREAD) {
-		kthread = to_kthread(current);
-		if (kthread)
-			return kthread->blkcg_css;
-	}
-	return NULL;
-}
-EXPORT_SYMBOL(kthread_blkcg);
-#endif

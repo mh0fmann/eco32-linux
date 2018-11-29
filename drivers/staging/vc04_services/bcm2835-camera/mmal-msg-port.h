@@ -1,8 +1,11 @@
-/* SPDX-License-Identifier: GPL-2.0 */
 /*
  * Broadcom BM2835 V4L2 driver
  *
  * Copyright © 2013 Raspberry Pi (Trading) Ltd.
+ *
+ * This file is subject to the terms and conditions of the GNU General Public
+ * License.  See the file COPYING in the main directory of this archive
+ * for more details.
  *
  * Authors: Vincent Sanders <vincent.sanders@collabora.co.uk>
  *          Dave Stevenson <dsteve@broadcom.com>
@@ -37,7 +40,7 @@ enum mmal_port_type {
  *
  * most elements are informational only, the pointer values for
  * interogation messages are generally provided as additional
- * structures within the message. When used to set values only the
+ * strucures within the message. When used to set values only teh
  * buffer_num, buffer_size and userdata parameters are writable.
  */
 struct mmal_port {

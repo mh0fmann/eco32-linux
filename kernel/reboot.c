@@ -49,7 +49,6 @@ int reboot_force;
  */
 
 void (*pm_power_off_prepare)(void);
-EXPORT_SYMBOL_GPL(pm_power_off_prepare);
 
 /**
  *	emergency_restart - reboot the system
@@ -104,33 +103,6 @@ int unregister_reboot_notifier(struct notifier_block *nb)
 	return blocking_notifier_chain_unregister(&reboot_notifier_list, nb);
 }
 EXPORT_SYMBOL(unregister_reboot_notifier);
-
-static void devm_unregister_reboot_notifier(struct device *dev, void *res)
-{
-	WARN_ON(unregister_reboot_notifier(*(struct notifier_block **)res));
-}
-
-int devm_register_reboot_notifier(struct device *dev, struct notifier_block *nb)
-{
-	struct notifier_block **rcnb;
-	int ret;
-
-	rcnb = devres_alloc(devm_unregister_reboot_notifier,
-			    sizeof(*rcnb), GFP_KERNEL);
-	if (!rcnb)
-		return -ENOMEM;
-
-	ret = register_reboot_notifier(nb);
-	if (!ret) {
-		*rcnb = nb;
-		devres_add(dev, rcnb);
-	} else {
-		devres_free(rcnb);
-	}
-
-	return ret;
-}
-EXPORT_SYMBOL(devm_register_reboot_notifier);
 
 /*
  *	Notifier list for kernel code which wants to be called
@@ -295,7 +267,7 @@ void kernel_power_off(void)
 }
 EXPORT_SYMBOL_GPL(kernel_power_off);
 
-DEFINE_MUTEX(system_transition_mutex);
+static DEFINE_MUTEX(reboot_mutex);
 
 /*
  * Reboot system call: for obvious reasons only root may call it,
@@ -339,7 +311,7 @@ SYSCALL_DEFINE4(reboot, int, magic1, int, magic2, unsigned int, cmd,
 	if ((cmd == LINUX_REBOOT_CMD_POWER_OFF) && !pm_power_off)
 		cmd = LINUX_REBOOT_CMD_HALT;
 
-	mutex_lock(&system_transition_mutex);
+	mutex_lock(&reboot_mutex);
 	switch (cmd) {
 	case LINUX_REBOOT_CMD_RESTART:
 		kernel_restart(NULL);
@@ -390,7 +362,7 @@ SYSCALL_DEFINE4(reboot, int, magic1, int, magic2, unsigned int, cmd,
 		ret = -EINVAL;
 		break;
 	}
-	mutex_unlock(&system_transition_mutex);
+	mutex_unlock(&reboot_mutex);
 	return ret;
 }
 

@@ -64,8 +64,7 @@ static const struct nla_policy drr_policy[TCA_DRR_MAX + 1] = {
 };
 
 static int drr_change_class(struct Qdisc *sch, u32 classid, u32 parentid,
-			    struct nlattr **tca, unsigned long *arg,
-			    struct netlink_ext_ack *extack)
+			    struct nlattr **tca, unsigned long *arg)
 {
 	struct drr_sched *q = qdisc_priv(sch);
 	struct drr_class *cl = (struct drr_class *)*arg;
@@ -74,21 +73,17 @@ static int drr_change_class(struct Qdisc *sch, u32 classid, u32 parentid,
 	u32 quantum;
 	int err;
 
-	if (!opt) {
-		NL_SET_ERR_MSG(extack, "DRR options are required for this operation");
+	if (!opt)
 		return -EINVAL;
-	}
 
-	err = nla_parse_nested(tb, TCA_DRR_MAX, opt, drr_policy, extack);
+	err = nla_parse_nested(tb, TCA_DRR_MAX, opt, drr_policy, NULL);
 	if (err < 0)
 		return err;
 
 	if (tb[TCA_DRR_QUANTUM]) {
 		quantum = nla_get_u32(tb[TCA_DRR_QUANTUM]);
-		if (quantum == 0) {
-			NL_SET_ERR_MSG(extack, "Specified DRR quantum cannot be zero");
+		if (quantum == 0)
 			return -EINVAL;
-		}
 	} else
 		quantum = psched_mtu(qdisc_dev(sch));
 
@@ -99,10 +94,8 @@ static int drr_change_class(struct Qdisc *sch, u32 classid, u32 parentid,
 						    NULL,
 						    qdisc_root_sleeping_running(sch),
 						    tca[TCA_RATE]);
-			if (err) {
-				NL_SET_ERR_MSG(extack, "Failed to replace estimator");
+			if (err)
 				return err;
-			}
 		}
 
 		sch_tree_lock(sch);
@@ -120,8 +113,7 @@ static int drr_change_class(struct Qdisc *sch, u32 classid, u32 parentid,
 	cl->common.classid = classid;
 	cl->quantum	   = quantum;
 	cl->qdisc	   = qdisc_create_dflt(sch->dev_queue,
-					       &pfifo_qdisc_ops, classid,
-					       NULL);
+					       &pfifo_qdisc_ops, classid);
 	if (cl->qdisc == NULL)
 		cl->qdisc = &noop_qdisc;
 	else
@@ -133,8 +125,7 @@ static int drr_change_class(struct Qdisc *sch, u32 classid, u32 parentid,
 					    qdisc_root_sleeping_running(sch),
 					    tca[TCA_RATE]);
 		if (err) {
-			NL_SET_ERR_MSG(extack, "Failed to replace estimator");
-			qdisc_put(cl->qdisc);
+			qdisc_destroy(cl->qdisc);
 			kfree(cl);
 			return err;
 		}
@@ -153,7 +144,7 @@ static int drr_change_class(struct Qdisc *sch, u32 classid, u32 parentid,
 static void drr_destroy_class(struct Qdisc *sch, struct drr_class *cl)
 {
 	gen_kill_estimator(&cl->rate_est);
-	qdisc_put(cl->qdisc);
+	qdisc_destroy(cl->qdisc);
 	kfree(cl);
 }
 
@@ -181,15 +172,12 @@ static unsigned long drr_search_class(struct Qdisc *sch, u32 classid)
 	return (unsigned long)drr_find_class(sch, classid);
 }
 
-static struct tcf_block *drr_tcf_block(struct Qdisc *sch, unsigned long cl,
-				       struct netlink_ext_ack *extack)
+static struct tcf_block *drr_tcf_block(struct Qdisc *sch, unsigned long cl)
 {
 	struct drr_sched *q = qdisc_priv(sch);
 
-	if (cl) {
-		NL_SET_ERR_MSG(extack, "DRR classid must be zero");
+	if (cl)
 		return NULL;
-	}
 
 	return q->block;
 }
@@ -213,14 +201,13 @@ static void drr_unbind_tcf(struct Qdisc *sch, unsigned long arg)
 }
 
 static int drr_graft_class(struct Qdisc *sch, unsigned long arg,
-			   struct Qdisc *new, struct Qdisc **old,
-			   struct netlink_ext_ack *extack)
+			   struct Qdisc *new, struct Qdisc **old)
 {
 	struct drr_class *cl = (struct drr_class *)arg;
 
 	if (new == NULL) {
-		new = qdisc_create_dflt(sch->dev_queue, &pfifo_qdisc_ops,
-					cl->common.classid, NULL);
+		new = qdisc_create_dflt(sch->dev_queue,
+					&pfifo_qdisc_ops, cl->common.classid);
 		if (new == NULL)
 			new = &noop_qdisc;
 	}
@@ -334,7 +321,6 @@ static struct drr_class *drr_classify(struct sk_buff *skb, struct Qdisc *sch,
 		case TC_ACT_STOLEN:
 		case TC_ACT_TRAP:
 			*qerr = NET_XMIT_SUCCESS | __NET_XMIT_STOLEN;
-			/* fall through */
 		case TC_ACT_SHOT:
 			return NULL;
 		}
@@ -421,13 +407,12 @@ out:
 	return NULL;
 }
 
-static int drr_init_qdisc(struct Qdisc *sch, struct nlattr *opt,
-			  struct netlink_ext_ack *extack)
+static int drr_init_qdisc(struct Qdisc *sch, struct nlattr *opt)
 {
 	struct drr_sched *q = qdisc_priv(sch);
 	int err;
 
-	err = tcf_block_get(&q->block, &q->filter_list, sch, extack);
+	err = tcf_block_get(&q->block, &q->filter_list);
 	if (err)
 		return err;
 	err = qdisc_class_hash_init(&q->clhash);

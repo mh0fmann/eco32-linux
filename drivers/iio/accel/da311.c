@@ -212,6 +212,7 @@ static int da311_read_raw(struct iio_dev *indio_dev,
 }
 
 static const struct iio_info da311_info = {
+	.driver_module	= THIS_MODULE,
 	.read_raw	= da311_read_raw,
 };
 

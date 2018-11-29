@@ -1,3 +1,4 @@
+generic-y += clkdev.h
 generic-y += div64.h
 generic-y += export.h
 generic-y += irq_regs.h

@@ -86,13 +86,13 @@
 #include <linux/seq_file.h>
 #include <linux/cpumask.h>
 #include <linux/spinlock.h>
-#include <linux/module.h>
 #include <linux/mutex.h>
 #include <linux/rcupdate.h>
 #include <linux/stacktrace.h>
 #include <linux/cache.h>
 #include <linux/percpu.h>
-#include <linux/memblock.h>
+#include <linux/hardirq.h>
+#include <linux/bootmem.h>
 #include <linux/pfn.h>
 #include <linux/mmzone.h>
 #include <linux/slab.h>
@@ -110,6 +110,7 @@
 #include <linux/atomic.h>
 
 #include <linux/kasan.h>
+#include <linux/kmemcheck.h>
 #include <linux/kmemleak.h>
 #include <linux/memory_hotplug.h>
 
@@ -127,7 +128,7 @@
 /* GFP bitmask for kmemleak internal allocations */
 #define gfp_kmemleak_mask(gfp)	(((gfp) & (GFP_KERNEL | GFP_ATOMIC)) | \
 				 __GFP_NORETRY | __GFP_NOMEMALLOC | \
-				 __GFP_NOWARN | __GFP_NOFAIL)
+				 __GFP_NOWARN)
 
 /* scanning area inside a memory block */
 struct kmemleak_scan_area {
@@ -182,7 +183,6 @@ struct kmemleak_object {
 /* flag set to not scan the object */
 #define OBJECT_NO_SCAN		(1 << 2)
 
-#define HEX_PREFIX		"    "
 /* number of bytes to print per line; must be 16 or 32 */
 #define HEX_ROW_SIZE		16
 /* number of bytes to print at a time (1, 2, 4, 8) */
@@ -236,9 +236,6 @@ static DEFINE_MUTEX(scan_mutex);
 static int kmemleak_skip_disable;
 /* If there are leaks that can be reported */
 static bool kmemleak_found_leaks;
-
-static bool kmemleak_verbose;
-module_param_named(verbose, kmemleak_verbose, bool, 0600);
 
 /*
  * Early object allocation/freeing logging. Kmemleak is initialized after the
@@ -304,25 +301,6 @@ static void kmemleak_disable(void);
 	kmemleak_disable();		\
 } while (0)
 
-#define warn_or_seq_printf(seq, fmt, ...)	do {	\
-	if (seq)					\
-		seq_printf(seq, fmt, ##__VA_ARGS__);	\
-	else						\
-		pr_warn(fmt, ##__VA_ARGS__);		\
-} while (0)
-
-static void warn_or_seq_hex_dump(struct seq_file *seq, int prefix_type,
-				 int rowsize, int groupsize, const void *buf,
-				 size_t len, bool ascii)
-{
-	if (seq)
-		seq_hex_dump(seq, HEX_PREFIX, prefix_type, rowsize, groupsize,
-			     buf, len, ascii);
-	else
-		print_hex_dump(KERN_WARNING, pr_fmt(HEX_PREFIX), prefix_type,
-			       rowsize, groupsize, buf, len, ascii);
-}
-
 /*
  * Printing of the objects hex dump to the seq file. The number of lines to be
  * printed is limited to HEX_MAX_LINES to prevent seq file spamming. The
@@ -338,10 +316,10 @@ static void hex_dump_object(struct seq_file *seq,
 	/* limit the number of lines to HEX_MAX_LINES */
 	len = min_t(size_t, object->size, HEX_MAX_LINES * HEX_ROW_SIZE);
 
-	warn_or_seq_printf(seq, "  hex dump (first %zu bytes):\n", len);
+	seq_printf(seq, "  hex dump (first %zu bytes):\n", len);
 	kasan_disable_current();
-	warn_or_seq_hex_dump(seq, DUMP_PREFIX_NONE, HEX_ROW_SIZE,
-			     HEX_GROUP_SIZE, ptr, len, HEX_ASCII);
+	seq_hex_dump(seq, "    ", DUMP_PREFIX_NONE, HEX_ROW_SIZE,
+		     HEX_GROUP_SIZE, ptr, len, HEX_ASCII);
 	kasan_enable_current();
 }
 
@@ -389,17 +367,17 @@ static void print_unreferenced(struct seq_file *seq,
 	int i;
 	unsigned int msecs_age = jiffies_to_msecs(jiffies - object->jiffies);
 
-	warn_or_seq_printf(seq, "unreferenced object 0x%08lx (size %zu):\n",
+	seq_printf(seq, "unreferenced object 0x%08lx (size %zu):\n",
 		   object->pointer, object->size);
-	warn_or_seq_printf(seq, "  comm \"%s\", pid %d, jiffies %lu (age %d.%03ds)\n",
+	seq_printf(seq, "  comm \"%s\", pid %d, jiffies %lu (age %d.%03ds)\n",
 		   object->comm, object->pid, object->jiffies,
 		   msecs_age / 1000, msecs_age % 1000);
 	hex_dump_object(seq, object);
-	warn_or_seq_printf(seq, "  backtrace:\n");
+	seq_printf(seq, "  backtrace:\n");
 
 	for (i = 0; i < object->trace_len; i++) {
 		void *ptr = (void *)object->trace[i];
-		warn_or_seq_printf(seq, "    [<%p>] %pS\n", ptr, ptr);
+		seq_printf(seq, "    [<%p>] %pS\n", ptr, ptr);
 	}
 }
 
@@ -1211,11 +1189,6 @@ EXPORT_SYMBOL(kmemleak_no_scan);
 /**
  * kmemleak_alloc_phys - similar to kmemleak_alloc but taking a physical
  *			 address argument
- * @phys:	physical address of the object
- * @size:	size of the object
- * @min_count:	minimum number of references to this object.
- *              See kmemleak_alloc()
- * @gfp:	kmalloc() flags used for kmemleak internal memory allocations
  */
 void __ref kmemleak_alloc_phys(phys_addr_t phys, size_t size, int min_count,
 			       gfp_t gfp)
@@ -1228,9 +1201,6 @@ EXPORT_SYMBOL(kmemleak_alloc_phys);
 /**
  * kmemleak_free_part_phys - similar to kmemleak_free_part but taking a
  *			     physical address argument
- * @phys:	physical address if the beginning or inside an object. This
- *		also represents the start of the range to be freed
- * @size:	size to be unregistered
  */
 void __ref kmemleak_free_part_phys(phys_addr_t phys, size_t size)
 {
@@ -1242,7 +1212,6 @@ EXPORT_SYMBOL(kmemleak_free_part_phys);
 /**
  * kmemleak_not_leak_phys - similar to kmemleak_not_leak but taking a physical
  *			    address argument
- * @phys:	physical address of the object
  */
 void __ref kmemleak_not_leak_phys(phys_addr_t phys)
 {
@@ -1254,7 +1223,6 @@ EXPORT_SYMBOL(kmemleak_not_leak_phys);
 /**
  * kmemleak_ignore_phys - similar to kmemleak_ignore but taking a physical
  *			  address argument
- * @phys:	physical address of the object
  */
 void __ref kmemleak_ignore_phys(phys_addr_t phys)
 {
@@ -1269,6 +1237,9 @@ EXPORT_SYMBOL(kmemleak_ignore_phys);
 static bool update_checksum(struct kmemleak_object *object)
 {
 	u32 old_csum = object->checksum;
+
+	if (!kmemcheck_is_obj_initialized(object->pointer, object->size))
+		return false;
 
 	kasan_disable_current();
 	object->checksum = crc32(0, (void *)object->pointer, object->size);
@@ -1342,6 +1313,11 @@ static void scan_block(void *_start, void *_end,
 
 		if (scan_should_stop())
 			break;
+
+		/* don't scan uninitialized memory */
+		if (!kmemcheck_is_obj_initialized((unsigned long)ptr,
+						  BYTES_PER_POINTER))
+			continue;
 
 		kasan_disable_current();
 		pointer = *ptr;
@@ -1556,8 +1532,6 @@ static void kmemleak_scan(void)
 			if (page_count(page) == 0)
 				continue;
 			scan_block(page, page + 1, NULL);
-			if (!(pfn & 63))
-				cond_resched();
 		}
 	}
 	put_online_mems();
@@ -1622,10 +1596,6 @@ static void kmemleak_scan(void)
 		if (unreferenced_object(object) &&
 		    !(object->flags & OBJECT_REPORTED)) {
 			object->flags |= OBJECT_REPORTED;
-
-			if (kmemleak_verbose)
-				print_unreferenced(NULL, object);
-
 			new_leaks++;
 		}
 		spin_unlock_irqrestore(&object->lock, flags);
@@ -1695,7 +1665,8 @@ static void start_scan_thread(void)
 }
 
 /*
- * Stop the automatic memory scanning thread.
+ * Stop the automatic memory scanning thread. This function must be called
+ * with the scan_mutex held.
  */
 static void stop_scan_thread(void)
 {
@@ -1958,15 +1929,12 @@ static void kmemleak_do_cleanup(struct work_struct *work)
 {
 	stop_scan_thread();
 
-	mutex_lock(&scan_mutex);
 	/*
-	 * Once it is made sure that kmemleak_scan has stopped, it is safe to no
-	 * longer track object freeing. Ordering of the scan thread stopping and
-	 * the memory accesses below is guaranteed by the kthread_stop()
-	 * function.
+	 * Once the scan thread has stopped, it is safe to no longer track
+	 * object freeing. Ordering of the scan thread stopping and the memory
+	 * accesses below is guaranteed by the kthread_stop() function.
 	 */
 	kmemleak_free_enabled = 0;
-	mutex_unlock(&scan_mutex);
 
 	if (!kmemleak_found_leaks)
 		__kmemleak_do_cleanup();
@@ -2001,7 +1969,7 @@ static void kmemleak_disable(void)
 /*
  * Allow boot-time kmemleak disabling (enabled by default).
  */
-static int __init kmemleak_boot_config(char *str)
+static int kmemleak_boot_config(char *str)
 {
 	if (!str)
 		return -EINVAL;
@@ -2125,11 +2093,6 @@ static int __init kmemleak_late_init(void)
 
 	kmemleak_initialized = 1;
 
-	dentry = debugfs_create_file("kmemleak", 0644, NULL, NULL,
-				     &kmemleak_fops);
-	if (!dentry)
-		pr_warn("Failed to create the debugfs kmemleak file\n");
-
 	if (kmemleak_error) {
 		/*
 		 * Some error occurred and kmemleak was disabled. There is a
@@ -2141,6 +2104,10 @@ static int __init kmemleak_late_init(void)
 		return -ENOMEM;
 	}
 
+	dentry = debugfs_create_file("kmemleak", S_IRUGO, NULL, NULL,
+				     &kmemleak_fops);
+	if (!dentry)
+		pr_warn("Failed to create the debugfs kmemleak file\n");
 	mutex_lock(&scan_mutex);
 	start_scan_thread();
 	mutex_unlock(&scan_mutex);

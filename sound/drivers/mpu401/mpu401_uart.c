@@ -169,9 +169,9 @@ EXPORT_SYMBOL(snd_mpu401_uart_interrupt_tx);
  * timer callback
  * reprogram the timer and call the interrupt job
  */
-static void snd_mpu401_uart_timer(struct timer_list *t)
+static void snd_mpu401_uart_timer(unsigned long data)
 {
-	struct snd_mpu401 *mpu = from_timer(mpu, t, timer);
+	struct snd_mpu401 *mpu = (struct snd_mpu401 *)data;
 	unsigned long flags;
 
 	spin_lock_irqsave(&mpu->timer_lock, flags);
@@ -191,7 +191,8 @@ static void snd_mpu401_uart_add_timer (struct snd_mpu401 *mpu, int input)
 
 	spin_lock_irqsave (&mpu->timer_lock, flags);
 	if (mpu->timer_invoked == 0) {
-		timer_setup(&mpu->timer, snd_mpu401_uart_timer, 0);
+		setup_timer(&mpu->timer, snd_mpu401_uart_timer,
+			    (unsigned long)mpu);
 		mod_timer(&mpu->timer, 1 + jiffies);
 	} 
 	mpu->timer_invoked |= input ? MPU401_MODE_INPUT_TIMER :
@@ -617,3 +618,19 @@ free_device:
 }
 
 EXPORT_SYMBOL(snd_mpu401_uart_new);
+
+/*
+ *  INIT part
+ */
+
+static int __init alsa_mpu401_uart_init(void)
+{
+	return 0;
+}
+
+static void __exit alsa_mpu401_uart_exit(void)
+{
+}
+
+module_init(alsa_mpu401_uart_init)
+module_exit(alsa_mpu401_uart_exit)

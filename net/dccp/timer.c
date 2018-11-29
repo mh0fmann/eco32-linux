@@ -125,11 +125,10 @@ static void dccp_retransmit_timer(struct sock *sk)
 		__sk_dst_reset(sk);
 }
 
-static void dccp_write_timer(struct timer_list *t)
+static void dccp_write_timer(unsigned long data)
 {
-	struct inet_connection_sock *icsk =
-			from_timer(icsk, t, icsk_retransmit_timer);
-	struct sock *sk = &icsk->icsk_inet.sk;
+	struct sock *sk = (struct sock *)data;
+	struct inet_connection_sock *icsk = inet_csk(sk);
 	int event = 0;
 
 	bh_lock_sock(sk);
@@ -162,20 +161,19 @@ out:
 	sock_put(sk);
 }
 
-static void dccp_keepalive_timer(struct timer_list *t)
+static void dccp_keepalive_timer(unsigned long data)
 {
-	struct sock *sk = from_timer(sk, t, sk_timer);
+	struct sock *sk = (struct sock *)data;
 
 	pr_err("dccp should not use a keepalive timer !\n");
 	sock_put(sk);
 }
 
 /* This is the same as tcp_delack_timer, sans prequeue & mem_reclaim stuff */
-static void dccp_delack_timer(struct timer_list *t)
+static void dccp_delack_timer(unsigned long data)
 {
-	struct inet_connection_sock *icsk =
-			from_timer(icsk, t, icsk_delack_timer);
-	struct sock *sk = &icsk->icsk_inet.sk;
+	struct sock *sk = (struct sock *)data;
+	struct inet_connection_sock *icsk = inet_csk(sk);
 
 	bh_lock_sock(sk);
 	if (sock_owned_by_user(sk)) {
@@ -232,15 +230,12 @@ static void dccp_write_xmitlet(unsigned long data)
 	else
 		dccp_write_xmit(sk);
 	bh_unlock_sock(sk);
-	sock_put(sk);
 }
 
-static void dccp_write_xmit_timer(struct timer_list *t)
+static void dccp_write_xmit_timer(unsigned long data)
 {
-	struct dccp_sock *dp = from_timer(dp, t, dccps_xmit_timer);
-	struct sock *sk = &dp->dccps_inet_connection.icsk_inet.sk;
-
-	dccp_write_xmitlet((unsigned long)sk);
+	dccp_write_xmitlet(data);
+	sock_put((struct sock *)data);
 }
 
 void dccp_init_xmit_timers(struct sock *sk)
@@ -248,7 +243,8 @@ void dccp_init_xmit_timers(struct sock *sk)
 	struct dccp_sock *dp = dccp_sk(sk);
 
 	tasklet_init(&dp->dccps_xmitlet, dccp_write_xmitlet, (unsigned long)sk);
-	timer_setup(&dp->dccps_xmit_timer, dccp_write_xmit_timer, 0);
+	setup_timer(&dp->dccps_xmit_timer, dccp_write_xmit_timer,
+							     (unsigned long)sk);
 	inet_csk_init_xmit_timers(sk, &dccp_write_timer, &dccp_delack_timer,
 				  &dccp_keepalive_timer);
 }

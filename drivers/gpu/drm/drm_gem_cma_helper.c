@@ -112,7 +112,7 @@ struct drm_gem_cma_object *drm_gem_cma_create(struct drm_device *drm,
 	cma_obj->vaddr = dma_alloc_wc(drm->dev, size, &cma_obj->paddr,
 				      GFP_KERNEL | __GFP_NOWARN);
 	if (!cma_obj->vaddr) {
-		dev_dbg(drm->dev, "failed to allocate buffer with size %zu\n",
+		dev_err(drm->dev, "failed to allocate buffer with size %zu\n",
 			size);
 		ret = -ENOMEM;
 		goto error;
@@ -397,24 +397,31 @@ unsigned long drm_gem_cma_get_unmapped_area(struct file *filp,
 EXPORT_SYMBOL_GPL(drm_gem_cma_get_unmapped_area);
 #endif
 
+#ifdef CONFIG_DEBUG_FS
 /**
- * drm_gem_cma_print_info() - Print &drm_gem_cma_object info for debugfs
- * @p: DRM printer
- * @indent: Tab indentation level
- * @obj: GEM object
+ * drm_gem_cma_describe - describe a CMA GEM object for debugfs
+ * @cma_obj: CMA GEM object
+ * @m: debugfs file handle
  *
- * This function can be used as the &drm_driver->gem_print_info callback.
- * It prints paddr and vaddr for use in e.g. debugfs output.
+ * This function can be used to dump a human-readable representation of the
+ * CMA GEM object into a synthetic file.
  */
-void drm_gem_cma_print_info(struct drm_printer *p, unsigned int indent,
-			    const struct drm_gem_object *obj)
+void drm_gem_cma_describe(struct drm_gem_cma_object *cma_obj,
+			  struct seq_file *m)
 {
-	const struct drm_gem_cma_object *cma_obj = to_drm_gem_cma_obj(obj);
+	struct drm_gem_object *obj = &cma_obj->base;
+	uint64_t off;
 
-	drm_printf_indent(p, indent, "paddr=%pad\n", &cma_obj->paddr);
-	drm_printf_indent(p, indent, "vaddr=%p\n", cma_obj->vaddr);
+	off = drm_vma_node_start(&obj->vma_node);
+
+	seq_printf(m, "%2d (%2d) %08llx %pad %p %zu",
+			obj->name, kref_read(&obj->refcount),
+			off, &cma_obj->paddr, cma_obj->vaddr, obj->size);
+
+	seq_printf(m, "\n");
 }
-EXPORT_SYMBOL(drm_gem_cma_print_info);
+EXPORT_SYMBOL_GPL(drm_gem_cma_describe);
+#endif
 
 /**
  * drm_gem_cma_prime_get_sg_table - provide a scatter/gather table of pinned
@@ -436,7 +443,7 @@ struct sg_table *drm_gem_cma_prime_get_sg_table(struct drm_gem_object *obj)
 
 	sgt = kzalloc(sizeof(*sgt), GFP_KERNEL);
 	if (!sgt)
-		return ERR_PTR(-ENOMEM);
+		return NULL;
 
 	ret = dma_get_sgtable(obj->dev->dev, sgt, cma_obj->vaddr,
 			      cma_obj->paddr, obj->size);
@@ -447,7 +454,7 @@ struct sg_table *drm_gem_cma_prime_get_sg_table(struct drm_gem_object *obj)
 
 out:
 	kfree(sgt);
-	return ERR_PTR(ret);
+	return NULL;
 }
 EXPORT_SYMBOL_GPL(drm_gem_cma_prime_get_sg_table);
 
@@ -475,26 +482,8 @@ drm_gem_cma_prime_import_sg_table(struct drm_device *dev,
 {
 	struct drm_gem_cma_object *cma_obj;
 
-	if (sgt->nents != 1) {
-		/* check if the entries in the sg_table are contiguous */
-		dma_addr_t next_addr = sg_dma_address(sgt->sgl);
-		struct scatterlist *s;
-		unsigned int i;
-
-		for_each_sg(sgt->sgl, s, sgt->nents, i) {
-			/*
-			 * sg_dma_address(s) is only valid for entries
-			 * that have sg_dma_len(s) != 0
-			 */
-			if (!sg_dma_len(s))
-				continue;
-
-			if (sg_dma_address(s) != next_addr)
-				return ERR_PTR(-EINVAL);
-
-			next_addr = sg_dma_address(s) + sg_dma_len(s);
-		}
-	}
+	if (sgt->nents != 1)
+		return ERR_PTR(-EINVAL);
 
 	/* Create a CMA GEM buffer. */
 	cma_obj = __drm_gem_cma_create(dev, attach->dmabuf->size);

@@ -8,8 +8,6 @@
  * published by the Free Software Foundation.
  */
 
-#define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
-
 #include <linux/netfilter.h>
 #include <linux/slab.h>
 #include <linux/kernel.h>
@@ -82,7 +80,7 @@ static int nf_conntrack_acct_init_sysctl(struct net *net)
 	net->ct.acct_sysctl_header = register_net_sysctl(net, "net/netfilter",
 							 table);
 	if (!net->ct.acct_sysctl_header) {
-		pr_err("can't register to sysctl\n");
+		printk(KERN_ERR "nf_conntrack_acct: can't register to sysctl.\n");
 		goto out_register;
 	}
 	return 0;
@@ -127,7 +125,7 @@ int nf_conntrack_acct_init(void)
 {
 	int ret = nf_ct_extend_register(&acct_extend);
 	if (ret < 0)
-		pr_err("Unable to register extension\n");
+		pr_err("nf_conntrack_acct: Unable to register extension\n");
 	return ret;
 }
 

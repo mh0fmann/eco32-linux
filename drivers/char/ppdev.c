@@ -769,14 +769,14 @@ static int pp_release(struct inode *inode, struct file *file)
 }
 
 /* No kernel lock held - fine */
-static __poll_t pp_poll(struct file *file, poll_table *wait)
+static unsigned int pp_poll(struct file *file, poll_table *wait)
 {
 	struct pp_struct *pp = file->private_data;
-	__poll_t mask = 0;
+	unsigned int mask = 0;
 
 	poll_wait(file, &pp->irq_wait, wait);
 	if (atomic_read(&pp->irqc))
-		mask |= EPOLLIN | EPOLLRDNORM;
+		mask |= POLLIN | POLLRDNORM;
 
 	return mask;
 }

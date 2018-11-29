@@ -12,9 +12,6 @@
  *	(at your option) any later version.
  */
 
-#define pr_fmt(fmt) "LSM: " fmt
-
-#include <linux/bpf.h>
 #include <linux/capability.h>
 #include <linux/dcache.h>
 #include <linux/module.h>
@@ -45,22 +42,13 @@ char *lsm_names;
 static __initdata char chosen_lsm[SECURITY_NAME_MAX + 1] =
 	CONFIG_DEFAULT_SECURITY;
 
-static __initdata bool debug;
-#define init_debug(...)						\
-	do {							\
-		if (debug)					\
-			pr_info(__VA_ARGS__);			\
-	} while (0)
-
-static void __init major_lsm_init(void)
+static void __init do_security_initcalls(void)
 {
-	struct lsm_info *lsm;
-	int ret;
-
-	for (lsm = __start_lsm_info; lsm < __end_lsm_info; lsm++) {
-		init_debug("initializing %s\n", lsm->name);
-		ret = lsm->init();
-		WARN(ret, "%s failed to initialize: %d\n", lsm->name, ret);
+	initcall_t *call;
+	call = __security_initcall_start;
+	while (call < __security_initcall_end) {
+		(*call) ();
+		call++;
 	}
 }
 
@@ -72,13 +60,12 @@ static void __init major_lsm_init(void)
 int __init security_init(void)
 {
 	int i;
-	struct hlist_head *list = (struct hlist_head *) &security_hook_heads;
+	struct list_head *list = (struct list_head *) &security_hook_heads;
 
-	pr_info("Security Framework initializing\n");
-
-	for (i = 0; i < sizeof(security_hook_heads) / sizeof(struct hlist_head);
+	for (i = 0; i < sizeof(security_hook_heads) / sizeof(struct list_head);
 	     i++)
-		INIT_HLIST_HEAD(&list[i]);
+		INIT_LIST_HEAD(&list[i]);
+	pr_info("Security Framework initialized\n");
 
 	/*
 	 * Load minor LSMs, with the capability module always first.
@@ -90,7 +77,7 @@ int __init security_init(void)
 	/*
 	 * Load all the remaining security modules.
 	 */
-	major_lsm_init();
+	do_security_initcalls();
 
 	return 0;
 }
@@ -102,14 +89,6 @@ static int __init choose_lsm(char *str)
 	return 1;
 }
 __setup("security=", choose_lsm);
-
-/* Enable LSM order debugging. */
-static int __init enable_debug(char *str)
-{
-	debug = true;
-	return 1;
-}
-__setup("lsm.debug", enable_debug);
 
 static bool match_last_lsm(const char *list, const char *lsm)
 {
@@ -132,8 +111,6 @@ static int lsm_append(char *new, char **result)
 
 	if (*result == NULL) {
 		*result = kstrdup(new, GFP_KERNEL);
-		if (*result == NULL)
-			return -ENOMEM;
 	} else {
 		/* Check if it is the last registered name */
 		if (match_last_lsm(*result, new))
@@ -185,7 +162,7 @@ void __init security_add_hooks(struct security_hook_list *hooks, int count,
 
 	for (i = 0; i < count; i++) {
 		hooks[i].lsm = lsm;
-		hlist_add_tail_rcu(&hooks[i].list, hooks[i].head);
+		list_add_tail_rcu(&hooks[i].list, hooks[i].head);
 	}
 	if (lsm_append(lsm, &lsm_names) < 0)
 		panic("%s - Cannot get early memory.\n", __func__);
@@ -223,7 +200,7 @@ EXPORT_SYMBOL(unregister_lsm_notifier);
 	do {							\
 		struct security_hook_list *P;			\
 								\
-		hlist_for_each_entry(P, &security_hook_heads.FUNC, list) \
+		list_for_each_entry(P, &security_hook_heads.FUNC, list)	\
 			P->hook.FUNC(__VA_ARGS__);		\
 	} while (0)
 
@@ -232,7 +209,7 @@ EXPORT_SYMBOL(unregister_lsm_notifier);
 	do {							\
 		struct security_hook_list *P;			\
 								\
-		hlist_for_each_entry(P, &security_hook_heads.FUNC, list) { \
+		list_for_each_entry(P, &security_hook_heads.FUNC, list) { \
 			RC = P->hook.FUNC(__VA_ARGS__);		\
 			if (RC != 0)				\
 				break;				\
@@ -339,7 +316,7 @@ int security_vm_enough_memory_mm(struct mm_struct *mm, long pages)
 	 * agree that it should be set it will. If any module
 	 * thinks it should not be set it won't.
 	 */
-	hlist_for_each_entry(hp, &security_hook_heads.vm_enough_memory, list) {
+	list_for_each_entry(hp, &security_hook_heads.vm_enough_memory, list) {
 		rc = hp->hook.vm_enough_memory(mm, pages);
 		if (rc <= 0) {
 			cap_sys_admin = 0;
@@ -827,7 +804,7 @@ int security_inode_getsecurity(struct inode *inode, const char *name, void **buf
 	/*
 	 * Only one module will provide an attribute with a given name.
 	 */
-	hlist_for_each_entry(hp, &security_hook_heads.inode_getsecurity, list) {
+	list_for_each_entry(hp, &security_hook_heads.inode_getsecurity, list) {
 		rc = hp->hook.inode_getsecurity(inode, name, buffer, alloc);
 		if (rc != -EOPNOTSUPP)
 			return rc;
@@ -845,7 +822,7 @@ int security_inode_setsecurity(struct inode *inode, const char *name, const void
 	/*
 	 * Only one module will provide an attribute with a given name.
 	 */
-	hlist_for_each_entry(hp, &security_hook_heads.inode_setsecurity, list) {
+	list_for_each_entry(hp, &security_hook_heads.inode_setsecurity, list) {
 		rc = hp->hook.inode_setsecurity(inode, name, value, size,
 								flags);
 		if (rc != -EOPNOTSUPP)
@@ -986,11 +963,11 @@ int security_file_receive(struct file *file)
 	return call_int_hook(file_receive, 0, file);
 }
 
-int security_file_open(struct file *file)
+int security_file_open(struct file *file, const struct cred *cred)
 {
 	int ret;
 
-	ret = call_int_hook(file_open, 0, file);
+	ret = call_int_hook(file_open, 0, file, cred);
 	if (ret)
 		return ret;
 
@@ -1027,13 +1004,6 @@ void security_transfer_creds(struct cred *new, const struct cred *old)
 	call_void_hook(cred_transfer, new, old);
 }
 
-void security_cred_getsecid(const struct cred *c, u32 *secid)
-{
-	*secid = 0;
-	call_void_hook(cred_getsecid, c, secid);
-}
-EXPORT_SYMBOL(security_cred_getsecid);
-
 int security_kernel_act_as(struct cred *new, u32 secid)
 {
 	return call_int_hook(kernel_act_as, 0, new, secid);
@@ -1046,12 +1016,7 @@ int security_kernel_create_files_as(struct cred *new, struct inode *inode)
 
 int security_kernel_module_request(char *kmod_name)
 {
-	int ret;
-
-	ret = call_int_hook(kernel_module_request, 0, kmod_name);
-	if (ret)
-		return ret;
-	return integrity_kernel_module_request(kmod_name);
+	return call_int_hook(kernel_module_request, 0, kmod_name);
 }
 
 int security_kernel_read_file(struct file *file, enum kernel_read_file_id id)
@@ -1076,17 +1041,6 @@ int security_kernel_post_read_file(struct file *file, char *buf, loff_t size,
 	return ima_post_read_file(file, buf, size, id);
 }
 EXPORT_SYMBOL_GPL(security_kernel_post_read_file);
-
-int security_kernel_load_data(enum kernel_load_data_id id)
-{
-	int ret;
-
-	ret = call_int_hook(kernel_load_data, 0, id);
-	if (ret)
-		return ret;
-	return ima_load_data(id);
-}
-EXPORT_SYMBOL_GPL(security_kernel_load_data);
 
 int security_task_fix_setuid(struct cred *new, const struct cred *old,
 			     int flags)
@@ -1158,10 +1112,10 @@ int security_task_movememory(struct task_struct *p)
 	return call_int_hook(task_movememory, 0, p);
 }
 
-int security_task_kill(struct task_struct *p, struct kernel_siginfo *info,
-			int sig, const struct cred *cred)
+int security_task_kill(struct task_struct *p, struct siginfo *info,
+			int sig, u32 secid)
 {
-	return call_int_hook(task_kill, 0, p, info, sig, cred);
+	return call_int_hook(task_kill, 0, p, info, sig, secid);
 }
 
 int security_task_prctl(int option, unsigned long arg2, unsigned long arg3,
@@ -1171,7 +1125,7 @@ int security_task_prctl(int option, unsigned long arg2, unsigned long arg3,
 	int rc = -ENOSYS;
 	struct security_hook_list *hp;
 
-	hlist_for_each_entry(hp, &security_hook_heads.task_prctl, list) {
+	list_for_each_entry(hp, &security_hook_heads.task_prctl, list) {
 		thisrc = hp->hook.task_prctl(option, arg2, arg3, arg4, arg5);
 		if (thisrc != -ENOSYS) {
 			rc = thisrc;
@@ -1208,84 +1162,84 @@ void security_msg_msg_free(struct msg_msg *msg)
 	call_void_hook(msg_msg_free_security, msg);
 }
 
-int security_msg_queue_alloc(struct kern_ipc_perm *msq)
+int security_msg_queue_alloc(struct msg_queue *msq)
 {
 	return call_int_hook(msg_queue_alloc_security, 0, msq);
 }
 
-void security_msg_queue_free(struct kern_ipc_perm *msq)
+void security_msg_queue_free(struct msg_queue *msq)
 {
 	call_void_hook(msg_queue_free_security, msq);
 }
 
-int security_msg_queue_associate(struct kern_ipc_perm *msq, int msqflg)
+int security_msg_queue_associate(struct msg_queue *msq, int msqflg)
 {
 	return call_int_hook(msg_queue_associate, 0, msq, msqflg);
 }
 
-int security_msg_queue_msgctl(struct kern_ipc_perm *msq, int cmd)
+int security_msg_queue_msgctl(struct msg_queue *msq, int cmd)
 {
 	return call_int_hook(msg_queue_msgctl, 0, msq, cmd);
 }
 
-int security_msg_queue_msgsnd(struct kern_ipc_perm *msq,
+int security_msg_queue_msgsnd(struct msg_queue *msq,
 			       struct msg_msg *msg, int msqflg)
 {
 	return call_int_hook(msg_queue_msgsnd, 0, msq, msg, msqflg);
 }
 
-int security_msg_queue_msgrcv(struct kern_ipc_perm *msq, struct msg_msg *msg,
+int security_msg_queue_msgrcv(struct msg_queue *msq, struct msg_msg *msg,
 			       struct task_struct *target, long type, int mode)
 {
 	return call_int_hook(msg_queue_msgrcv, 0, msq, msg, target, type, mode);
 }
 
-int security_shm_alloc(struct kern_ipc_perm *shp)
+int security_shm_alloc(struct shmid_kernel *shp)
 {
 	return call_int_hook(shm_alloc_security, 0, shp);
 }
 
-void security_shm_free(struct kern_ipc_perm *shp)
+void security_shm_free(struct shmid_kernel *shp)
 {
 	call_void_hook(shm_free_security, shp);
 }
 
-int security_shm_associate(struct kern_ipc_perm *shp, int shmflg)
+int security_shm_associate(struct shmid_kernel *shp, int shmflg)
 {
 	return call_int_hook(shm_associate, 0, shp, shmflg);
 }
 
-int security_shm_shmctl(struct kern_ipc_perm *shp, int cmd)
+int security_shm_shmctl(struct shmid_kernel *shp, int cmd)
 {
 	return call_int_hook(shm_shmctl, 0, shp, cmd);
 }
 
-int security_shm_shmat(struct kern_ipc_perm *shp, char __user *shmaddr, int shmflg)
+int security_shm_shmat(struct shmid_kernel *shp, char __user *shmaddr, int shmflg)
 {
 	return call_int_hook(shm_shmat, 0, shp, shmaddr, shmflg);
 }
 
-int security_sem_alloc(struct kern_ipc_perm *sma)
+int security_sem_alloc(struct sem_array *sma)
 {
 	return call_int_hook(sem_alloc_security, 0, sma);
 }
 
-void security_sem_free(struct kern_ipc_perm *sma)
+void security_sem_free(struct sem_array *sma)
 {
 	call_void_hook(sem_free_security, sma);
 }
 
-int security_sem_associate(struct kern_ipc_perm *sma, int semflg)
+int security_sem_associate(struct sem_array *sma, int semflg)
 {
 	return call_int_hook(sem_associate, 0, sma, semflg);
 }
 
-int security_sem_semctl(struct kern_ipc_perm *sma, int cmd)
+int security_sem_semctl(struct sem_array *sma, int cmd)
 {
 	return call_int_hook(sem_semctl, 0, sma, cmd);
 }
 
-int security_sem_semop(struct kern_ipc_perm *sma, struct sembuf *sops,
+int security_sem_semop(struct sem_array *sma, struct sembuf *sops,
 			unsigned nsops, int alter)
 {
 	return call_int_hook(sem_semop, 0, sma, sops, nsops, alter);
@@ -1389,12 +1343,6 @@ int security_socket_post_create(struct socket *sock, int family,
 	return call_int_hook(socket_post_create, 0, sock, family, type,
 						protocol, kern);
 }
-
-int security_socket_socketpair(struct socket *socka, struct socket *sockb)
-{
-	return call_int_hook(socket_socketpair, 0, socka, sockb);
-}
-EXPORT_SYMBOL(security_socket_socketpair);
 
 int security_socket_bind(struct socket *sock, struct sockaddr *address, int addrlen)
 {
@@ -1524,7 +1472,6 @@ void security_inet_conn_established(struct sock *sk,
 {
 	call_void_hook(inet_conn_established, sk, skb);
 }
-EXPORT_SYMBOL(security_inet_conn_established);
 
 int security_secmark_relabel_packet(u32 secid)
 {
@@ -1579,27 +1526,6 @@ int security_tun_dev_open(void *security)
 	return call_int_hook(tun_dev_open, 0, security);
 }
 EXPORT_SYMBOL(security_tun_dev_open);
-
-int security_sctp_assoc_request(struct sctp_endpoint *ep, struct sk_buff *skb)
-{
-	return call_int_hook(sctp_assoc_request, 0, ep, skb);
-}
-EXPORT_SYMBOL(security_sctp_assoc_request);
-
-int security_sctp_bind_connect(struct sock *sk, int optname,
-			       struct sockaddr *address, int addrlen)
-{
-	return call_int_hook(sctp_bind_connect, 0, sk, optname,
-			     address, addrlen);
-}
-EXPORT_SYMBOL(security_sctp_bind_connect);
-
-void security_sctp_sk_clone(struct sctp_endpoint *ep, struct sock *sk,
-			    struct sock *newsk)
-{
-	call_void_hook(sctp_sk_clone, ep, sk, newsk);
-}
-EXPORT_SYMBOL(security_sctp_sk_clone);
 
 #endif	/* CONFIG_SECURITY_NETWORK */
 
@@ -1702,7 +1628,7 @@ int security_xfrm_state_pol_flow_match(struct xfrm_state *x,
 	 * For speed optimization, we explicitly break the loop rather than
 	 * using the macro
 	 */
-	hlist_for_each_entry(hp, &security_hook_heads.xfrm_state_pol_flow_match,
+	list_for_each_entry(hp, &security_hook_heads.xfrm_state_pol_flow_match,
 				list) {
 		rc = hp->hook.xfrm_state_pol_flow_match(x, xp, fl);
 		break;
@@ -1777,34 +1703,3 @@ int security_audit_rule_match(u32 secid, u32 field, u32 op, void *lsmrule,
 				actx);
 }
 #endif /* CONFIG_AUDIT */
-
-#ifdef CONFIG_BPF_SYSCALL
-int security_bpf(int cmd, union bpf_attr *attr, unsigned int size)
-{
-	return call_int_hook(bpf, 0, cmd, attr, size);
-}
-int security_bpf_map(struct bpf_map *map, fmode_t fmode)
-{
-	return call_int_hook(bpf_map, 0, map, fmode);
-}
-int security_bpf_prog(struct bpf_prog *prog)
-{
-	return call_int_hook(bpf_prog, 0, prog);
-}
-int security_bpf_map_alloc(struct bpf_map *map)
-{
-	return call_int_hook(bpf_map_alloc_security, 0, map);
-}
-int security_bpf_prog_alloc(struct bpf_prog_aux *aux)
-{
-	return call_int_hook(bpf_prog_alloc_security, 0, aux);
-}
-void security_bpf_map_free(struct bpf_map *map)
-{
-	call_void_hook(bpf_map_free_security, map);
-}
-void security_bpf_prog_free(struct bpf_prog_aux *aux)
-{
-	call_void_hook(bpf_prog_free_security, aux);
-}
-#endif /* CONFIG_BPF_SYSCALL */

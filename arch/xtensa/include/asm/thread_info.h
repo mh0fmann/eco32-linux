@@ -11,9 +11,7 @@
 #ifndef _XTENSA_THREAD_INFO_H
 #define _XTENSA_THREAD_INFO_H
 
-#include <asm/kmem_layout.h>
-
-#define CURRENT_SHIFT KERNEL_STACK_SHIFT
+#ifdef __KERNEL__
 
 #ifndef __ASSEMBLY__
 # include <asm/processor.h>
@@ -79,11 +77,14 @@ struct thread_info {
 	.addr_limit	= KERNEL_DS,		\
 }
 
+#define init_thread_info	(init_thread_union.thread_info)
+#define init_stack		(init_thread_union.stack)
+
 /* how to get the thread information struct from C */
 static inline struct thread_info *current_thread_info(void)
 {
 	struct thread_info *ti;
-	 __asm__("extui %0, a1, 0, "__stringify(CURRENT_SHIFT)"\n\t"
+	 __asm__("extui %0,a1,0,13\n\t"
 	         "xor %0, a1, %0" : "=&r" (ti) : );
 	return ti;
 }
@@ -92,7 +93,7 @@ static inline struct thread_info *current_thread_info(void)
 
 /* how to get the thread information struct from ASM */
 #define GET_THREAD_INFO(reg,sp) \
-	extui reg, sp, 0, CURRENT_SHIFT; \
+	extui reg, sp, 0, 13; \
 	xor   reg, sp, reg
 #endif
 
@@ -129,7 +130,8 @@ static inline struct thread_info *current_thread_info(void)
  */
 #define TS_USEDFPU		0x0001	/* FPU was used by this task this quantum (SMP) */
 
-#define THREAD_SIZE KERNEL_STACK_SIZE
-#define THREAD_SIZE_ORDER (KERNEL_STACK_SHIFT - PAGE_SHIFT)
+#define THREAD_SIZE 8192	//(2*PAGE_SIZE)
+#define THREAD_SIZE_ORDER 1
 
+#endif	/* __KERNEL__ */
 #endif	/* _XTENSA_THREAD_INFO */

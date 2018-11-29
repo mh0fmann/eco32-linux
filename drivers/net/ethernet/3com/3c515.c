@@ -367,7 +367,7 @@ static struct net_device *corkscrew_scan(int unit);
 static int corkscrew_setup(struct net_device *dev, int ioaddr,
 			    struct pnp_dev *idev, int card_number);
 static int corkscrew_open(struct net_device *dev);
-static void corkscrew_timer(struct timer_list *t);
+static void corkscrew_timer(unsigned long arg);
 static netdev_tx_t corkscrew_start_xmit(struct sk_buff *skb,
 					struct net_device *dev);
 static int corkscrew_rx(struct net_device *dev);
@@ -627,7 +627,7 @@ static int corkscrew_setup(struct net_device *dev, int ioaddr,
 
 	spin_lock_init(&vp->lock);
 
-	timer_setup(&vp->timer, corkscrew_timer, 0);
+	setup_timer(&vp->timer, corkscrew_timer, (unsigned long) dev);
 
 	/* Read the station address from the EEPROM. */
 	EL3WINDOW(0);
@@ -869,11 +869,11 @@ static int corkscrew_open(struct net_device *dev)
 	return 0;
 }
 
-static void corkscrew_timer(struct timer_list *t)
+static void corkscrew_timer(unsigned long data)
 {
 #ifdef AUTOMEDIA
-	struct corkscrew_private *vp = from_timer(vp, t, timer);
-	struct net_device *dev = vp->our_dev;
+	struct net_device *dev = (struct net_device *) data;
+	struct corkscrew_private *vp = netdev_priv(dev);
 	int ioaddr = dev->base_addr;
 	unsigned long flags;
 	int ok = 0;

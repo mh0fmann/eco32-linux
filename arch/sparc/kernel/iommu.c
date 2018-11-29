@@ -14,7 +14,7 @@
 #include <linux/errno.h>
 #include <linux/iommu-helper.h>
 #include <linux/bitmap.h>
-#include <asm/iommu-common.h>
+#include <linux/iommu-common.h>
 
 #ifdef CONFIG_PCI
 #include <linux/pci.h>

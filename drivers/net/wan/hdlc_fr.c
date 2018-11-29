@@ -140,7 +140,6 @@ struct frad_state {
 	int dce_pvc_count;
 
 	struct timer_list timer;
-	struct net_device *dev;
 	unsigned long last_poll;
 	int reliable;
 	int dce_changed;
@@ -598,10 +597,9 @@ static void fr_set_link_state(int reliable, struct net_device *dev)
 }
 
 
-static void fr_timer(struct timer_list *t)
+static void fr_timer(unsigned long arg)
 {
-	struct frad_state *st = from_timer(st, t, timer);
-	struct net_device *dev = st->dev;
+	struct net_device *dev = (struct net_device *)arg;
 	hdlc_device *hdlc = dev_to_hdlc(dev);
 	int i, cnt = 0, reliable;
 	u32 list;
@@ -646,6 +644,8 @@ static void fr_timer(struct timer_list *t)
 			state(hdlc)->settings.t391 * HZ;
 	}
 
+	state(hdlc)->timer.function = fr_timer;
+	state(hdlc)->timer.data = arg;
 	add_timer(&state(hdlc)->timer);
 }
 
@@ -1003,10 +1003,11 @@ static void fr_start(struct net_device *dev)
 		state(hdlc)->n391cnt = 0;
 		state(hdlc)->txseq = state(hdlc)->rxseq = 0;
 
-		state(hdlc)->dev = dev;
-		timer_setup(&state(hdlc)->timer, fr_timer, 0);
+		init_timer(&state(hdlc)->timer);
 		/* First poll after 1 s */
 		state(hdlc)->timer.expires = jiffies + HZ;
+		state(hdlc)->timer.function = fr_timer;
+		state(hdlc)->timer.data = (unsigned long)dev;
 		add_timer(&state(hdlc)->timer);
 	} else
 		fr_set_link_state(1, dev);

@@ -591,18 +591,18 @@ static int nci_close_device(struct nci_dev *ndev)
 }
 
 /* NCI command timer function */
-static void nci_cmd_timer(struct timer_list *t)
+static void nci_cmd_timer(unsigned long arg)
 {
-	struct nci_dev *ndev = from_timer(ndev, t, cmd_timer);
+	struct nci_dev *ndev = (void *) arg;
 
 	atomic_set(&ndev->cmd_cnt, 1);
 	queue_work(ndev->cmd_wq, &ndev->cmd_work);
 }
 
 /* NCI data exchange timer function */
-static void nci_data_timer(struct timer_list *t)
+static void nci_data_timer(unsigned long arg)
 {
-	struct nci_dev *ndev = from_timer(ndev, t, data_timer);
+	struct nci_dev *ndev = (void *) arg;
 
 	set_bit(NCI_DATA_EXCHANGE_TO, &ndev->flags);
 	queue_work(ndev->rx_wq, &ndev->rx_work);
@@ -1232,8 +1232,10 @@ int nci_register_device(struct nci_dev *ndev)
 	skb_queue_head_init(&ndev->rx_q);
 	skb_queue_head_init(&ndev->tx_q);
 
-	timer_setup(&ndev->cmd_timer, nci_cmd_timer, 0);
-	timer_setup(&ndev->data_timer, nci_data_timer, 0);
+	setup_timer(&ndev->cmd_timer, nci_cmd_timer,
+		    (unsigned long) ndev);
+	setup_timer(&ndev->data_timer, nci_data_timer,
+		    (unsigned long) ndev);
 
 	mutex_init(&ndev->req_lock);
 	INIT_LIST_HEAD(&ndev->conn_info_list);

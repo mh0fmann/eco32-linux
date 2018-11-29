@@ -176,6 +176,7 @@ qc_already_gone:
 
 static unsigned int sas_ata_qc_issue(struct ata_queued_cmd *qc)
 {
+	unsigned long flags;
 	struct sas_task *task;
 	struct scatterlist *sg;
 	int ret = AC_ERR_SYSTEM;
@@ -186,7 +187,10 @@ static unsigned int sas_ata_qc_issue(struct ata_queued_cmd *qc)
 	struct Scsi_Host *host = sas_ha->core.shost;
 	struct sas_internal *i = to_sas_internal(host->transportt);
 
-	/* TODO: we should try to remove that unlock */
+	/* TODO: audit callers to ensure they are ready for qc_issue to
+	 * unconditionally re-enable interrupts
+	 */
+	local_irq_save(flags);
 	spin_unlock(ap->lock);
 
 	/* If the device fell off, no sense in issuing commands */
@@ -248,6 +252,7 @@ static unsigned int sas_ata_qc_issue(struct ata_queued_cmd *qc)
 
  out:
 	spin_lock(ap->lock);
+	local_irq_restore(flags);
 	return ret;
 }
 
@@ -552,46 +557,29 @@ int sas_ata_init(struct domain_device *found_dev)
 {
 	struct sas_ha_struct *ha = found_dev->port->ha;
 	struct Scsi_Host *shost = ha->core.shost;
-	struct ata_host *ata_host;
 	struct ata_port *ap;
 	int rc;
 
-	ata_host = kzalloc(sizeof(*ata_host), GFP_KERNEL);
-	if (!ata_host)	{
-		SAS_DPRINTK("ata host alloc failed.\n");
-		return -ENOMEM;
-	}
-
-	ata_host_init(ata_host, ha->dev, &sas_sata_ops);
-
-	ap = ata_sas_port_alloc(ata_host, &sata_port_info, shost);
+	ata_host_init(&found_dev->sata_dev.ata_host, ha->dev, &sas_sata_ops);
+	ap = ata_sas_port_alloc(&found_dev->sata_dev.ata_host,
+				&sata_port_info,
+				shost);
 	if (!ap) {
 		SAS_DPRINTK("ata_sas_port_alloc failed.\n");
-		rc = -ENODEV;
-		goto free_host;
+		return -ENODEV;
 	}
 
 	ap->private_data = found_dev;
 	ap->cbl = ATA_CBL_SATA;
 	ap->scsi_host = shost;
 	rc = ata_sas_port_init(ap);
-	if (rc)
-		goto destroy_port;
-
-	rc = ata_sas_tport_add(ata_host->dev, ap);
-	if (rc)
-		goto destroy_port;
-
-	found_dev->sata_dev.ata_host = ata_host;
+	if (rc) {
+		ata_sas_port_destroy(ap);
+		return rc;
+	}
 	found_dev->sata_dev.ap = ap;
 
 	return 0;
-
-destroy_port:
-	ata_sas_port_destroy(ap);
-free_host:
-	ata_host_put(ata_host);
-	return rc;
 }
 
 void sas_ata_task_abort(struct sas_task *task)
@@ -654,7 +642,7 @@ void sas_probe_sata(struct asd_sas_port *port)
 		/* if libata could not bring the link up, don't surface
 		 * the device
 		 */
-		if (!ata_dev_enabled(sas_to_ata_dev(dev)))
+		if (ata_dev_disabled(sas_to_ata_dev(dev)))
 			sas_fail_probe(dev, __func__, -ENODEV);
 	}
 
@@ -721,7 +709,7 @@ void sas_resume_sata(struct asd_sas_port *port)
 }
 
 /**
- * sas_discover_sata - discover an STP/SATA domain device
+ * sas_discover_sata -- discover an STP/SATA domain device
  * @dev: pointer to struct domain_device of interest
  *
  * Devices directly attached to a HA port, have no parents.  All other
@@ -742,6 +730,7 @@ int sas_discover_sata(struct domain_device *dev)
 	if (res)
 		return res;
 
+	sas_discover_event(dev->port, DISCE_PROBE);
 	return 0;
 }
 

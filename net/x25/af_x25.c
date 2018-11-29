@@ -374,11 +374,9 @@ static void __x25_destroy_socket(struct sock *);
 /*
  *	handler for deferred kills.
  */
-static void x25_destroy_timer(struct timer_list *t)
+static void x25_destroy_timer(unsigned long data)
 {
-	struct sock *sk = from_timer(sk, t, sk_timer);
-
-	x25_destroy_socket_from_timer(sk);
+	x25_destroy_socket_from_timer((struct sock *)data);
 }
 
 /*
@@ -416,6 +414,7 @@ static void __x25_destroy_socket(struct sock *sk)
 		/* Defer: outstanding buffers */
 		sk->sk_timer.expires  = jiffies + 10 * HZ;
 		sk->sk_timer.function = x25_destroy_timer;
+		sk->sk_timer.data = (unsigned long)sk;
 		add_timer(&sk->sk_timer);
 	} else {
 		/* drop last reference so sock_put will free */
@@ -896,7 +895,7 @@ out:
 }
 
 static int x25_getname(struct socket *sock, struct sockaddr *uaddr,
-		       int peer)
+		       int *uaddr_len, int peer)
 {
 	struct sockaddr_x25 *sx25 = (struct sockaddr_x25 *)uaddr;
 	struct sock *sk = sock->sk;
@@ -913,7 +912,7 @@ static int x25_getname(struct socket *sock, struct sockaddr *uaddr,
 		sx25->sx25_addr = x25->source_addr;
 
 	sx25->sx25_family = AF_X25;
-	rc = sizeof(*sx25);
+	*uaddr_len = sizeof(*sx25);
 
 out:
 	return rc;

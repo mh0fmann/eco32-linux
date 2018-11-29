@@ -18,7 +18,6 @@
 #include <linux/if_alg.h>
 #include <linux/scatterlist.h>
 #include <linux/types.h>
-#include <linux/atomic.h>
 #include <net/sock.h>
 
 #include <crypto/aead.h>
@@ -39,6 +38,11 @@ struct alg_sock {
 
 	const struct af_alg_type *type;
 	void *private;
+};
+
+struct af_alg_completion {
+	struct completion completion;
+	int err;
 };
 
 struct af_alg_control {
@@ -148,10 +152,10 @@ struct af_alg_ctx {
 	void *iv;
 	size_t aead_assoclen;
 
-	struct crypto_wait wait;
+	struct af_alg_completion completion;
 
 	size_t used;
-	atomic_t rcvused;
+	size_t rcvused;
 
 	bool more;
 	bool merge;
@@ -173,9 +177,17 @@ void af_alg_link_sg(struct af_alg_sgl *sgl_prev, struct af_alg_sgl *sgl_new);
 
 int af_alg_cmsg_send(struct msghdr *msg, struct af_alg_control *con);
 
+int af_alg_wait_for_completion(int err, struct af_alg_completion *completion);
+void af_alg_complete(struct crypto_async_request *req, int err);
+
 static inline struct alg_sock *alg_sk(struct sock *sk)
 {
 	return (struct alg_sock *)sk;
+}
+
+static inline void af_alg_init_completion(struct af_alg_completion *completion)
+{
+	init_completion(&completion->completion);
 }
 
 /**
@@ -216,7 +228,7 @@ static inline int af_alg_rcvbuf(struct sock *sk)
 	struct af_alg_ctx *ctx = ask->private;
 
 	return max_t(int, max_t(int, sk->sk_rcvbuf & PAGE_MASK, PAGE_SIZE) -
-		     atomic_read(&ctx->rcvused), 0);
+			  ctx->rcvused, 0);
 }
 
 /**
@@ -243,9 +255,8 @@ int af_alg_sendmsg(struct socket *sock, struct msghdr *msg, size_t size,
 		   unsigned int ivsize);
 ssize_t af_alg_sendpage(struct socket *sock, struct page *page,
 			int offset, size_t size, int flags);
-void af_alg_free_resources(struct af_alg_async_req *areq);
 void af_alg_async_cb(struct crypto_async_request *_req, int err);
-__poll_t af_alg_poll(struct file *file, struct socket *sock,
+unsigned int af_alg_poll(struct file *file, struct socket *sock,
 			 poll_table *wait);
 struct af_alg_async_req *af_alg_alloc_areq(struct sock *sk,
 					   unsigned int areqlen);

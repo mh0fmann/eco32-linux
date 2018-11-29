@@ -34,34 +34,14 @@ TRACE_EVENT(armada_ovl_plane_update,
 		__field(struct drm_plane *, plane)
 		__field(struct drm_crtc *, crtc)
 		__field(struct drm_framebuffer *, fb)
-		__field(int, crtc_x)
-		__field(int, crtc_y)
-		__field(unsigned int, crtc_w)
-		__field(unsigned int, crtc_h)
-		__field(u32, src_x)
-		__field(u32, src_y)
-		__field(u32, src_w)
-		__field(u32, src_h)
 	),
 	TP_fast_assign(
 		__entry->plane = plane;
 		__entry->crtc = crtc;
 		__entry->fb = fb;
-		__entry->crtc_x = crtc_x;
-		__entry->crtc_y = crtc_y;
-		__entry->crtc_w = crtc_w;
-		__entry->crtc_h = crtc_h;
-		__entry->src_x = src_x;
-		__entry->src_y = src_y;
-		__entry->src_w = src_w;
-		__entry->src_h = src_h;
 	),
-	TP_printk("plane %p crtc %p fb %p crtc @ (%d,%d, %ux%u) src @ (%u,%u, %ux%u)",
-		__entry->plane, __entry->crtc, __entry->fb,
-		__entry->crtc_x, __entry->crtc_y,
-		__entry->crtc_w, __entry->crtc_h,
-		__entry->src_x >> 16, __entry->src_y >> 16,
-		__entry->src_w >> 16, __entry->src_h >> 16)
+	TP_printk("plane %p crtc %p fb %p",
+		__entry->plane, __entry->crtc, __entry->fb)
 );
 
 TRACE_EVENT(armada_ovl_plane_work,
@@ -83,5 +63,5 @@ TRACE_EVENT(armada_ovl_plane_work,
 
 /* This part must be outside protection */
 #undef TRACE_INCLUDE_PATH
-#define TRACE_INCLUDE_PATH ../../drivers/gpu/drm/armada
+#define TRACE_INCLUDE_PATH .
 #include <trace/define_trace.h>

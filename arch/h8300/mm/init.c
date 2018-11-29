@@ -30,7 +30,7 @@
 #include <linux/init.h>
 #include <linux/highmem.h>
 #include <linux/pagemap.h>
-#include <linux/memblock.h>
+#include <linux/bootmem.h>
 #include <linux/gfp.h>
 
 #include <asm/setup.h>
@@ -40,9 +40,20 @@
 #include <asm/sections.h>
 
 /*
+ * BAD_PAGE is the page that is used for page faults when linux
+ * is out-of-memory. Older versions of linux just did a
+ * do_exit(), but using this instead means there is less risk
+ * for a process dying in kernel mode, possibly leaving a inode
+ * unused etc..
+ *
+ * BAD_PAGETABLE is the accompanying page-table: it is initialized
+ * to point to BAD_PAGE entries.
+ *
  * ZERO_PAGE is a special page that is used for zero-initialized
  * data and COW.
  */
+static unsigned long empty_bad_page_table;
+static unsigned long empty_bad_page;
 unsigned long empty_zero_page;
 
 /*
@@ -67,7 +78,9 @@ void __init paging_init(void)
 	 * Initialize the bad page table and bad page to point
 	 * to a couple of allocated pages.
 	 */
-	empty_zero_page = (unsigned long)memblock_alloc(PAGE_SIZE, PAGE_SIZE);
+	empty_bad_page_table = (unsigned long)alloc_bootmem_pages(PAGE_SIZE);
+	empty_bad_page = (unsigned long)alloc_bootmem_pages(PAGE_SIZE);
+	empty_zero_page = (unsigned long)alloc_bootmem_pages(PAGE_SIZE);
 	memset((void *)empty_zero_page, 0, PAGE_SIZE);
 
 	/*
@@ -96,7 +109,7 @@ void __init mem_init(void)
 	max_mapnr = MAP_NR(high_memory);
 
 	/* this will put all low memory onto the freelists */
-	memblock_free_all();
+	free_all_bootmem();
 
 	mem_init_print_info(NULL);
 }

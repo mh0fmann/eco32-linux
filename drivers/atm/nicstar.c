@@ -145,7 +145,7 @@ static int ns_ioctl(struct atm_dev *dev, unsigned int cmd, void __user * arg);
 #ifdef EXTRA_DEBUG
 static void which_list(ns_dev * card, struct sk_buff *skb);
 #endif
-static void ns_poll(struct timer_list *unused);
+static void ns_poll(unsigned long arg);
 static void ns_phy_put(struct atm_dev *dev, unsigned char value,
 		       unsigned long addr);
 static unsigned char ns_phy_get(struct atm_dev *dev, unsigned long addr);
@@ -284,8 +284,10 @@ static int __init nicstar_init(void)
 	XPRINTK("nicstar: nicstar_init() returned.\n");
 
 	if (!error) {
-		timer_setup(&ns_timer, ns_poll, 0);
+		init_timer(&ns_timer);
 		ns_timer.expires = jiffies + NS_POLL_PERIOD;
+		ns_timer.data = 0UL;
+		ns_timer.function = ns_poll;
 		add_timer(&ns_timer);
 	}
 
@@ -2679,7 +2681,7 @@ static void which_list(ns_dev * card, struct sk_buff *skb)
 }
 #endif /* EXTRA_DEBUG */
 
-static void ns_poll(struct timer_list *unused)
+static void ns_poll(unsigned long arg)
 {
 	int i;
 	ns_dev *card;
@@ -2689,10 +2691,11 @@ static void ns_poll(struct timer_list *unused)
 	PRINTK("nicstar: Entering ns_poll().\n");
 	for (i = 0; i < num_cards; i++) {
 		card = cards[i];
-		if (!spin_trylock_irqsave(&card->int_lock, flags)) {
+		if (spin_is_locked(&card->int_lock)) {
 			/* Probably it isn't worth spinning */
 			continue;
 		}
+		spin_lock_irqsave(&card->int_lock, flags);
 
 		stat_w = 0;
 		stat_r = readl(card->membase + STAT);

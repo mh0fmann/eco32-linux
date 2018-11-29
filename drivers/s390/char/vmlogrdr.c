@@ -1,4 +1,3 @@
-// SPDX-License-Identifier: GPL-2.0
 /*
  *	character device driver for reading z/VM system service records
  *
@@ -153,7 +152,7 @@ static struct vmlogrdr_priv_t sys_ser[] = {
 	}
 };
 
-#define MAXMINOR  ARRAY_SIZE(sys_ser)
+#define MAXMINOR  (sizeof(sys_ser)/sizeof(struct vmlogrdr_priv_t))
 
 static char FENCE[] = {"EOR"};
 static int vmlogrdr_major = 0;
@@ -813,7 +812,8 @@ static int vmlogrdr_register_cdev(dev_t dev)
 	}
 	vmlogrdr_cdev->owner = THIS_MODULE;
 	vmlogrdr_cdev->ops = &vmlogrdr_fops;
-	rc = cdev_add(vmlogrdr_cdev, dev, MAXMINOR);
+	vmlogrdr_cdev->dev = dev;
+	rc = cdev_add(vmlogrdr_cdev, vmlogrdr_cdev->dev, MAXMINOR);
 	if (!rc)
 		return 0;
 

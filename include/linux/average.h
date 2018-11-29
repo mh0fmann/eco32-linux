@@ -2,10 +2,6 @@
 #ifndef _LINUX_AVERAGE_H
 #define _LINUX_AVERAGE_H
 
-#include <linux/bug.h>
-#include <linux/compiler.h>
-#include <linux/log2.h>
-
 /*
  * Exponentially weighted moving average (EWMA)
  *
@@ -53,7 +49,7 @@
 	static inline void ewma_##name##_add(struct ewma_##name *e,	\
 					     unsigned long val)		\
 	{								\
-		unsigned long internal = READ_ONCE(e->internal);	\
+		unsigned long internal = ACCESS_ONCE(e->internal);	\
 		unsigned long weight_rcp = ilog2(_weight_rcp);		\
 		unsigned long precision = _precision;			\
 									\
@@ -62,10 +58,10 @@
 		BUILD_BUG_ON((_precision) > 30);			\
 		BUILD_BUG_ON_NOT_POWER_OF_2(_weight_rcp);		\
 									\
-		WRITE_ONCE(e->internal, internal ?			\
+		ACCESS_ONCE(e->internal) = internal ?			\
 			(((internal << weight_rcp) - internal) +	\
 				(val << precision)) >> weight_rcp :	\
-			(val << precision));				\
+			(val << precision);				\
 	}
 
 #endif /* _LINUX_AVERAGE_H */

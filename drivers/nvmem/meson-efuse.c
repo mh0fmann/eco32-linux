@@ -1,5 +1,5 @@
 /*
- * Amlogic Meson GX eFuse Driver
+ * Amlogic eFuse Driver
  *
  * Copyright (c) 2016 Endless Computers, Inc.
  * Author: Carlo Caione <carlo@endlessm.com>
@@ -24,16 +24,24 @@
 static int meson_efuse_read(void *context, unsigned int offset,
 			    void *val, size_t bytes)
 {
-	return meson_sm_call_read((u8 *)val, bytes, SM_EFUSE_READ, offset,
-				  bytes, 0, 0, 0);
+	u8 *buf = val;
+	int ret;
+
+	ret = meson_sm_call_read(buf, bytes, SM_EFUSE_READ, offset,
+				 bytes, 0, 0, 0);
+	if (ret < 0)
+		return ret;
+
+	return 0;
 }
 
-static int meson_efuse_write(void *context, unsigned int offset,
-			     void *val, size_t bytes)
-{
-	return meson_sm_call_write((u8 *)val, bytes, SM_EFUSE_WRITE, offset,
-				   bytes, 0, 0, 0);
-}
+static struct nvmem_config econfig = {
+	.name = "meson-efuse",
+	.owner = THIS_MODULE,
+	.stride = 1,
+	.word_size = 1,
+	.read_only = true,
+};
 
 static const struct of_device_id meson_efuse_match[] = {
 	{ .compatible = "amlogic,meson-gxbb-efuse", },
@@ -43,33 +51,35 @@ MODULE_DEVICE_TABLE(of, meson_efuse_match);
 
 static int meson_efuse_probe(struct platform_device *pdev)
 {
-	struct device *dev = &pdev->dev;
 	struct nvmem_device *nvmem;
-	struct nvmem_config *econfig;
 	unsigned int size;
 
 	if (meson_sm_call(SM_EFUSE_USER_MAX, &size, 0, 0, 0, 0, 0) < 0)
 		return -EINVAL;
 
-	econfig = devm_kzalloc(dev, sizeof(*econfig), GFP_KERNEL);
-	if (!econfig)
-		return -ENOMEM;
+	econfig.dev = &pdev->dev;
+	econfig.reg_read = meson_efuse_read;
+	econfig.size = size;
 
-	econfig->dev = dev;
-	econfig->name = dev_name(dev);
-	econfig->stride = 1;
-	econfig->word_size = 1;
-	econfig->reg_read = meson_efuse_read;
-	econfig->reg_write = meson_efuse_write;
-	econfig->size = size;
+	nvmem = nvmem_register(&econfig);
+	if (IS_ERR(nvmem))
+		return PTR_ERR(nvmem);
 
-	nvmem = devm_nvmem_register(&pdev->dev, econfig);
+	platform_set_drvdata(pdev, nvmem);
 
-	return PTR_ERR_OR_ZERO(nvmem);
+	return 0;
+}
+
+static int meson_efuse_remove(struct platform_device *pdev)
+{
+	struct nvmem_device *nvmem = platform_get_drvdata(pdev);
+
+	return nvmem_unregister(nvmem);
 }
 
 static struct platform_driver meson_efuse_driver = {
 	.probe = meson_efuse_probe,
+	.remove = meson_efuse_remove,
 	.driver = {
 		.name = "meson-efuse",
 		.of_match_table = meson_efuse_match,
@@ -79,5 +89,5 @@ static struct platform_driver meson_efuse_driver = {
 module_platform_driver(meson_efuse_driver);
 
 MODULE_AUTHOR("Carlo Caione <carlo@endlessm.com>");
-MODULE_DESCRIPTION("Amlogic Meson GX NVMEM driver");
+MODULE_DESCRIPTION("Amlogic Meson NVMEM driver");
 MODULE_LICENSE("GPL v2");

@@ -2,7 +2,6 @@
 #ifndef __PERF_HEADER_H
 #define __PERF_HEADER_H
 
-#include <linux/stddef.h>
 #include <linux/perf_event.h>
 #include <sys/types.h>
 #include <stdbool.h>
@@ -10,7 +9,6 @@
 #include <linux/types.h>
 #include "event.h"
 #include "env.h"
-#include "pmu.h"
 
 enum {
 	HEADER_RESERVED		= 0,	/* always cleared */
@@ -36,9 +34,6 @@ enum {
 	HEADER_AUXTRACE,
 	HEADER_STAT,
 	HEADER_CACHE,
-	HEADER_SAMPLE_TIME,
-	HEADER_MEM_TOPOLOGY,
-	HEADER_CLOCKID,
 	HEADER_LAST_FEATURE,
 	HEADER_FEAT_BITS	= 256,
 };
@@ -112,19 +107,15 @@ int perf_event__synthesize_features(struct perf_tool *tool,
 				    struct perf_evlist *evlist,
 				    perf_event__handler_t process);
 
-int perf_event__synthesize_extra_attr(struct perf_tool *tool,
-				      struct perf_evlist *evsel_list,
-				      perf_event__handler_t process,
-				      bool is_pipe);
-
-int perf_event__process_feature(struct perf_session *session,
-				union perf_event *event);
+int perf_event__process_feature(struct perf_tool *tool,
+				union perf_event *event,
+				struct perf_session *session);
 
 int perf_event__synthesize_attr(struct perf_tool *tool,
 				struct perf_event_attr *attr, u32 ids, u64 *id,
 				perf_event__handler_t process);
 int perf_event__synthesize_attrs(struct perf_tool *tool,
-				 struct perf_evlist *evlist,
+				 struct perf_session *session,
 				 perf_event__handler_t process);
 int perf_event__synthesize_event_update_unit(struct perf_tool *tool,
 					     struct perf_evsel *evsel,
@@ -148,15 +139,17 @@ size_t perf_event__fprintf_event_update(union perf_event *event, FILE *fp);
 int perf_event__synthesize_tracing_data(struct perf_tool *tool,
 					int fd, struct perf_evlist *evlist,
 					perf_event__handler_t process);
-int perf_event__process_tracing_data(struct perf_session *session,
-				     union perf_event *event);
+int perf_event__process_tracing_data(struct perf_tool *tool,
+				     union perf_event *event,
+				     struct perf_session *session);
 
 int perf_event__synthesize_build_id(struct perf_tool *tool,
 				    struct dso *pos, u16 misc,
 				    perf_event__handler_t process,
 				    struct machine *machine);
-int perf_event__process_build_id(struct perf_session *session,
-				 union perf_event *event);
+int perf_event__process_build_id(struct perf_tool *tool,
+				 union perf_event *event,
+				 struct perf_session *session);
 bool is_perf_magic(u64 magic);
 
 #define NAME_ALIGN 64
@@ -173,6 +166,5 @@ int write_padded(struct feat_fd *fd, const void *bf,
  */
 int get_cpuid(char *buffer, size_t sz);
 
-char *get_cpuid_str(struct perf_pmu *pmu __maybe_unused);
-int strcmp_cpuid_str(const char *s1, const char *s2);
+char *get_cpuid_str(void);
 #endif /* __PERF_HEADER_H */

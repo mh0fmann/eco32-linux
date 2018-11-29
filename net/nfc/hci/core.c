@@ -209,11 +209,6 @@ void nfc_hci_cmd_received(struct nfc_hci_dev *hdev, u8 pipe, u8 cmd,
 		}
 		create_info = (struct hci_create_pipe_resp *)skb->data;
 
-		if (create_info->pipe >= NFC_HCI_MAX_PIPES) {
-			status = NFC_HCI_ANY_E_NOK;
-			goto exit;
-		}
-
 		/* Save the new created pipe and bind with local gate,
 		 * the description for skb->data[3] is destination gate id
 		 * but since we received this cmd from host controller, we
@@ -236,11 +231,6 @@ void nfc_hci_cmd_received(struct nfc_hci_dev *hdev, u8 pipe, u8 cmd,
 			goto exit;
 		}
 		delete_info = (struct hci_delete_pipe_noti *)skb->data;
-
-		if (delete_info->pipe >= NFC_HCI_MAX_PIPES) {
-			status = NFC_HCI_ANY_E_NOK;
-			goto exit;
-		}
 
 		hdev->pipes[delete_info->pipe].gate = NFC_HCI_INVALID_GATE;
 		hdev->pipes[delete_info->pipe].dest_host = NFC_HCI_INVALID_HOST;
@@ -438,9 +428,9 @@ exit_noskb:
 		nfc_hci_driver_failure(hdev, r);
 }
 
-static void nfc_hci_cmd_timeout(struct timer_list *t)
+static void nfc_hci_cmd_timeout(unsigned long data)
 {
-	struct nfc_hci_dev *hdev = from_timer(hdev, t, cmd_timer);
+	struct nfc_hci_dev *hdev = (struct nfc_hci_dev *)data;
 
 	schedule_work(&hdev->msg_tx_work);
 }
@@ -1014,7 +1004,9 @@ int nfc_hci_register_device(struct nfc_hci_dev *hdev)
 
 	INIT_WORK(&hdev->msg_tx_work, nfc_hci_msg_tx_work);
 
-	timer_setup(&hdev->cmd_timer, nfc_hci_cmd_timeout, 0);
+	init_timer(&hdev->cmd_timer);
+	hdev->cmd_timer.data = (unsigned long)hdev;
+	hdev->cmd_timer.function = nfc_hci_cmd_timeout;
 
 	skb_queue_head_init(&hdev->rx_hcp_frags);
 

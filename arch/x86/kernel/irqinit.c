@@ -5,7 +5,6 @@
 #include <linux/sched.h>
 #include <linux/ioport.h>
 #include <linux/interrupt.h>
-#include <linux/irq.h>
 #include <linux/timex.h>
 #include <linux/random.h>
 #include <linux/kprobes.h>
@@ -62,14 +61,9 @@ void __init init_ISA_irqs(void)
 	struct irq_chip *chip = legacy_pic->chip;
 	int i;
 
-	/*
-	 * Try to set up the through-local-APIC virtual wire mode earlier.
-	 *
-	 * On some 32-bit UP machines, whose APIC has been disabled by BIOS
-	 * and then got re-enabled by "lapic", it hangs at boot time without this.
-	 */
+#if defined(CONFIG_X86_64) || defined(CONFIG_X86_LOCAL_APIC)
 	init_bsp_APIC();
-
+#endif
 	legacy_pic->init(0);
 
 	for (i = 0; i < nr_legacy_irqs(); i++)
@@ -100,7 +94,6 @@ void __init native_init_IRQ(void)
 	x86_init.irqs.pre_vector_init();
 
 	idt_setup_apic_and_irq_gates();
-	lapic_assign_system_vectors();
 
 	if (!acpi_ioapic && !of_ioapic && nr_legacy_irqs())
 		setup_irq(2, &irq2);

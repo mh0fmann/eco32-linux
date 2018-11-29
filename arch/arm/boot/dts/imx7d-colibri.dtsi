@@ -44,13 +44,9 @@
 #include "imx7-colibri.dtsi"
 
 / {
-	memory@80000000 {
+	memory {
 		reg = <0x80000000 0x20000000>;
 	};
-};
-
-&gpmi {
-	status = "okay";
 };
 
 &usbotg2 {

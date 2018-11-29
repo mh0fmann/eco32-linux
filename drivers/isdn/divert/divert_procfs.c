@@ -119,15 +119,15 @@ isdn_divert_write(struct file *file, const char __user *buf, size_t count, loff_
 /***************************************/
 /* select routines for various kernels */
 /***************************************/
-static __poll_t
+static unsigned int
 isdn_divert_poll(struct file *file, poll_table *wait)
 {
-	__poll_t mask = 0;
+	unsigned int mask = 0;
 
 	poll_wait(file, &(rd_queue), wait);
-	/* mask = EPOLLOUT | EPOLLWRNORM; */
+	/* mask = POLLOUT | POLLWRNORM; */
 	if (*((struct divert_info **) file->private_data)) {
-		mask |= EPOLLIN | EPOLLRDNORM;
+		mask |= POLLIN | POLLRDNORM;
 	}
 	return mask;
 }				/* isdn_divert_poll */

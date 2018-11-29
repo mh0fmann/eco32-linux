@@ -13,7 +13,6 @@
  * GNU General Public License for more details.
  */
 
-#include <linux/bitfield.h>
 #include <linux/bitops.h>
 #include <linux/iopoll.h>
 #include <linux/module.h>
@@ -28,14 +27,15 @@
 #define   SDHCI_CDNS_HRS04_ACK			BIT(26)
 #define   SDHCI_CDNS_HRS04_RD			BIT(25)
 #define   SDHCI_CDNS_HRS04_WR			BIT(24)
-#define   SDHCI_CDNS_HRS04_RDATA		GENMASK(23, 16)
-#define   SDHCI_CDNS_HRS04_WDATA		GENMASK(15, 8)
-#define   SDHCI_CDNS_HRS04_ADDR			GENMASK(5, 0)
+#define   SDHCI_CDNS_HRS04_RDATA_SHIFT		16
+#define   SDHCI_CDNS_HRS04_WDATA_SHIFT		8
+#define   SDHCI_CDNS_HRS04_ADDR_SHIFT		0
 
 #define SDHCI_CDNS_HRS06		0x18		/* eMMC control */
 #define   SDHCI_CDNS_HRS06_TUNE_UP		BIT(15)
-#define   SDHCI_CDNS_HRS06_TUNE			GENMASK(13, 8)
-#define   SDHCI_CDNS_HRS06_MODE			GENMASK(2, 0)
+#define   SDHCI_CDNS_HRS06_TUNE_SHIFT		8
+#define   SDHCI_CDNS_HRS06_TUNE_MASK		0x3f
+#define   SDHCI_CDNS_HRS06_MODE_MASK		0x7
 #define   SDHCI_CDNS_HRS06_MODE_SD		0x0
 #define   SDHCI_CDNS_HRS06_MODE_MMC_SDR		0x2
 #define   SDHCI_CDNS_HRS06_MODE_MMC_DDR		0x3
@@ -105,8 +105,8 @@ static int sdhci_cdns_write_phy_reg(struct sdhci_cdns_priv *priv,
 	u32 tmp;
 	int ret;
 
-	tmp = FIELD_PREP(SDHCI_CDNS_HRS04_WDATA, data) |
-	      FIELD_PREP(SDHCI_CDNS_HRS04_ADDR, addr);
+	tmp = (data << SDHCI_CDNS_HRS04_WDATA_SHIFT) |
+	      (addr << SDHCI_CDNS_HRS04_ADDR_SHIFT);
 	writel(tmp, reg);
 
 	tmp |= SDHCI_CDNS_HRS04_WR;
@@ -189,8 +189,8 @@ static void sdhci_cdns_set_emmc_mode(struct sdhci_cdns_priv *priv, u32 mode)
 
 	/* The speed mode for eMMC is selected by HRS06 register */
 	tmp = readl(priv->hrs_addr + SDHCI_CDNS_HRS06);
-	tmp &= ~SDHCI_CDNS_HRS06_MODE;
-	tmp |= FIELD_PREP(SDHCI_CDNS_HRS06_MODE, mode);
+	tmp &= ~SDHCI_CDNS_HRS06_MODE_MASK;
+	tmp |= mode;
 	writel(tmp, priv->hrs_addr + SDHCI_CDNS_HRS06);
 }
 
@@ -199,7 +199,7 @@ static u32 sdhci_cdns_get_emmc_mode(struct sdhci_cdns_priv *priv)
 	u32 tmp;
 
 	tmp = readl(priv->hrs_addr + SDHCI_CDNS_HRS06);
-	return FIELD_GET(SDHCI_CDNS_HRS06_MODE, tmp);
+	return tmp & SDHCI_CDNS_HRS06_MODE_MASK;
 }
 
 static void sdhci_cdns_set_uhs_signaling(struct sdhci_host *host,
@@ -253,32 +253,18 @@ static int sdhci_cdns_set_tune_val(struct sdhci_host *host, unsigned int val)
 	struct sdhci_cdns_priv *priv = sdhci_cdns_priv(host);
 	void __iomem *reg = priv->hrs_addr + SDHCI_CDNS_HRS06;
 	u32 tmp;
-	int i, ret;
 
-	if (WARN_ON(!FIELD_FIT(SDHCI_CDNS_HRS06_TUNE, val)))
+	if (WARN_ON(val > SDHCI_CDNS_HRS06_TUNE_MASK))
 		return -EINVAL;
 
 	tmp = readl(reg);
-	tmp &= ~SDHCI_CDNS_HRS06_TUNE;
-	tmp |= FIELD_PREP(SDHCI_CDNS_HRS06_TUNE, val);
+	tmp &= ~(SDHCI_CDNS_HRS06_TUNE_MASK << SDHCI_CDNS_HRS06_TUNE_SHIFT);
+	tmp |= val << SDHCI_CDNS_HRS06_TUNE_SHIFT;
+	tmp |= SDHCI_CDNS_HRS06_TUNE_UP;
+	writel(tmp, reg);
 
-	/*
-	 * Workaround for IP errata:
-	 * The IP6116 SD/eMMC PHY design has a timing issue on receive data
-	 * path. Send tune request twice.
-	 */
-	for (i = 0; i < 2; i++) {
-		tmp |= SDHCI_CDNS_HRS06_TUNE_UP;
-		writel(tmp, reg);
-
-		ret = readl_poll_timeout(reg, tmp,
-					 !(tmp & SDHCI_CDNS_HRS06_TUNE_UP),
-					 0, 1);
-		if (ret)
-			return ret;
-	}
-
-	return 0;
+	return readl_poll_timeout(reg, tmp, !(tmp & SDHCI_CDNS_HRS06_TUNE_UP),
+				  0, 1);
 }
 
 static int sdhci_cdns_execute_tuning(struct mmc_host *mmc, u32 opcode)

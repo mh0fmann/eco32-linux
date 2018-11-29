@@ -88,7 +88,7 @@ static int clkgate_separated_is_enabled(struct clk_hw *hw)
 	return reg ? 1 : 0;
 }
 
-static const struct clk_ops clkgate_separated_ops = {
+static struct clk_ops clkgate_separated_ops = {
 	.enable		= clkgate_separated_enable,
 	.disable	= clkgate_separated_disable,
 	.is_enabled	= clkgate_separated_is_enabled,
@@ -105,8 +105,10 @@ struct clk *hisi_register_clkgate_sep(struct device *dev, const char *name,
 	struct clk_init_data init;
 
 	sclk = kzalloc(sizeof(*sclk), GFP_KERNEL);
-	if (!sclk)
+	if (!sclk) {
+		pr_err("%s: fail to allocate separated gated clk\n", __func__);
 		return ERR_PTR(-ENOMEM);
+	}
 
 	init.name = name;
 	init.ops = &clkgate_separated_ops;

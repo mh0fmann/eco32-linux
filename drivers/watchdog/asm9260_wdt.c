@@ -292,13 +292,13 @@ static int asm9260_wdt_probe(struct platform_device *pdev)
 	if (IS_ERR(priv->iobase))
 		return PTR_ERR(priv->iobase);
 
-	priv->rst = devm_reset_control_get_exclusive(&pdev->dev, "wdt_rst");
-	if (IS_ERR(priv->rst))
-		return PTR_ERR(priv->rst);
-
 	ret = asm9260_wdt_get_dt_clks(priv);
 	if (ret)
 		return ret;
+
+	priv->rst = devm_reset_control_get_exclusive(&pdev->dev, "wdt_rst");
+	if (IS_ERR(priv->rst))
+		return PTR_ERR(priv->rst);
 
 	wdd = &priv->wdd;
 	wdd->info = &asm9260_wdt_ident;

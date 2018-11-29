@@ -11,7 +11,6 @@
  * GNU General Public License for more details.
  *
  */
-#include <linux/dsa/lan9303.h>
 #include <linux/etherdevice.h>
 #include <linux/list.h>
 #include <linux/slab.h>
@@ -40,30 +39,10 @@
  */
 
 #define LAN9303_TAG_LEN 4
-# define LAN9303_TAG_TX_USE_ALR BIT(3)
-# define LAN9303_TAG_TX_STP_OVERRIDE BIT(4)
-# define LAN9303_TAG_RX_IGMP BIT(3)
-# define LAN9303_TAG_RX_STP BIT(4)
-# define LAN9303_TAG_RX_TRAPPED_TO_CPU (LAN9303_TAG_RX_IGMP | \
-					LAN9303_TAG_RX_STP)
-
-/* Decide whether to transmit using ALR lookup, or transmit directly to
- * port using tag. ALR learning is performed only when using ALR lookup.
- * If the two external ports are bridged and the frame is unicast,
- * then use ALR lookup to allow ALR learning on CPU port.
- * Otherwise transmit directly to port with STP state override.
- * See also: lan9303_separate_ports() and lan9303.pdf 6.4.10.1
- */
-static int lan9303_xmit_use_arl(struct dsa_port *dp, u8 *dest_addr)
-{
-	struct lan9303 *chip = dp->ds->priv;
-
-	return chip->is_bridged && !is_multicast_ether_addr(dest_addr);
-}
 
 static struct sk_buff *lan9303_xmit(struct sk_buff *skb, struct net_device *dev)
 {
-	struct dsa_port *dp = dsa_slave_to_port(dev);
+	struct dsa_slave_priv *p = netdev_priv(dev);
 	u16 *lan9303_tag;
 
 	/* insert a special VLAN tag between the MAC addresses
@@ -83,20 +62,25 @@ static struct sk_buff *lan9303_xmit(struct sk_buff *skb, struct net_device *dev)
 
 	lan9303_tag = (u16 *)(skb->data + 2 * ETH_ALEN);
 	lan9303_tag[0] = htons(ETH_P_8021Q);
-	lan9303_tag[1] = lan9303_xmit_use_arl(dp, skb->data) ?
-				LAN9303_TAG_TX_USE_ALR :
-				dp->index | LAN9303_TAG_TX_STP_OVERRIDE;
-	lan9303_tag[1] = htons(lan9303_tag[1]);
+	lan9303_tag[1] = htons(p->dp->index | BIT(4));
 
 	return skb;
 }
 
 static struct sk_buff *lan9303_rcv(struct sk_buff *skb, struct net_device *dev,
-				   struct packet_type *pt)
+			struct packet_type *pt)
 {
 	u16 *lan9303_tag;
-	u16 lan9303_tag1;
+	struct dsa_switch_tree *dst = dev->dsa_ptr;
+	struct dsa_switch *ds;
 	unsigned int source_port;
+
+	ds = dst->ds[0];
+
+	if (unlikely(!ds)) {
+		dev_warn_ratelimited(&dev->dev, "Dropping packet, due to missing DSA switch device\n");
+		return NULL;
+	}
 
 	if (unlikely(!pskb_may_pull(skb, LAN9303_TAG_LEN))) {
 		dev_warn_ratelimited(&dev->dev,
@@ -117,12 +101,15 @@ static struct sk_buff *lan9303_rcv(struct sk_buff *skb, struct net_device *dev,
 		return NULL;
 	}
 
-	lan9303_tag1 = ntohs(lan9303_tag[1]);
-	source_port = lan9303_tag1 & 0x3;
+	source_port = ntohs(lan9303_tag[1]) & 0x3;
 
-	skb->dev = dsa_master_find_slave(dev, 0, source_port);
-	if (!skb->dev) {
+	if (source_port >= ds->num_ports) {
 		dev_warn_ratelimited(&dev->dev, "Dropping packet due to invalid source port\n");
+		return NULL;
+	}
+
+	if (!ds->ports[source_port].netdev) {
+		dev_warn_ratelimited(&dev->dev, "Dropping packet due to invalid netdev or device\n");
 		return NULL;
 	}
 
@@ -132,7 +119,9 @@ static struct sk_buff *lan9303_rcv(struct sk_buff *skb, struct net_device *dev,
 	skb_pull_rcsum(skb, 2 + 2);
 	memmove(skb->data - ETH_HLEN, skb->data - (ETH_HLEN + LAN9303_TAG_LEN),
 		2 * ETH_ALEN);
-	skb->offload_fwd_mark = !(lan9303_tag1 & LAN9303_TAG_RX_TRAPPED_TO_CPU);
+
+	/* forward the packet to the dedicated interface */
+	skb->dev = ds->ports[source_port].netdev;
 
 	return skb;
 }

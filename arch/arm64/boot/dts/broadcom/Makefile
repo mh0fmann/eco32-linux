@@ -1,7 +1,8 @@
 # SPDX-License-Identifier: GPL-2.0
-dtb-$(CONFIG_ARCH_BCM2835) += bcm2837-rpi-3-b.dtb \
-			      bcm2837-rpi-3-b-plus.dtb \
-			      bcm2837-rpi-cm3-io3.dtb
+dtb-$(CONFIG_ARCH_BCM2835) += bcm2837-rpi-3-b.dtb
 
-subdir-y	+= northstar2
-subdir-y	+= stingray
+dts-dirs	+= northstar2
+dts-dirs	+= stingray
+always		:= $(dtb-y)
+subdir-y	:= $(dts-dirs)
+clean-files	:= *.dtb

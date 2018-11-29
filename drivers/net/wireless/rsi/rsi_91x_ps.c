@@ -36,6 +36,7 @@ char *str_psstate(enum ps_state state)
 	default:
 		return "INVALID_STATE";
 	}
+	return "INVALID_STATE";
 }
 
 static inline void rsi_modify_ps_state(struct rsi_hw *adapter,
@@ -66,7 +67,7 @@ void rsi_default_ps_params(struct rsi_hw *adapter)
 	ps_info->deep_sleep_wakeup_period = RSI_DEF_DS_WAKEUP_PERIOD;
 }
 
-void rsi_enable_ps(struct rsi_hw *adapter, struct ieee80211_vif *vif)
+void rsi_enable_ps(struct rsi_hw *adapter)
 {
 	if (adapter->ps_state != PS_NONE) {
 		rsi_dbg(ERR_ZONE,
@@ -75,7 +76,7 @@ void rsi_enable_ps(struct rsi_hw *adapter, struct ieee80211_vif *vif)
 		return;
 	}
 
-	if (rsi_send_ps_request(adapter, true, vif)) {
+	if (rsi_send_ps_request(adapter, true)) {
 		rsi_dbg(ERR_ZONE,
 			"%s: Failed to send PS request to device\n",
 			__func__);
@@ -85,8 +86,7 @@ void rsi_enable_ps(struct rsi_hw *adapter, struct ieee80211_vif *vif)
 	rsi_modify_ps_state(adapter, PS_ENABLE_REQ_SENT);
 }
 
-/* This function is used to disable power save */
-void rsi_disable_ps(struct rsi_hw *adapter, struct ieee80211_vif *vif)
+void rsi_disable_ps(struct rsi_hw *adapter)
 {
 	if (adapter->ps_state != PS_ENABLED) {
 		rsi_dbg(ERR_ZONE,
@@ -95,7 +95,7 @@ void rsi_disable_ps(struct rsi_hw *adapter, struct ieee80211_vif *vif)
 		return;
 	}
 
-	if (rsi_send_ps_request(adapter, false, vif)) {
+	if (rsi_send_ps_request(adapter, false)) {
 		rsi_dbg(ERR_ZONE,
 			"%s: Failed to send PS request to device\n",
 			__func__);
@@ -105,16 +105,16 @@ void rsi_disable_ps(struct rsi_hw *adapter, struct ieee80211_vif *vif)
 	rsi_modify_ps_state(adapter, PS_DISABLE_REQ_SENT);
 }
 
-void rsi_conf_uapsd(struct rsi_hw *adapter, struct ieee80211_vif *vif)
+void rsi_conf_uapsd(struct rsi_hw *adapter)
 {
 	int ret;
 
 	if (adapter->ps_state != PS_ENABLED)
 		return;
 
-	ret = rsi_send_ps_request(adapter, false, vif);
+	ret = rsi_send_ps_request(adapter, false);
 	if (!ret)
-		ret = rsi_send_ps_request(adapter, true, vif);
+		ret = rsi_send_ps_request(adapter, true);
 	if (ret)
 		rsi_dbg(ERR_ZONE,
 			"%s: Failed to send PS request to device\n",

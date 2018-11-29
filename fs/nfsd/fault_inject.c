@@ -12,7 +12,6 @@
 #include <linux/nsproxy.h>
 #include <linux/sunrpc/addr.h>
 #include <linux/uaccess.h>
-#include <linux/kernel.h>
 
 #include "state.h"
 #include "netns.h"
@@ -127,6 +126,8 @@ static struct nfsd_fault_inject_op inject_ops[] = {
 	},
 };
 
+#define NUM_INJECT_OPS (sizeof(inject_ops)/sizeof(struct nfsd_fault_inject_op))
+
 int nfsd_fault_inject_init(void)
 {
 	unsigned int i;
@@ -137,7 +138,7 @@ int nfsd_fault_inject_init(void)
 	if (!debug_dir)
 		goto fail;
 
-	for (i = 0; i < ARRAY_SIZE(inject_ops); i++) {
+	for (i = 0; i < NUM_INJECT_OPS; i++) {
 		op = &inject_ops[i];
 		if (!debugfs_create_file(op->file, mode, debug_dir, op, &fops_nfsd))
 			goto fail;

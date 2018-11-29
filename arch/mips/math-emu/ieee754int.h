@@ -54,13 +54,13 @@ static inline int ieee754_class_nan(int xc)
 }
 
 #define COMPXSP \
-	unsigned int xm; int xe; int xs __maybe_unused; int xc
+	unsigned xm; int xe; int xs __maybe_unused; int xc
 
 #define COMPYSP \
-	unsigned int ym; int ye; int ys; int yc
+	unsigned ym; int ye; int ys; int yc
 
 #define COMPZSP \
-	unsigned int zm; int ze; int zs; int zc
+	unsigned zm; int ze; int zs; int zc
 
 #define EXPLODESP(v, vc, vs, ve, vm)					\
 {									\

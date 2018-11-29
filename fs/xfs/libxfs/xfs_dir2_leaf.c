@@ -1,8 +1,20 @@
-// SPDX-License-Identifier: GPL-2.0
 /*
  * Copyright (c) 2000-2003,2005 Silicon Graphics, Inc.
  * Copyright (c) 2013 Red Hat, Inc.
  * All Rights Reserved.
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License as
+ * published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it would be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write the Free Software Foundation,
+ * Inc.,  51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
  */
 #include "xfs.h"
 #include "xfs_fs.h"
@@ -38,7 +50,13 @@ static void xfs_dir3_leaf_log_tail(struct xfs_da_args *args,
  * Pop an assert if something is wrong.
  */
 #ifdef DEBUG
-static xfs_failaddr_t
+#define	xfs_dir3_leaf_check(dp, bp) \
+do { \
+	if (!xfs_dir3_leaf1_check((dp), (bp))) \
+		ASSERT(0); \
+} while (0);
+
+STATIC bool
 xfs_dir3_leaf1_check(
 	struct xfs_inode	*dp,
 	struct xfs_buf		*bp)
@@ -51,33 +69,17 @@ xfs_dir3_leaf1_check(
 	if (leafhdr.magic == XFS_DIR3_LEAF1_MAGIC) {
 		struct xfs_dir3_leaf_hdr *leaf3 = bp->b_addr;
 		if (be64_to_cpu(leaf3->info.blkno) != bp->b_bn)
-			return __this_address;
+			return false;
 	} else if (leafhdr.magic != XFS_DIR2_LEAF1_MAGIC)
-		return __this_address;
+		return false;
 
 	return xfs_dir3_leaf_check_int(dp->i_mount, dp, &leafhdr, leaf);
-}
-
-static inline void
-xfs_dir3_leaf_check(
-	struct xfs_inode	*dp,
-	struct xfs_buf		*bp)
-{
-	xfs_failaddr_t		fa;
-
-	fa = xfs_dir3_leaf1_check(dp, bp);
-	if (!fa)
-		return;
-	xfs_corruption_error(__func__, XFS_ERRLEVEL_LOW, dp->i_mount,
-			bp->b_addr, BBTOB(bp->b_length), __FILE__, __LINE__,
-			fa);
-	ASSERT(0);
 }
 #else
 #define	xfs_dir3_leaf_check(dp, bp)
 #endif
 
-xfs_failaddr_t
+bool
 xfs_dir3_leaf_check_int(
 	struct xfs_mount	*mp,
 	struct xfs_inode	*dp,
@@ -112,27 +114,27 @@ xfs_dir3_leaf_check_int(
 	 * We can deduce a value for that from di_size.
 	 */
 	if (hdr->count > ops->leaf_max_ents(geo))
-		return __this_address;
+		return false;
 
 	/* Leaves and bests don't overlap in leaf format. */
 	if ((hdr->magic == XFS_DIR2_LEAF1_MAGIC ||
 	     hdr->magic == XFS_DIR3_LEAF1_MAGIC) &&
 	    (char *)&ents[hdr->count] > (char *)xfs_dir2_leaf_bests_p(ltp))
-		return __this_address;
+		return false;
 
 	/* Check hash value order, count stale entries.  */
 	for (i = stale = 0; i < hdr->count; i++) {
 		if (i + 1 < hdr->count) {
 			if (be32_to_cpu(ents[i].hashval) >
 					be32_to_cpu(ents[i + 1].hashval))
-				return __this_address;
+				return false;
 		}
 		if (ents[i].address == cpu_to_be32(XFS_DIR2_NULL_DATAPTR))
 			stale++;
 	}
 	if (hdr->stale != stale)
-		return __this_address;
-	return NULL;
+		return false;
+	return true;
 }
 
 /*
@@ -140,7 +142,7 @@ xfs_dir3_leaf_check_int(
  * kernels we don't get assertion failures in xfs_dir3_leaf_hdr_from_disk() due
  * to incorrect magic numbers.
  */
-static xfs_failaddr_t
+static bool
 xfs_dir3_leaf_verify(
 	struct xfs_buf		*bp,
 	uint16_t		magic)
@@ -158,16 +160,16 @@ xfs_dir3_leaf_verify(
 							 : XFS_DIR3_LEAFN_MAGIC;
 
 		if (leaf3->info.hdr.magic != cpu_to_be16(magic3))
-			return __this_address;
+			return false;
 		if (!uuid_equal(&leaf3->info.uuid, &mp->m_sb.sb_meta_uuid))
-			return __this_address;
+			return false;
 		if (be64_to_cpu(leaf3->info.blkno) != bp->b_bn)
-			return __this_address;
+			return false;
 		if (!xfs_log_check_lsn(mp, be64_to_cpu(leaf3->info.lsn)))
-			return __this_address;
+			return false;
 	} else {
 		if (leaf->hdr.info.magic != cpu_to_be16(magic))
-			return __this_address;
+			return false;
 	}
 
 	return xfs_dir3_leaf_check_int(mp, NULL, NULL, leaf);
@@ -179,16 +181,15 @@ __read_verify(
 	uint16_t	magic)
 {
 	struct xfs_mount	*mp = bp->b_target->bt_mount;
-	xfs_failaddr_t		fa;
 
 	if (xfs_sb_version_hascrc(&mp->m_sb) &&
 	     !xfs_buf_verify_cksum(bp, XFS_DIR3_LEAF_CRC_OFF))
-		xfs_verifier_error(bp, -EFSBADCRC, __this_address);
-	else {
-		fa = xfs_dir3_leaf_verify(bp, magic);
-		if (fa)
-			xfs_verifier_error(bp, -EFSCORRUPTED, fa);
-	}
+		xfs_buf_ioerror(bp, -EFSBADCRC);
+	else if (!xfs_dir3_leaf_verify(bp, magic))
+		xfs_buf_ioerror(bp, -EFSCORRUPTED);
+
+	if (bp->b_error)
+		xfs_verifier_error(bp);
 }
 
 static void
@@ -197,13 +198,12 @@ __write_verify(
 	uint16_t	magic)
 {
 	struct xfs_mount	*mp = bp->b_target->bt_mount;
-	struct xfs_buf_log_item	*bip = bp->b_log_item;
+	struct xfs_buf_log_item	*bip = bp->b_fspriv;
 	struct xfs_dir3_leaf_hdr *hdr3 = bp->b_addr;
-	xfs_failaddr_t		fa;
 
-	fa = xfs_dir3_leaf_verify(bp, magic);
-	if (fa) {
-		xfs_verifier_error(bp, -EFSCORRUPTED, fa);
+	if (!xfs_dir3_leaf_verify(bp, magic)) {
+		xfs_buf_ioerror(bp, -EFSCORRUPTED);
+		xfs_verifier_error(bp);
 		return;
 	}
 
@@ -214,13 +214,6 @@ __write_verify(
 		hdr3->info.lsn = cpu_to_be64(bip->bli_item.li_lsn);
 
 	xfs_buf_update_cksum(bp, XFS_DIR3_LEAF_CRC_OFF);
-}
-
-static xfs_failaddr_t
-xfs_dir3_leaf1_verify(
-	struct xfs_buf	*bp)
-{
-	return xfs_dir3_leaf_verify(bp, XFS_DIR2_LEAF1_MAGIC);
 }
 
 static void
@@ -235,13 +228,6 @@ xfs_dir3_leaf1_write_verify(
 	struct xfs_buf	*bp)
 {
 	__write_verify(bp, XFS_DIR2_LEAF1_MAGIC);
-}
-
-static xfs_failaddr_t
-xfs_dir3_leafn_verify(
-	struct xfs_buf	*bp)
-{
-	return xfs_dir3_leaf_verify(bp, XFS_DIR2_LEAFN_MAGIC);
 }
 
 static void
@@ -262,14 +248,12 @@ const struct xfs_buf_ops xfs_dir3_leaf1_buf_ops = {
 	.name = "xfs_dir3_leaf1",
 	.verify_read = xfs_dir3_leaf1_read_verify,
 	.verify_write = xfs_dir3_leaf1_write_verify,
-	.verify_struct = xfs_dir3_leaf1_verify,
 };
 
 const struct xfs_buf_ops xfs_dir3_leafn_buf_ops = {
 	.name = "xfs_dir3_leafn",
 	.verify_read = xfs_dir3_leafn_read_verify,
 	.verify_write = xfs_dir3_leafn_write_verify,
-	.verify_struct = xfs_dir3_leafn_verify,
 };
 
 int
@@ -590,8 +574,8 @@ xfs_dir3_leaf_find_entry(
 				(index - lowstale - 1) *
 					sizeof(xfs_dir2_leaf_entry_t));
 		}
-		*lfloglow = min(lowstale, *lfloglow);
-		*lfloghigh = max(index - 1, *lfloghigh);
+		*lfloglow = MIN(lowstale, *lfloglow);
+		*lfloghigh = MAX(index - 1, *lfloghigh);
 		leafhdr->stale--;
 		return &ents[index - 1];
 	}
@@ -610,8 +594,8 @@ xfs_dir3_leaf_find_entry(
 		memmove(&ents[index + 1], &ents[index],
 			(highstale - index) * sizeof(xfs_dir2_leaf_entry_t));
 	}
-	*lfloglow = min(index, *lfloglow);
-	*lfloghigh = max(highstale, *lfloghigh);
+	*lfloglow = MIN(index, *lfloglow);
+	*lfloghigh = MAX(highstale, *lfloghigh);
 	leafhdr->stale--;
 	return &ents[index];
 }
@@ -861,17 +845,14 @@ xfs_dir2_leaf_addname(
 	 */
 	dup = (xfs_dir2_data_unused_t *)
 	      ((char *)hdr + be16_to_cpu(bf[0].offset));
+	ASSERT(be16_to_cpu(dup->length) >= length);
 	needscan = needlog = 0;
 	/*
 	 * Mark the initial part of our freespace in use for the new entry.
 	 */
-	error = xfs_dir2_data_use_free(args, dbp, dup,
-			(xfs_dir2_data_aoff_t)((char *)dup - (char *)hdr),
-			length, &needlog, &needscan);
-	if (error) {
-		xfs_trans_brelse(tp, lbp);
-		return error;
-	}
+	xfs_dir2_data_use_free(args, dbp, dup,
+		(xfs_dir2_data_aoff_t)((char *)dup - (char *)hdr), length,
+		&needlog, &needscan);
 	/*
 	 * Initialize our new entry (at last).
 	 */
@@ -1407,8 +1388,7 @@ xfs_dir2_leaf_removename(
 	oldbest = be16_to_cpu(bf[0].length);
 	ltp = xfs_dir2_leaf_tail_p(args->geo, leaf);
 	bestsp = xfs_dir2_leaf_bests_p(ltp);
-	if (be16_to_cpu(bestsp[db]) != oldbest)
-		return -EFSCORRUPTED;
+	ASSERT(be16_to_cpu(bestsp[db]) == oldbest);
 	/*
 	 * Mark the former data entry unused.
 	 */

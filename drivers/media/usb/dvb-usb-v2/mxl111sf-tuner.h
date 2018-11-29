@@ -17,7 +17,7 @@
 #ifndef __MXL111SF_TUNER_H__
 #define __MXL111SF_TUNER_H__
 
-#include <media/dvb_frontend.h>
+#include "dvb_frontend.h"
 #include "mxl111sf.h"
 
 enum mxl_if_freq {

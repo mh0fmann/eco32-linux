@@ -54,7 +54,6 @@ multiq_classify(struct sk_buff *skb, struct Qdisc *sch, int *qerr)
 	case TC_ACT_QUEUED:
 	case TC_ACT_TRAP:
 		*qerr = NET_XMIT_SUCCESS | __NET_XMIT_STOLEN;
-		/* fall through */
 	case TC_ACT_SHOT:
 		return NULL;
 	}
@@ -175,13 +174,12 @@ multiq_destroy(struct Qdisc *sch)
 
 	tcf_block_put(q->block);
 	for (band = 0; band < q->bands; band++)
-		qdisc_put(q->queues[band]);
+		qdisc_destroy(q->queues[band]);
 
 	kfree(q->queues);
 }
 
-static int multiq_tune(struct Qdisc *sch, struct nlattr *opt,
-		       struct netlink_ext_ack *extack)
+static int multiq_tune(struct Qdisc *sch, struct nlattr *opt)
 {
 	struct multiq_sched_data *q = qdisc_priv(sch);
 	struct tc_multiq_qopt *qopt;
@@ -204,7 +202,7 @@ static int multiq_tune(struct Qdisc *sch, struct nlattr *opt,
 			q->queues[i] = &noop_qdisc;
 			qdisc_tree_reduce_backlog(child, child->q.qlen,
 						  child->qstats.backlog);
-			qdisc_put(child);
+			qdisc_destroy(child);
 		}
 	}
 
@@ -216,7 +214,7 @@ static int multiq_tune(struct Qdisc *sch, struct nlattr *opt,
 			child = qdisc_create_dflt(sch->dev_queue,
 						  &pfifo_qdisc_ops,
 						  TC_H_MAKE(sch->handle,
-							    i + 1), extack);
+							    i + 1));
 			if (child) {
 				sch_tree_lock(sch);
 				old = q->queues[i];
@@ -228,7 +226,7 @@ static int multiq_tune(struct Qdisc *sch, struct nlattr *opt,
 					qdisc_tree_reduce_backlog(old,
 								  old->q.qlen,
 								  old->qstats.backlog);
-					qdisc_put(old);
+					qdisc_destroy(old);
 				}
 				sch_tree_unlock(sch);
 			}
@@ -237,18 +235,17 @@ static int multiq_tune(struct Qdisc *sch, struct nlattr *opt,
 	return 0;
 }
 
-static int multiq_init(struct Qdisc *sch, struct nlattr *opt,
-		       struct netlink_ext_ack *extack)
+static int multiq_init(struct Qdisc *sch, struct nlattr *opt)
 {
 	struct multiq_sched_data *q = qdisc_priv(sch);
 	int i, err;
 
 	q->queues = NULL;
 
-	if (!opt)
+	if (opt == NULL)
 		return -EINVAL;
 
-	err = tcf_block_get(&q->block, &q->filter_list, sch, extack);
+	err = tcf_block_get(&q->block, &q->filter_list);
 	if (err)
 		return err;
 
@@ -260,7 +257,7 @@ static int multiq_init(struct Qdisc *sch, struct nlattr *opt,
 	for (i = 0; i < q->max_bands; i++)
 		q->queues[i] = &noop_qdisc;
 
-	return multiq_tune(sch, opt, extack);
+	return multiq_tune(sch, opt);
 }
 
 static int multiq_dump(struct Qdisc *sch, struct sk_buff *skb)
@@ -283,7 +280,7 @@ nla_put_failure:
 }
 
 static int multiq_graft(struct Qdisc *sch, unsigned long arg, struct Qdisc *new,
-			struct Qdisc **old, struct netlink_ext_ack *extack)
+		      struct Qdisc **old)
 {
 	struct multiq_sched_data *q = qdisc_priv(sch);
 	unsigned long band = arg - 1;
@@ -371,8 +368,7 @@ static void multiq_walk(struct Qdisc *sch, struct qdisc_walker *arg)
 	}
 }
 
-static struct tcf_block *multiq_tcf_block(struct Qdisc *sch, unsigned long cl,
-					  struct netlink_ext_ack *extack)
+static struct tcf_block *multiq_tcf_block(struct Qdisc *sch, unsigned long cl)
 {
 	struct multiq_sched_data *q = qdisc_priv(sch);
 

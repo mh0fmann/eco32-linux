@@ -182,20 +182,8 @@ pte_t arch_make_huge_pte(pte_t entry, struct vm_area_struct *vma,
 			 struct page *page, int writeable)
 {
 	unsigned int shift = huge_page_shift(hstate_vma(vma));
-	pte_t pte;
 
-	pte = hugepage_shift_to_tte(entry, shift);
-
-#ifdef CONFIG_SPARC64
-	/* If this vma has ADI enabled on it, turn on TTE.mcd
-	 */
-	if (vma->vm_flags & VM_SPARC_ADI)
-		return pte_mkmcd(pte);
-	else
-		return pte_mknotmcd(pte);
-#else
-	return pte;
-#endif
+	return hugepage_shift_to_tte(entry, shift);
 }
 
 static unsigned int sun4v_huge_tte_to_shift(pte_t entry)
@@ -409,7 +397,7 @@ static void hugetlb_free_pte_range(struct mmu_gather *tlb, pmd_t *pmd,
 
 	pmd_clear(pmd);
 	pte_free_tlb(tlb, token, addr);
-	mm_dec_nr_ptes(tlb->mm);
+	atomic_long_dec(&tlb->mm->nr_ptes);
 }
 
 static void hugetlb_free_pmd_range(struct mmu_gather *tlb, pud_t *pud,
@@ -484,7 +472,6 @@ static void hugetlb_free_pud_range(struct mmu_gather *tlb, pgd_t *pgd,
 	pud = pud_offset(pgd, start);
 	pgd_clear(pgd);
 	pud_free_tlb(tlb, pud, start);
-	mm_dec_nr_puds(tlb->mm);
 }
 
 void hugetlb_free_pgd_range(struct mmu_gather *tlb,

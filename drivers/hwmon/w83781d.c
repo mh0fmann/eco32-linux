@@ -1246,8 +1246,10 @@ w83781d_probe(struct i2c_client *client, const struct i2c_device_id *id)
 
  exit_remove_files:
 	w83781d_remove_files(dev);
-	i2c_unregister_device(data->lm75[0]);
-	i2c_unregister_device(data->lm75[1]);
+	if (data->lm75[0])
+		i2c_unregister_device(data->lm75[0]);
+	if (data->lm75[1])
+		i2c_unregister_device(data->lm75[1]);
 	return err;
 }
 
@@ -1260,8 +1262,10 @@ w83781d_remove(struct i2c_client *client)
 	hwmon_device_unregister(data->hwmon_dev);
 	w83781d_remove_files(dev);
 
-	i2c_unregister_device(data->lm75[0]);
-	i2c_unregister_device(data->lm75[1]);
+	if (data->lm75[0])
+		i2c_unregister_device(data->lm75[0]);
+	if (data->lm75[1])
+		i2c_unregister_device(data->lm75[1]);
 
 	return 0;
 }

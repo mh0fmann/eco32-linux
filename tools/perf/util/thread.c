@@ -46,8 +46,6 @@ struct thread *thread__new(pid_t pid, pid_t tid)
 		thread->cpu = -1;
 		INIT_LIST_HEAD(&thread->namespaces_list);
 		INIT_LIST_HEAD(&thread->comm_list);
-		init_rwsem(&thread->namespaces_lock);
-		init_rwsem(&thread->comm_lock);
 
 		comm_str = malloc(32);
 		if (!comm_str)
@@ -86,26 +84,18 @@ void thread__delete(struct thread *thread)
 		map_groups__put(thread->mg);
 		thread->mg = NULL;
 	}
-	down_write(&thread->namespaces_lock);
 	list_for_each_entry_safe(namespaces, tmp_namespaces,
 				 &thread->namespaces_list, list) {
 		list_del(&namespaces->list);
 		namespaces__free(namespaces);
 	}
-	up_write(&thread->namespaces_lock);
-
-	down_write(&thread->comm_lock);
 	list_for_each_entry_safe(comm, tmp_comm, &thread->comm_list, list) {
 		list_del(&comm->list);
 		comm__free(comm);
 	}
-	up_write(&thread->comm_lock);
-
 	unwind__finish_access(thread);
 	nsinfo__zput(thread->nsinfo);
 
-	exit_rwsem(&thread->namespaces_lock);
-	exit_rwsem(&thread->comm_lock);
 	free(thread);
 }
 
@@ -136,8 +126,8 @@ struct namespaces *thread__namespaces(const struct thread *thread)
 	return list_first_entry(&thread->namespaces_list, struct namespaces, list);
 }
 
-static int __thread__set_namespaces(struct thread *thread, u64 timestamp,
-				    struct namespaces_event *event)
+int thread__set_namespaces(struct thread *thread, u64 timestamp,
+			   struct namespaces_event *event)
 {
 	struct namespaces *new, *curr = thread__namespaces(thread);
 
@@ -158,17 +148,6 @@ static int __thread__set_namespaces(struct thread *thread, u64 timestamp,
 	}
 
 	return 0;
-}
-
-int thread__set_namespaces(struct thread *thread, u64 timestamp,
-			   struct namespaces_event *event)
-{
-	int ret;
-
-	down_write(&thread->namespaces_lock);
-	ret = __thread__set_namespaces(thread, timestamp, event);
-	up_write(&thread->namespaces_lock);
-	return ret;
 }
 
 struct comm *thread__comm(const struct thread *thread)
@@ -192,8 +171,8 @@ struct comm *thread__exec_comm(const struct thread *thread)
 	return last;
 }
 
-static int ____thread__set_comm(struct thread *thread, const char *str,
-				u64 timestamp, bool exec)
+int __thread__set_comm(struct thread *thread, const char *str, u64 timestamp,
+		       bool exec)
 {
 	struct comm *new, *curr = thread__comm(thread);
 
@@ -217,17 +196,6 @@ static int ____thread__set_comm(struct thread *thread, const char *str,
 	return 0;
 }
 
-int __thread__set_comm(struct thread *thread, const char *str, u64 timestamp,
-		       bool exec)
-{
-	int ret;
-
-	down_write(&thread->comm_lock);
-	ret = ____thread__set_comm(thread, str, timestamp, exec);
-	up_write(&thread->comm_lock);
-	return ret;
-}
-
 int thread__set_comm_from_proc(struct thread *thread)
 {
 	char path[64];
@@ -245,7 +213,7 @@ int thread__set_comm_from_proc(struct thread *thread)
 	return err;
 }
 
-static const char *__thread__comm_str(const struct thread *thread)
+const char *thread__comm_str(const struct thread *thread)
 {
 	const struct comm *comm = thread__comm(thread);
 
@@ -253,17 +221,6 @@ static const char *__thread__comm_str(const struct thread *thread)
 		return NULL;
 
 	return comm__str(comm);
-}
-
-const char *thread__comm_str(const struct thread *thread)
-{
-	const char *str;
-
-	down_read((struct rw_semaphore *)&thread->comm_lock);
-	str = __thread__comm_str(thread);
-	up_read((struct rw_semaphore *)&thread->comm_lock);
-
-	return str;
 }
 
 /* CHECKME: it should probably better return the max comm len from its comm list */
@@ -302,19 +259,22 @@ int thread__insert_map(struct thread *thread, struct map *map)
 static int __thread__prepare_access(struct thread *thread)
 {
 	bool initialized = false;
-	int err = 0;
-	struct maps *maps = &thread->mg->maps;
-	struct map *map;
+	int i, err = 0;
 
-	down_read(&maps->lock);
+	for (i = 0; i < MAP__NR_TYPES; ++i) {
+		struct maps *maps = &thread->mg->maps[i];
+		struct map *map;
 
-	for (map = maps__first(maps); map; map = map__next(map)) {
-		err = unwind__prepare_access(thread, map, &initialized);
-		if (err || initialized)
-			break;
+		pthread_rwlock_rdlock(&maps->lock);
+
+		for (map = maps__first(maps); map; map = map__next(map)) {
+			err = unwind__prepare_access(thread, map, &initialized);
+			if (err || initialized)
+				break;
+		}
+
+		pthread_rwlock_unlock(&maps->lock);
 	}
-
-	up_read(&maps->lock);
 
 	return err;
 }
@@ -330,9 +290,10 @@ static int thread__prepare_access(struct thread *thread)
 }
 
 static int thread__clone_map_groups(struct thread *thread,
-				    struct thread *parent,
-				    bool do_maps_clone)
+				    struct thread *parent)
 {
+	int i;
+
 	/* This is new thread, we share map groups for process. */
 	if (thread->pid_ == parent->pid_)
 		return thread__prepare_access(thread);
@@ -342,11 +303,16 @@ static int thread__clone_map_groups(struct thread *thread,
 			 thread->pid_, thread->tid, parent->pid_, parent->tid);
 		return 0;
 	}
+
 	/* But this one is new process, copy maps. */
-	return do_maps_clone ? map_groups__clone(thread, parent->mg) : 0;
+	for (i = 0; i < MAP__NR_TYPES; ++i)
+		if (map_groups__clone(thread, parent->mg, i) < 0)
+			return -ENOMEM;
+
+	return 0;
 }
 
-int thread__fork(struct thread *thread, struct thread *parent, u64 timestamp, bool do_maps_clone)
+int thread__fork(struct thread *thread, struct thread *parent, u64 timestamp)
 {
 	if (parent->comm_set) {
 		const char *comm = thread__comm_str(parent);
@@ -359,10 +325,11 @@ int thread__fork(struct thread *thread, struct thread *parent, u64 timestamp, bo
 	}
 
 	thread->ppid = parent->tid;
-	return thread__clone_map_groups(thread, parent, do_maps_clone);
+	return thread__clone_map_groups(thread, parent);
 }
 
-void thread__find_cpumode_addr_location(struct thread *thread, u64 addr,
+void thread__find_cpumode_addr_location(struct thread *thread,
+					enum map_type type, u64 addr,
 					struct addr_location *al)
 {
 	size_t i;
@@ -374,7 +341,7 @@ void thread__find_cpumode_addr_location(struct thread *thread, u64 addr,
 	};
 
 	for (i = 0; i < ARRAY_SIZE(cpumodes); i++) {
-		thread__find_symbol(thread, cpumodes[i], addr, al);
+		thread__find_addr_location(thread, cpumodes[i], type, addr, al);
 		if (al->map)
 			break;
 	}

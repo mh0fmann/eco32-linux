@@ -16,6 +16,7 @@
  * 02110-1301, USA
  */
 
+#include <linux/hardirq.h>
 #include <linux/if_vlan.h>
 #include <linux/kernel.h>
 #include <linux/netdevice.h>
@@ -43,8 +44,7 @@ static struct internal_dev *internal_dev_priv(struct net_device *netdev)
 }
 
 /* Called with rcu_read_lock_bh. */
-static netdev_tx_t
-internal_dev_xmit(struct sk_buff *skb, struct net_device *netdev)
+static int internal_dev_xmit(struct sk_buff *skb, struct net_device *netdev)
 {
 	int len, err;
 
@@ -63,7 +63,7 @@ internal_dev_xmit(struct sk_buff *skb, struct net_device *netdev)
 	} else {
 		netdev->stats.tx_errors++;
 	}
-	return NETDEV_TX_OK;
+	return 0;
 }
 
 static int internal_dev_open(struct net_device *netdev)
@@ -126,12 +126,18 @@ internal_get_stats(struct net_device *dev, struct rtnl_link_stats64 *stats)
 	}
 }
 
+static void internal_set_rx_headroom(struct net_device *dev, int new_hr)
+{
+	dev->needed_headroom = new_hr < 0 ? 0 : new_hr;
+}
+
 static const struct net_device_ops internal_dev_netdev_ops = {
 	.ndo_open = internal_dev_open,
 	.ndo_stop = internal_dev_stop,
 	.ndo_start_xmit = internal_dev_xmit,
 	.ndo_set_mac_address = eth_mac_addr,
 	.ndo_get_stats64 = internal_get_stats,
+	.ndo_set_rx_headroom = internal_set_rx_headroom,
 };
 
 static struct rtnl_link_ops internal_dev_link_ops __read_mostly = {
@@ -148,7 +154,7 @@ static void do_setup(struct net_device *netdev)
 
 	netdev->priv_flags &= ~IFF_TX_SKB_SHARING;
 	netdev->priv_flags |= IFF_LIVE_ADDR_CHANGE | IFF_OPENVSWITCH |
-			      IFF_NO_QUEUE;
+			      IFF_PHONY_HEADROOM | IFF_NO_QUEUE;
 	netdev->needs_free_netdev = true;
 	netdev->priv_destructor = internal_dev_destructor;
 	netdev->ethtool_ops = &internal_dev_ethtool_ops;
@@ -189,6 +195,7 @@ static struct vport *internal_dev_create(const struct vport_parms *parms)
 		err = -ENOMEM;
 		goto error_free_netdev;
 	}
+	vport->dev->needed_headroom = vport->dp->max_headroom;
 
 	dev_net_set(vport->dev, ovs_dp_get_net(vport->dp));
 	internal_dev = internal_dev_priv(vport->dev);

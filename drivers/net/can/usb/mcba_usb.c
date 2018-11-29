@@ -592,8 +592,6 @@ static void mcba_usb_read_bulk_callback(struct urb *urb)
 		break;
 
 	case -ENOENT:
-	case -EPIPE:
-	case -EPROTO:
 	case -ESHUTDOWN:
 		return;
 
@@ -864,7 +862,7 @@ static int mcba_usb_probe(struct usb_interface *intf,
 		goto cleanup_unregister_candev;
 	}
 
-	dev_info(&intf->dev, "Microchip CAN BUS Analyzer connected\n");
+	dev_info(&intf->dev, "Microchip CAN BUS analizer connected\n");
 
 	return 0;
 

@@ -1,13 +1,17 @@
-// SPDX-License-Identifier: GPL-2.0
-//
-// Freescale S/PDIF ALSA SoC Digital Audio Interface (DAI) driver
-//
-// Copyright (C) 2013 Freescale Semiconductor, Inc.
-//
-// Based on stmp3xxx_spdif_dai.c
-// Vladimir Barinov <vbarinov@embeddedalley.com>
-// Copyright 2008 SigmaTel, Inc
-// Copyright 2008 Embedded Alley Solutions, Inc
+/*
+ * Freescale S/PDIF ALSA SoC Digital Audio Interface (DAI) driver
+ *
+ * Copyright (C) 2013 Freescale Semiconductor, Inc.
+ *
+ * Based on stmp3xxx_spdif_dai.c
+ * Vladimir Barinov <vbarinov@embeddedalley.com>
+ * Copyright 2008 SigmaTel, Inc
+ * Copyright 2008 Embedded Alley Solutions, Inc
+ *
+ * This file is licensed under the terms of the GNU General Public License
+ * version 2.  This program  is licensed "as is" without any warranty of any
+ * kind, whether express or implied.
+ */
 
 #include <linux/bitrev.h>
 #include <linux/clk.h>
@@ -1106,7 +1110,7 @@ static u32 fsl_spdif_txclk_caldiv(struct fsl_spdif_priv *spdif_priv,
 				struct clk *clk, u64 savesub,
 				enum spdif_txrate index, bool round)
 {
-	static const u32 rate[] = { 32000, 44100, 48000, 96000, 192000 };
+	const u32 rate[] = { 32000, 44100, 48000, 96000, 192000 };
 	bool is_sysclk = clk_is_match(clk, spdif_priv->sysclk);
 	u64 rate_ideal, rate_actual, sub;
 	u32 sysclk_dfmin, sysclk_dfmax;
@@ -1118,7 +1122,7 @@ static u32 fsl_spdif_txclk_caldiv(struct fsl_spdif_priv *spdif_priv,
 
 	for (sysclk_df = sysclk_dfmin; sysclk_df <= sysclk_dfmax; sysclk_df++) {
 		for (txclk_df = 1; txclk_df <= 128; txclk_df++) {
-			rate_ideal = rate[index] * txclk_df * 64ULL;
+			rate_ideal = rate[index] * txclk_df * 64;
 			if (round)
 				rate_actual = clk_round_rate(clk, rate_ideal);
 			else
@@ -1165,7 +1169,7 @@ out:
 static int fsl_spdif_probe_txclk(struct fsl_spdif_priv *spdif_priv,
 				enum spdif_txrate index)
 {
-	static const u32 rate[] = { 32000, 44100, 48000, 96000, 192000 };
+	const u32 rate[] = { 32000, 44100, 48000, 96000, 192000 };
 	struct platform_device *pdev = spdif_priv->pdev;
 	struct device *dev = &pdev->dev;
 	u64 savesub = 100000, ret;

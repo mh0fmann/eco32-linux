@@ -177,7 +177,6 @@ int its_map_vlpi(int irq, struct its_vlpi_map *map)
 			.map      = map,
 		},
 	};
-	int ret;
 
 	/*
 	 * The host will never see that interrupt firing again, so it
@@ -185,11 +184,7 @@ int its_map_vlpi(int irq, struct its_vlpi_map *map)
 	 */
 	irq_set_status_flags(irq, IRQ_DISABLE_UNLAZY);
 
-	ret = irq_set_vcpu_affinity(irq, &info);
-	if (ret)
-		irq_clear_status_flags(irq, IRQ_DISABLE_UNLAZY);
-
-	return ret;
+	return irq_set_vcpu_affinity(irq, &info);
 }
 
 int its_get_vlpi(int irq, struct its_vlpi_map *map)

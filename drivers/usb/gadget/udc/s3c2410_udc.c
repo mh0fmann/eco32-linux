@@ -1,4 +1,3 @@
-// SPDX-License-Identifier: GPL-2.0+
 /*
  * linux/drivers/usb/gadget/s3c2410_udc.c
  *
@@ -6,6 +5,11 @@
  *
  * Copyright (C) 2004-2007 Herbert Pötzl - Arnaud Patard
  *	Additional cleanups by Ben Dooks <ben-linux@fluff.org>
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
  */
 
 #define pr_fmt(fmt) "s3c2410_udc: " fmt
@@ -1871,9 +1875,13 @@ static int s3c2410_udc_probe(struct platform_device *pdev)
 	if (retval)
 		goto err_add_udc;
 
-	udc->regs_info = debugfs_create_file("registers", S_IRUGO,
-					     s3c2410_udc_debugfs_root, udc,
-					     &s3c2410_udc_debugfs_fops);
+	if (s3c2410_udc_debugfs_root) {
+		udc->regs_info = debugfs_create_file("registers", S_IRUGO,
+				s3c2410_udc_debugfs_root,
+				udc, &s3c2410_udc_debugfs_fops);
+		if (!udc->regs_info)
+			dev_warn(dev, "debugfs file creation failed\n");
+	}
 
 	dev_dbg(dev, "probe ok\n");
 
@@ -1990,6 +1998,11 @@ static int __init udc_init(void)
 	dprintk(DEBUG_NORMAL, "%s\n", gadget_name);
 
 	s3c2410_udc_debugfs_root = debugfs_create_dir(gadget_name, NULL);
+	if (IS_ERR(s3c2410_udc_debugfs_root)) {
+		pr_err("%s: debugfs dir creation failed %ld\n",
+			gadget_name, PTR_ERR(s3c2410_udc_debugfs_root));
+		s3c2410_udc_debugfs_root = NULL;
+	}
 
 	retval = platform_driver_register(&udc_driver_24x0);
 	if (retval)
@@ -2005,7 +2018,7 @@ err:
 static void __exit udc_exit(void)
 {
 	platform_driver_unregister(&udc_driver_24x0);
-	debugfs_remove_recursive(s3c2410_udc_debugfs_root);
+	debugfs_remove(s3c2410_udc_debugfs_root);
 }
 
 module_init(udc_init);

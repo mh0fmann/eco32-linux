@@ -192,11 +192,6 @@ static ssize_t hidraw_get_report(struct file *file, char __user *buffer, size_t 
 	int ret = 0, len;
 	unsigned char report_number;
 
-	if (!hidraw_table[minor] || !hidraw_table[minor]->exist) {
-		ret = -ENODEV;
-		goto out;
-	}
-
 	dev = hidraw_table[minor]->hid;
 
 	if (!dev->ll_driver->raw_request) {
@@ -218,7 +213,7 @@ static ssize_t hidraw_get_report(struct file *file, char __user *buffer, size_t 
 		goto out;
 	}
 
-	buf = kmalloc(count, GFP_KERNEL);
+	buf = kmalloc(count * sizeof(__u8), GFP_KERNEL);
 	if (!buf) {
 		ret = -ENOMEM;
 		goto out;
@@ -254,15 +249,15 @@ out:
 	return ret;
 }
 
-static __poll_t hidraw_poll(struct file *file, poll_table *wait)
+static unsigned int hidraw_poll(struct file *file, poll_table *wait)
 {
 	struct hidraw_list *list = file->private_data;
 
 	poll_wait(file, &list->hidraw->wait, wait);
 	if (list->head != list->tail)
-		return EPOLLIN | EPOLLRDNORM;
+		return POLLIN | POLLRDNORM;
 	if (!list->hidraw->exist)
-		return EPOLLERR | EPOLLHUP;
+		return POLLERR | POLLHUP;
 	return 0;
 }
 

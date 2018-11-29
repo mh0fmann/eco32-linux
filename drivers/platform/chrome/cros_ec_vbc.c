@@ -29,7 +29,8 @@ static ssize_t vboot_context_read(struct file *filp, struct kobject *kobj,
 				  loff_t pos, size_t count)
 {
 	struct device *dev = container_of(kobj, struct device, kobj);
-	struct cros_ec_dev *ec = to_cros_ec_dev(dev);
+	struct cros_ec_dev *ec = container_of(dev, struct cros_ec_dev,
+					      class_dev);
 	struct cros_ec_device *ecdev = ec->ec_dev;
 	struct ec_params_vbnvcontext *params;
 	struct cros_ec_command *msg;
@@ -69,7 +70,8 @@ static ssize_t vboot_context_write(struct file *filp, struct kobject *kobj,
 				   loff_t pos, size_t count)
 {
 	struct device *dev = container_of(kobj, struct device, kobj);
-	struct cros_ec_dev *ec = to_cros_ec_dev(dev);
+	struct cros_ec_dev *ec = container_of(dev, struct cros_ec_dev,
+					      class_dev);
 	struct cros_ec_device *ecdev = ec->ec_dev;
 	struct ec_params_vbnvcontext *params;
 	struct cros_ec_command *msg;
@@ -109,7 +111,8 @@ static umode_t cros_ec_vbc_is_visible(struct kobject *kobj,
 				      struct bin_attribute *a, int n)
 {
 	struct device *dev = container_of(kobj, struct device, kobj);
-	struct cros_ec_dev *ec = to_cros_ec_dev(dev);
+	struct cros_ec_dev *ec = container_of(dev, struct cros_ec_dev,
+					      class_dev);
 	struct device_node *np = ec->ec_dev->dev->of_node;
 
 	if (IS_ENABLED(CONFIG_OF) && np) {
@@ -132,4 +135,3 @@ struct attribute_group cros_ec_vbc_attr_group = {
 	.bin_attrs = cros_ec_vbc_bin_attrs,
 	.is_bin_visible = cros_ec_vbc_is_visible,
 };
-EXPORT_SYMBOL(cros_ec_vbc_attr_group);

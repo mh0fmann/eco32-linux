@@ -57,9 +57,9 @@ void ieee80211_crypt_deinit_entries(struct ieee80211_device *ieee,
 	}
 }
 
-void ieee80211_crypt_deinit_handler(struct timer_list *t)
+void ieee80211_crypt_deinit_handler(unsigned long data)
 {
-	struct ieee80211_device *ieee = from_timer(ieee, t, crypt_deinit_timer);
+	struct ieee80211_device *ieee = (struct ieee80211_device *)data;
 	unsigned long flags;
 
 	spin_lock_irqsave(&ieee->lock, flags);

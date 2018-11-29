@@ -1,7 +1,15 @@
-// SPDX-License-Identifier: GPL-2.0
 /******************************************************************************
  *
  * Copyright(c) 2007 - 2011 Realtek Corporation. All rights reserved.
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms of version 2 of the GNU General Public License as
+ * published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
+ * more details.
  *
  ******************************************************************************/
 #define _RTW_STA_MGT_C_
@@ -421,7 +429,7 @@ u32 rtw_free_stainfo(struct adapter *padapter, struct sta_info *psta)
 		plist = get_next(phead);
 
 		while (!list_empty(phead)) {
-			prframe = (union recv_frame *)plist;
+			prframe = LIST_CONTAINOR(plist, union recv_frame, u);
 
 			plist = get_next(plist);
 
@@ -596,10 +604,10 @@ struct sta_info *rtw_get_bcmc_stainfo(struct adapter *padapter)
 
 u8 rtw_access_ctrl(struct adapter *padapter, u8 *mac_addr)
 {
-	bool res = true;
+	u8 res = true;
 	struct list_head	*plist, *phead;
 	struct rtw_wlan_acl_node *paclnode;
-	bool match = false;
+	u8 match = false;
 	struct sta_priv *pstapriv = &padapter->stapriv;
 	struct wlan_acl_pool *pacl_list = &pstapriv->acl_list;
 	struct __queue	*pacl_node_q = &pacl_list->acl_node_q;
@@ -622,10 +630,10 @@ u8 rtw_access_ctrl(struct adapter *padapter, u8 *mac_addr)
 
 
 	if (pacl_list->mode == 1) /* accept unless in deny list */
-		res = !match;
+		res = (match == true) ?  false:true;
 
 	else if (pacl_list->mode == 2)/* deny unless in accept list */
-		res = match;
+		res = (match == true) ?  true:false;
 	else
 		 res = true;
 

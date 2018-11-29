@@ -34,7 +34,6 @@
 #include <asm/bug.h>
 #include <asm/ptrace.h>
 #include <asm/export.h>
-#include <asm/feature-fixups.h>
 
 	.text
 

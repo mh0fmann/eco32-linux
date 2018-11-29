@@ -56,8 +56,6 @@ FEATURE_TESTS_BASIC :=                  \
         libunwind-arm                   \
         libunwind-aarch64               \
         pthread-attr-setaffinity-np     \
-        pthread-barrier     		\
-        reallocarray                    \
         stackprotector-all              \
         timerfd                         \
         libdw-dwarf-unwind              \
@@ -67,8 +65,7 @@ FEATURE_TESTS_BASIC :=                  \
         bpf                             \
         sched_getcpu			\
         sdt				\
-        setns				\
-        libopencsd
+        setns
 
 # FEATURE_TESTS_BASIC + FEATURE_TESTS_EXTRA is the complete list
 # of all feature tests
@@ -83,11 +80,7 @@ FEATURE_TESTS_EXTRA :=                  \
          liberty-z                      \
          libunwind-debug-frame          \
          libunwind-debug-frame-arm      \
-         libunwind-debug-frame-aarch64  \
-         cxx                            \
-         llvm                           \
-         llvm-version                   \
-         clang
+         libunwind-debug-frame-aarch64
 
 FEATURE_TESTS ?= $(FEATURE_TESTS_BASIC)
 

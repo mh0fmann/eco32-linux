@@ -1,8 +1,11 @@
-/* SPDX-License-Identifier: GPL-2.0 */
 /*
  * Broadcom BM2835 V4L2 driver
  *
  * Copyright © 2013 Raspberry Pi (Trading) Ltd.
+ *
+ * This file is subject to the terms and conditions of the GNU General Public
+ * License.  See the file COPYING in the main directory of this archive
+ * for more details.
  *
  * Authors: Vincent Sanders <vincent.sanders@collabora.co.uk>
  *          Dave Stevenson <dsteve@broadcom.com>
@@ -17,9 +20,6 @@
  * a group using an enum.
  * @{
  */
-
-#ifndef __MMAL_PARAMETERS_H
-#define __MMAL_PARAMETERS_H
 
 /** Common parameter ID group, used with many types of component. */
 #define MMAL_PARAMETER_GROUP_COMMON            (0<<16)
@@ -564,14 +564,6 @@ enum mmal_parameter_displayset {
 	MMAL_DISPLAY_SET_ALPHA = 0x400,
 };
 
-/* rectangle, used lots so it gets its own struct */
-struct vchiq_mmal_rect {
-	s32 x;
-	s32 y;
-	s32 width;
-	s32 height;
-};
-
 struct mmal_parameter_displayregion {
 	/** Bitfield that indicates which fields are set and should be
 	 * used. All other fields will maintain their current value.
@@ -693,5 +685,3 @@ struct mmal_parameter_camera_info_t {
 	struct mmal_parameter_camera_info_flash_t
 				flashes[MMAL_PARAMETER_CAMERA_INFO_MAX_FLASHES];
 };
-
-#endif

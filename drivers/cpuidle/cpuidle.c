@@ -131,10 +131,6 @@ int cpuidle_find_deepest_state(struct cpuidle_driver *drv,
 static void enter_s2idle_proper(struct cpuidle_driver *drv,
 				struct cpuidle_device *dev, int index)
 {
-	ktime_t time_start, time_end;
-
-	time_start = ns_to_ktime(local_clock());
-
 	/*
 	 * trace_suspend_resume() called by tick_freeze() for the last CPU
 	 * executing it contains RCU usage regarded as invalid in the idle
@@ -156,11 +152,6 @@ static void enter_s2idle_proper(struct cpuidle_driver *drv,
 	 */
 	RCU_NONIDLE(tick_unfreeze());
 	start_critical_timings();
-
-	time_end = ns_to_ktime(local_clock());
-
-	dev->states_usage[index].s2idle_time += ktime_us_delta(time_end, time_start);
-	dev->states_usage[index].s2idle_usage++;
 }
 
 /**
@@ -217,7 +208,6 @@ int cpuidle_enter_state(struct cpuidle_device *dev, struct cpuidle_driver *drv,
 			return -EBUSY;
 		}
 		target_state = &drv->states[index];
-		broadcast = false;
 	}
 
 	/* Take note of the planned idle state. */
@@ -247,17 +237,17 @@ int cpuidle_enter_state(struct cpuidle_device *dev, struct cpuidle_driver *drv,
 	if (!cpuidle_state_is_coupled(drv, index))
 		local_irq_enable();
 
+	diff = ktime_us_delta(time_end, time_start);
+	if (diff > INT_MAX)
+		diff = INT_MAX;
+
+	dev->last_residency = (int) diff;
+
 	if (entered_state >= 0) {
-		/*
-		 * Update cpuidle counters
-		 * This can be moved to within driver enter routine,
+		/* Update cpuidle counters */
+		/* This can be moved to within driver enter routine
 		 * but that results in multiple copies of same code.
 		 */
-		diff = ktime_us_delta(time_end, time_start);
-		if (diff > INT_MAX)
-			diff = INT_MAX;
-
-		dev->last_residency = (int)diff;
 		dev->states_usage[entered_state].time += dev->last_residency;
 		dev->states_usage[entered_state].usage++;
 	} else {
@@ -272,18 +262,12 @@ int cpuidle_enter_state(struct cpuidle_device *dev, struct cpuidle_driver *drv,
  *
  * @drv: the cpuidle driver
  * @dev: the cpuidle device
- * @stop_tick: indication on whether or not to stop the tick
  *
  * Returns the index of the idle state.  The return value must not be negative.
- *
- * The memory location pointed to by @stop_tick is expected to be written the
- * 'false' boolean value if the scheduler tick should not be stopped before
- * entering the returned state.
  */
-int cpuidle_select(struct cpuidle_driver *drv, struct cpuidle_device *dev,
-		   bool *stop_tick)
+int cpuidle_select(struct cpuidle_driver *drv, struct cpuidle_device *dev)
 {
-	return cpuidle_curr_governor->select(drv, dev, stop_tick);
+	return cpuidle_curr_governor->select(drv, dev);
 }
 
 /**
@@ -403,12 +387,9 @@ int cpuidle_enable_device(struct cpuidle_device *dev)
 	if (dev->enabled)
 		return 0;
 
-	if (!cpuidle_curr_governor)
-		return -EIO;
-
 	drv = cpuidle_get_cpu_driver(dev);
 
-	if (!drv)
+	if (!drv || !cpuidle_curr_governor)
 		return -EIO;
 
 	if (!dev->registered)
@@ -418,11 +399,9 @@ int cpuidle_enable_device(struct cpuidle_device *dev)
 	if (ret)
 		return ret;
 
-	if (cpuidle_curr_governor->enable) {
-		ret = cpuidle_curr_governor->enable(drv, dev);
-		if (ret)
-			goto fail_sysfs;
-	}
+	if (cpuidle_curr_governor->enable &&
+	    (ret = cpuidle_curr_governor->enable(drv, dev)))
+		goto fail_sysfs;
 
 	smp_wmb();
 

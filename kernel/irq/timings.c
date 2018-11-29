@@ -1,6 +1,13 @@
-// SPDX-License-Identifier: GPL-2.0
-// Copyright (C) 2016, Linaro Ltd - Daniel Lezcano <daniel.lezcano@linaro.org>
-
+/*
+ * linux/kernel/irq/timings.c
+ *
+ * Copyright (C) 2016, Linaro Ltd - Daniel Lezcano <daniel.lezcano@linaro.org>
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation.
+ *
+ */
 #include <linux/kernel.h>
 #include <linux/percpu.h>
 #include <linux/slab.h>
@@ -257,7 +264,7 @@ u64 irq_timings_next_event(u64 now)
 	 * order to prevent the timings circular buffer to be updated
 	 * while we are reading it.
 	 */
-	lockdep_assert_irqs_disabled();
+	WARN_ON_ONCE(!irqs_disabled());
 
 	/*
 	 * Number of elements in the circular buffer: If it happens it

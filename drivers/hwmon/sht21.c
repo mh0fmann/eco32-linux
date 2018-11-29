@@ -16,7 +16,8 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin St - Fifth Floor, Boston, MA 02110-1301 USA
  *
- * Data sheet available at http://www.sensirion.com/file/datasheet_sht21
+ * Data sheet available (5/2010) at
+ * http://www.sensirion.com/en/pdf/product_information/Datasheet-humidity-sensor-SHT21.pdf
  */
 
 #include <linux/module.h>
@@ -40,7 +41,7 @@
 
 /**
  * struct sht21 - SHT21 device specific data
- * @client: I2C client device
+ * @hwmon_dev: device registered with hwmon
  * @lock: mutex to protect measurement values
  * @last_update: time of last update (jiffies)
  * @temperature: cached temperature measurement value

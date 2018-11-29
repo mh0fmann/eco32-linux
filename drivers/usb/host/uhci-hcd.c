@@ -1,4 +1,3 @@
-// SPDX-License-Identifier: GPL-2.0
 /*
  * Universal Host Controller Interface driver for USB.
  *
@@ -585,18 +584,23 @@ static int uhci_start(struct usb_hcd *hcd)
 		hcd->self.sg_tablesize = ~0;
 
 	spin_lock_init(&uhci->lock);
-	timer_setup(&uhci->fsbr_timer, uhci_fsbr_timeout, 0);
+	setup_timer(&uhci->fsbr_timer, uhci_fsbr_timeout,
+			(unsigned long) uhci);
 	INIT_LIST_HEAD(&uhci->idle_qh_list);
 	init_waitqueue_head(&uhci->waitqh);
 
 #ifdef UHCI_DEBUG_OPS
-	uhci->dentry = debugfs_create_file(hcd->self.bus_name,
-					   S_IFREG|S_IRUGO|S_IWUSR,
-					   uhci_debugfs_root, uhci,
-					   &uhci_debug_operations);
+	dentry = debugfs_create_file(hcd->self.bus_name,
+			S_IFREG|S_IRUGO|S_IWUSR, uhci_debugfs_root,
+			uhci, &uhci_debug_operations);
+	if (!dentry) {
+		dev_err(uhci_dev(uhci), "couldn't create uhci debugfs entry\n");
+		return -ENOMEM;
+	}
+	uhci->dentry = dentry;
 #endif
 
-	uhci->frame = dma_zalloc_coherent(uhci_dev(uhci),
+	uhci->frame = dma_alloc_coherent(uhci_dev(uhci),
 			UHCI_NUMFRAMES * sizeof(*uhci->frame),
 			&uhci->frame_dma_handle, GFP_KERNEL);
 	if (!uhci->frame) {
@@ -604,6 +608,7 @@ static int uhci_start(struct usb_hcd *hcd)
 			"unable to allocate consistent memory for frame list\n");
 		goto err_alloc_frame;
 	}
+	memset(uhci->frame, 0, UHCI_NUMFRAMES * sizeof(*uhci->frame));
 
 	uhci->frame_cpu = kcalloc(UHCI_NUMFRAMES, sizeof(*uhci->frame_cpu),
 			GFP_KERNEL);
@@ -878,6 +883,8 @@ static int __init uhci_hcd_init(void)
 	if (!errbuf)
 		goto errbuf_failed;
 	uhci_debugfs_root = debugfs_create_dir("uhci", usb_debug_root);
+	if (!uhci_debugfs_root)
+		goto debug_failed;
 #endif
 
 	uhci_up_cachep = kmem_cache_create("uhci_urb_priv",
@@ -912,6 +919,7 @@ up_failed:
 #if defined(DEBUG) || defined(CONFIG_DYNAMIC_DEBUG)
 	debugfs_remove(uhci_debugfs_root);
 
+debug_failed:
 	kfree(errbuf);
 
 errbuf_failed:

@@ -157,7 +157,7 @@ static char *tomoyo_print_header(struct tomoyo_request_info *r)
 	if (!buffer)
 		return NULL;
 
-	tomoyo_convert_time(ktime_get_real_seconds(), &stamp);
+	tomoyo_convert_time(get_seconds(), &stamp);
 
 	pos = snprintf(buffer, tomoyo_buffer_len - 1,
 		       "#%04u/%02u/%02u %02u:%02u:%02u# profile=%u mode=%s "
@@ -456,14 +456,14 @@ void tomoyo_read_log(struct tomoyo_io_buffer *head)
  * @file: Pointer to "struct file".
  * @wait: Pointer to "poll_table". Maybe NULL.
  *
- * Returns EPOLLIN | EPOLLRDNORM when ready to read an audit log.
+ * Returns POLLIN | POLLRDNORM when ready to read an audit log.
  */
-__poll_t tomoyo_poll_log(struct file *file, poll_table *wait)
+unsigned int tomoyo_poll_log(struct file *file, poll_table *wait)
 {
 	if (tomoyo_log_count)
-		return EPOLLIN | EPOLLRDNORM;
+		return POLLIN | POLLRDNORM;
 	poll_wait(file, &tomoyo_log_wait, wait);
 	if (tomoyo_log_count)
-		return EPOLLIN | EPOLLRDNORM;
+		return POLLIN | POLLRDNORM;
 	return 0;
 }

@@ -33,19 +33,20 @@
 #include <linux/mm.h>
 #include <linux/interrupt.h>
 
-static void ax25_heartbeat_expiry(struct timer_list *);
-static void ax25_t1timer_expiry(struct timer_list *);
-static void ax25_t2timer_expiry(struct timer_list *);
-static void ax25_t3timer_expiry(struct timer_list *);
-static void ax25_idletimer_expiry(struct timer_list *);
+static void ax25_heartbeat_expiry(unsigned long);
+static void ax25_t1timer_expiry(unsigned long);
+static void ax25_t2timer_expiry(unsigned long);
+static void ax25_t3timer_expiry(unsigned long);
+static void ax25_idletimer_expiry(unsigned long);
 
 void ax25_setup_timers(ax25_cb *ax25)
 {
-	timer_setup(&ax25->timer, ax25_heartbeat_expiry, 0);
-	timer_setup(&ax25->t1timer, ax25_t1timer_expiry, 0);
-	timer_setup(&ax25->t2timer, ax25_t2timer_expiry, 0);
-	timer_setup(&ax25->t3timer, ax25_t3timer_expiry, 0);
-	timer_setup(&ax25->idletimer, ax25_idletimer_expiry, 0);
+	setup_timer(&ax25->timer, ax25_heartbeat_expiry, (unsigned long)ax25);
+	setup_timer(&ax25->t1timer, ax25_t1timer_expiry, (unsigned long)ax25);
+	setup_timer(&ax25->t2timer, ax25_t2timer_expiry, (unsigned long)ax25);
+	setup_timer(&ax25->t3timer, ax25_t3timer_expiry, (unsigned long)ax25);
+	setup_timer(&ax25->idletimer, ax25_idletimer_expiry,
+		    (unsigned long)ax25);
 }
 
 void ax25_start_heartbeat(ax25_cb *ax25)
@@ -119,10 +120,10 @@ unsigned long ax25_display_timer(struct timer_list *timer)
 
 EXPORT_SYMBOL(ax25_display_timer);
 
-static void ax25_heartbeat_expiry(struct timer_list *t)
+static void ax25_heartbeat_expiry(unsigned long param)
 {
 	int proto = AX25_PROTO_STD_SIMPLEX;
-	ax25_cb *ax25 = from_timer(ax25, t, timer);
+	ax25_cb *ax25 = (ax25_cb *)param;
 
 	if (ax25->ax25_dev)
 		proto = ax25->ax25_dev->values[AX25_VALUES_PROTOCOL];
@@ -144,9 +145,9 @@ static void ax25_heartbeat_expiry(struct timer_list *t)
 	}
 }
 
-static void ax25_t1timer_expiry(struct timer_list *t)
+static void ax25_t1timer_expiry(unsigned long param)
 {
-	ax25_cb *ax25 = from_timer(ax25, t, t1timer);
+	ax25_cb *ax25 = (ax25_cb *)param;
 
 	switch (ax25->ax25_dev->values[AX25_VALUES_PROTOCOL]) {
 	case AX25_PROTO_STD_SIMPLEX:
@@ -163,9 +164,9 @@ static void ax25_t1timer_expiry(struct timer_list *t)
 	}
 }
 
-static void ax25_t2timer_expiry(struct timer_list *t)
+static void ax25_t2timer_expiry(unsigned long param)
 {
-	ax25_cb *ax25 = from_timer(ax25, t, t2timer);
+	ax25_cb *ax25 = (ax25_cb *)param;
 
 	switch (ax25->ax25_dev->values[AX25_VALUES_PROTOCOL]) {
 	case AX25_PROTO_STD_SIMPLEX:
@@ -182,9 +183,9 @@ static void ax25_t2timer_expiry(struct timer_list *t)
 	}
 }
 
-static void ax25_t3timer_expiry(struct timer_list *t)
+static void ax25_t3timer_expiry(unsigned long param)
 {
-	ax25_cb *ax25 = from_timer(ax25, t, t3timer);
+	ax25_cb *ax25 = (ax25_cb *)param;
 
 	switch (ax25->ax25_dev->values[AX25_VALUES_PROTOCOL]) {
 	case AX25_PROTO_STD_SIMPLEX:
@@ -203,9 +204,9 @@ static void ax25_t3timer_expiry(struct timer_list *t)
 	}
 }
 
-static void ax25_idletimer_expiry(struct timer_list *t)
+static void ax25_idletimer_expiry(unsigned long param)
 {
-	ax25_cb *ax25 = from_timer(ax25, t, idletimer);
+	ax25_cb *ax25 = (ax25_cb *)param;
 
 	switch (ax25->ax25_dev->values[AX25_VALUES_PROTOCOL]) {
 	case AX25_PROTO_STD_SIMPLEX:

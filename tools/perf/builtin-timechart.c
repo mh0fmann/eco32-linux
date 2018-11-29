@@ -533,8 +533,12 @@ static const char *cat_backtrace(union perf_event *event,
 		}
 
 		tal.filtered = 0;
-		if (thread__find_symbol(al.thread, cpumode, ip, &tal))
-			fprintf(f, "..... %016" PRIx64 " %s\n", ip, tal.sym->name);
+		thread__find_addr_location(al.thread, cpumode,
+					   MAP__FUNCTION, ip, &tal);
+
+		if (tal.sym)
+			fprintf(f, "..... %016" PRIx64 " %s\n", ip,
+				tal.sym->name);
 		else
 			fprintf(f, "..... %016" PRIx64 "\n", ip);
 	}
@@ -1597,15 +1601,13 @@ static int __cmd_timechart(struct timechart *tchart, const char *output_name)
 		{ "syscalls:sys_exit_pselect6",		process_exit_poll },
 		{ "syscalls:sys_exit_select",		process_exit_poll },
 	};
-	struct perf_data data = {
-		.file      = {
-			.path = input_name,
-		},
-		.mode      = PERF_DATA_MODE_READ,
-		.force     = tchart->force,
+	struct perf_data_file file = {
+		.path = input_name,
+		.mode = PERF_DATA_MODE_READ,
+		.force = tchart->force,
 	};
 
-	struct perf_session *session = perf_session__new(&data, false,
+	struct perf_session *session = perf_session__new(&file, false,
 							 &tchart->tool);
 	int ret = -EINVAL;
 
@@ -1615,7 +1617,7 @@ static int __cmd_timechart(struct timechart *tchart, const char *output_name)
 	symbol__init(&session->header.env);
 
 	(void)perf_header__process_sections(&session->header,
-					    perf_data__fd(session->data),
+					    perf_data_file__fd(session->file),
 					    tchart,
 					    process_header);
 
@@ -1730,10 +1732,8 @@ static int timechart__io_record(int argc, const char **argv)
 	if (rec_argv == NULL)
 		return -ENOMEM;
 
-	if (asprintf(&filter, "common_pid != %d", getpid()) < 0) {
-		free(rec_argv);
+	if (asprintf(&filter, "common_pid != %d", getpid()) < 0)
 		return -ENOMEM;
-	}
 
 	p = rec_argv;
 	for (i = 0; i < common_args_nr; i++)

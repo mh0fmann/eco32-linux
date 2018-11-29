@@ -18,8 +18,7 @@
 
 #include <linux/io.h>
 #include <linux/module.h>
-#include <linux/gpio/driver.h>
-#include <linux/of_gpio.h> /* For of_mm_gpio_chip */
+#include <linux/of_gpio.h>
 #include <linux/platform_device.h>
 
 #define ALTERA_GPIO_MAX_NGPIO		32
@@ -212,7 +211,7 @@ static void altera_gpio_irq_edge_handler(struct irq_desc *desc)
 	altera_gc = gpiochip_get_data(irq_desc_get_handler_data(desc));
 	chip = irq_desc_get_chip(desc);
 	mm_gc = &altera_gc->mmchip;
-	irqdomain = altera_gc->mmchip.gc.irq.domain;
+	irqdomain = altera_gc->mmchip.gc.irqdomain;
 
 	chained_irq_enter(chip, desc);
 
@@ -240,7 +239,7 @@ static void altera_gpio_irq_leveL_high_handler(struct irq_desc *desc)
 	altera_gc = gpiochip_get_data(irq_desc_get_handler_data(desc));
 	chip = irq_desc_get_chip(desc);
 	mm_gc = &altera_gc->mmchip;
-	irqdomain = altera_gc->mmchip.gc.irq.domain;
+	irqdomain = altera_gc->mmchip.gc.irqdomain;
 
 	chained_irq_enter(chip, desc);
 
