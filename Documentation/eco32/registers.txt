@@ -1,0 +1,8 @@
+                ECO32 ADDITIONAL REGISTER USAGE
+                ===============================
+
+While running inside the kernel register 27 is used to hold a pointer to
+the current thread_info for easy access.
+
+It is loaded when entering the kernel and restored befor leaving the
+kernel. Values used by the userland won't be lost when leaving the kernel.

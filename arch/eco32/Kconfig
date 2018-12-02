@@ -1,0 +1,150 @@
+#
+# For a description of the syntax of this configuration file,
+# see Documentation/kbuild/kconfig-language.txt.
+#
+
+#--------------- ECO32 FIX ----------------
+
+#
+# This part contains fixed options for our architecture.
+# Choices made here are not configurable and need to be like this
+# or the build will break
+#
+
+config ECO32
+    bool
+    default y
+    select TINY_RCU
+    select EMBEDDED
+    select NO_BOOTMEM
+    select HAVE_MEMBLOCK
+    select GENERIC_CLOCKEVENTS
+    select GENERIC_STRNLEN_USER
+    select GENERIC_STRNCPY_FROM_USER
+    select GENERIC_IOMAP
+    select GENERIC_ATOMIC64
+    select GENERIC_IRQ_SHOW
+    select GENERIC_FIND_FIRST_BIT
+    select OF
+    select OF_EARLY_FLATTREE
+    select OF_IRQ
+    select IRQ_DOMAIN
+    select ECO32_TIMERS
+
+config GENERIC_CSUM
+    def_bool y
+
+config GENERIC_CALIBRATE_DELAY
+    def_bool y
+
+config GENERIC_HWEIGHT
+    def_bool y
+
+config RWSEM_GENERIC_SPINLOCK
+    def_bool y
+
+config NO_DMA
+    def_bool y
+    
+config CPU_BIG_ENDIAN
+    def_bool y
+
+config SYS_SUPPORTS_BIG_ENDIAN
+    def_bool y
+
+config NR_CPUS
+    int
+    default 1
+
+config HZ
+    int
+    default 100
+
+config MMU
+    def_bool y
+
+
+#---------------- ARCH CONFIG ---------------
+
+menu "ECO32 Kernel features"
+
+config ECO32_SIMULATOR
+    bool "Compile Linux for the ECO32 simulator"
+    default y
+    ---help---
+    The ECO32 has little more features than the real hardware.
+    The shutdown device is one of those. If you plan to run the kernel
+    only on the simulator you can say yes here
+
+config EARLY_PRINTK
+    bool "Enable early prinkt"
+    default n
+    ---help---
+    Choose this to activate early kernel outputs befor the first console
+    gets registered
+
+#
+# On eco32 we accept arguments for the kernel from a bootloader in
+# register 4 to 7
+#
+# $4 : cmdline
+# $5 : device tree
+# $6 : initrd start
+# $7 : initrd end
+#
+config ARGUMENT_PASSING
+    bool "Enable argument passing from bootloader"
+    default y
+    ---help---
+    Say yes here if you want to be able to pass arguments from the bootloader
+    to linux
+
+config ARGUMENT_CMDLINE
+    bool "Accept the kernel commandline from the bootloader"
+    default y
+    depends on ARGUMENT_PASSING
+    ---help---
+    Say yes here if you want to be able to pass a kernel command line from the
+    bootloader to the kernel. This will always overwrite the arguments specified
+    in the device tree
+
+config ARGUMENT_DEVICETREE
+    bool "Accept the device tree from the bootloader"
+    default y
+    depends on ARGUMENT_PASSING
+    ---help---
+    Say yes here if you want to be able to pass a devicetree from the bootloader
+    to the kernel
+
+config ARGUMENT_INITRD
+    bool "Accept the initrd from the bootloader"
+    default n
+    depends on ARGUMENT_PASSING
+    depends on BLK_DEV_INITRD
+    ---help---
+    Say yes here if you want to be able to pass the initrd from the bootloader
+    to the kernel
+
+
+
+config BUILTIN_DTB
+    bool "Use builtin device tree"
+    default y
+    ---help---
+    If you want or need to use a builtin device tree say yes here
+
+config ECO32_BUILTIN_DTB
+    string  "Choose which builtin device tree to use"
+    default "eco32sim"
+    depends on BUILTIN_DTB
+    ---help---
+    Choose the default Builtin Device Tree which should be compiled
+    in the kernel.
+
+endmenu
+
+
+#------------------------------------------
+
+
+source "kernel/Kconfig.hz"

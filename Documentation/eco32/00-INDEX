@@ -1,0 +1,14 @@
+00-INDEX
+        - this file
+
+abi.txt
+        - describes how arguments are passed to the kernel when performing syscalls
+
+booting.txt
+        - describes how arguments are passed to the kernel
+
+memory.txt
+        - describes the memory layout used on eco32
+
+registers.txt
+        - describes additional non gcc abi conform reister usage

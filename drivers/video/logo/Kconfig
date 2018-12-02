@@ -67,4 +67,9 @@ config LOGO_SUPERH_CLUT224
 	depends on SUPERH
 	default y
 
+config LOGO_THM_CLUT224
+	bool "224-color THM Linux logo"
+	depends on ECO32
+	default y
+
 endif # LOGO

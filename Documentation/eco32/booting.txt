@@ -1,0 +1,53 @@
+                            BOOTING ECO32 LINUX
+                            ===================
+
+
+In order to boot linux on eco32 one needs a bootloader to load the kernel from
+persistant memory to RAM.
+
+Linux on eco32 probes itself witht the device tree in all cases. So one way or
+the other a device tree needs to be present when booting linux. This can be done
+on two ways. Either passed by the bootloader or as builtin device tree.
+
+
+The bootloader can optionally pass arguments to the kernel which will determin
+its behavior at runtime. If arguments are mandatory or not depends on the kernels
+configuration.
+
+
+If ther kernel accepts arguments passed by the bootloader is determined thorugh
+Kconfig option CONFIG_ARGUMENT_PASSING. Each subset of arguments have thier own
+config option available.
+
+
+Kernel Command Line:
+- optional
+- register 4
+- CONFIG_ARGUMENT_CMDLINE
+If enabled the kernel expects a kernel command line beeing passed in register 4.
+If the kernel is configured to accept a command line from the bootloader it will
+copy it to the internal command line or ignores it if register 4 is loaded with
+0.
+
+Device Tree:
+- mandatory if no builtin device tree, optional otherwise
+- register 5
+- CONFIG_ARGUMENT_DEVICETREE
+If enabled the kernel expects a device tree beeing passed in register 5.
+This option is mandatory if no device tree is bultin in the kernel.
+If register 5 is loaded with 0 the argument will be ignored.
+If a bultin device tree is present but also a device tree is passed by the
+bootloader the one passed by the bootloader will be favored.
+If the builtin device tree should be used in all cases this option should be
+disabled and a builtin device tree will be used if present.
+
+Initrd:
+- optional
+-register 6 and 7
+- CONFIG_ARGUMENT_INITRD
+If enabled the kernel expects the initrd to be passed by the bootloader in register
+6 and 7. Register 6 needs to contain the start of the initrd and register 7 the end
+of the initrd in memory. If one register is loaded with 0 the arguments will be
+ignored. If the kernel is configured to accept the initrd to be passed by the
+bootloader and also has a bultin initrd present the one passed by the bootloader
+will be favored.

@@ -1,0 +1,108 @@
+                    ECO32 MEMORY LAYOUT
+                    ==================
+
+This document describes the memory layout used by the kernel on eco32.
+Note that the layout described here may change in future when new features
+for the cpu are developed and the overall architecture evolves.
+
+
+                  Hardware Memory Layout
+
+Virtual Memory Layout:
+
+    +---------------------------+ 0xFFFFFFFF
+    |    Peripheral Devices     |
+    +---------------------------+ 0xF0000000
+    |           ROM             |
+    +---------------------------+ 0xE0000000
+    |   Kernel Direct Mapped    |
+    |                           |
+    +---------------------------+ 0xC0000000
+    |                           |
+    | Kernel Dynamic TLB Mapped |
+    |                           |
+    |                           |
+    +---------------------------+ 0x80000000
+    |                           |
+    |                           |
+    |                           |
+    |  User Dynamic TLB Mapped  |
+    |                           |
+    |                           |
+    |                           |
+    |                           |
+    +---------------------------+ 0x000000000
+
+Physical Memory Layout:
+
+    .                           .
+    |          UNUSED           |
+    |                           |
+    +---------------------------+ 0x400000000
+    |        Peripheral         |
+    +---------------------------+ 0x300000000
+    |           ROM             |
+    +---------------------------+ 0x200000000
+    |           RAM             |
+    |                           |
+    +---------------------------+ 0x000000000
+
+On the eco32 only virtual addresses are used and all addresses get translated
+by the MMU to physical ones. Some of these addresses are mapped to fixed
+physical ones. For more information see the eco32 manual which can be downloaded
+by the following link: https://homepages.thm.de/~hg53/eco32-on-s3e/eco32.pdf
+
+
+
+                     Kernel Memory Layout
+
+    +---------------------------+ 0xFFFFFFFF
+    |          IORemap          |
+    +---------------------------+ 0xF0000000
+    |           UNUSED          |
+    +---------------------------+ 0xE0000000
+    |           lowmem          |
+    |                           |
+    +---------------------------+ 0xC0000000
+    |                           |
+    |       VMALLOC_AREA        |
+    |                           |
+    +---------------------------+
+    |          FIXMAP           |
+    +---------------------------+ 0x80000000
+    |                           |
+    |                           |
+    |                           |
+    |         TASK_SIZE         |
+    |                           |
+    |                           |
+    |                           |
+    |                           |
+    +---------------------------+ 0x000000000
+
+
+                                IORemap
+
+On eco32 all IORemap is fake. Due to our MMU all IO devices are reached through fixed
+virtual addresses. On IORemap the corresponding virtual addreass to a physical IO
+address can simply be calculated. IOUnmap does nothing.
+No mapping in the page table is created on IORemap and no mapping is undone on IOUnmap.
+
+                                lowmem
+
+lowmem reaches from 0xC0000000 up to 0xE0000000 and covers all the pysical RAM at all
+time. No mapping needs to be created on boot time because these addresses are fixed
+and allways translatet by the MMU to thier corresponding phyiscal addresses.
+Currently only 512MB RAM are supported by the eco32 so all of that memory is coverd
+by lowmem.
+
+                        VMALLOC_AREA / FIXMAPS
+
+
+0x80000000 to 0xC0000000 is dynamic mapped through the TLB and can only accessed when
+execution is in priveleged mode. This address space therefore is used for dynamic
+allocation used by vmalloc and friends and fixmaps.
+
+Currently no fixmaps are used on eco32. Neither we need to have constant fixed addresses
+for IO devices created at boottime nor do we support highmem.
+If in future there will be a case to use fixmaps these addresses will start on 0x80000000.
