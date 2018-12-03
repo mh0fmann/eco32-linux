@@ -17,6 +17,15 @@
 #ifndef __ASM_MVTFS_H
 #define __ASM_MVTFS_H
 
+
+#define PSW             0
+#define TLB_INDEX       1
+#define TLB_ENTRY_HI    2
+#define TLB_ENTRY_LO    3
+
+
+#ifndef __ASSEMBLY__
+
 /*
  * Makros and helpers function to read and manipulate
  * the psw from C sources
@@ -85,5 +94,7 @@ static inline unsigned long __eco32_read_tlbbad(void)
     __asm__("mvfs %0, 4" : "=r" (addr));
     return addr; 
 }
+
+#endif /* __ASSEMBLY__ */
 
 #endif /* __ASM_MVTFS_H */

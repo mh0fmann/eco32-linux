@@ -17,11 +17,12 @@
 #include <linux/pm.h>
 #include <linux/reboot.h>
 
+#include <asm/mvtfs.h>
+#include <asm/eco32.h>
+
 
 #define SHUTDOWN_BASE   *((unsigned int*)0xFF100000)
 
-
-void __noreturn eco32_restart(void);
 
 void machine_power_off(void)
 {
@@ -47,8 +48,10 @@ void machine_halt(void)
 
 void machine_restart(char* cmd)
 {
+    unsigned int rom = ECO32_KERNEL_DIRECT_MAPPED_ROM_START;
     pr_info("\nmachine_restart: %s\n", cmd);
-    eco32_restart();
+    __eco32_write_psw(0);
+    __asm__ volatile("jalr   %0" : "=r"(rom));
 }
 
 void (*pm_power_off)(void) = machine_power_off;

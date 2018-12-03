@@ -13,15 +13,12 @@
  * (at your option) any later version.
  */
 
+#include <asm/mvtfs.h>
 #include <asm/ptrace.h>
 #include <asm/page.h>
 #include <asm/thread_info.h>
 #include <asm/asm-offsets.h>
 
-#define PSW             0
-#define TLB_INDEX       1
-#define TLB_ENTRY_HI    2
-#define TLB_ENTRY_LO    3
 
 #define CUM_SHIFT       26
 #define CUM             (1 << CUM_SHIFT)
