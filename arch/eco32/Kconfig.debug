@@ -1,1 +1,6 @@
-# empty
+config EARLY_PRINTK
+    bool "Enable early prinkt"
+    default n
+    ---help---
+    Choose this to activate early kernel outputs befor the first console
+    gets registered

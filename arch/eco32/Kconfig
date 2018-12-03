@@ -76,13 +76,6 @@ config ECO32_SIMULATOR
     The shutdown device is one of those. If you plan to run the kernel
     only on the simulator you can say yes here
 
-config EARLY_PRINTK
-    bool "Enable early prinkt"
-    default n
-    ---help---
-    Choose this to activate early kernel outputs befor the first console
-    gets registered
-
 #
 # On eco32 we accept arguments for the kernel from a bootloader in
 # register 4 to 7
