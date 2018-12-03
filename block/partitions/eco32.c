@@ -22,7 +22,6 @@
 
 
 #define PARTITON_TABLE_SECTOR	1
-#define SECTOR_SIZE	512
 #define NPE		(SECTOR_SIZE / sizeof(PartEntry))
 #define DESCR_SIZE				20
 #define PART_MAGIC	0xF5A5F2F9
