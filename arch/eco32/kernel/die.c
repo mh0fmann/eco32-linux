@@ -21,8 +21,8 @@
 
 void die(char* msg, struct pt_regs* regs, long err)
 {
-	console_verbose();
-	printk("\n%s#: %04lx\n", msg, err & 0xffff);
-	show_regs(regs);
-	do_exit(SIGSEGV);
+    console_verbose();
+    printk("\n%s#: %04lx\n", msg, err & 0xffff);
+    show_regs(regs);
+    do_exit(SIGSEGV);
 }

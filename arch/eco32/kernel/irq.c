@@ -31,7 +31,7 @@ void __init init_IRQ(void)
     /*
      * Set do_IRQ as the ISR for all currently used irqlines
      * used by hardware on the SoC
-     * 
+     *
      * Other irqlines should never be active and interrupt the cpu.
      * If they do we got some hardwarefailure which gets
      * catched by the default ISR that is still present for these

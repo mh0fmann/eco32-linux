@@ -31,15 +31,15 @@
 
 int main(int argc, char* argv[])
 {
-	/* offsets into task_struct */
+    /* offsets into task_struct */
 
-	/* offsets into thread_info */
-	DEFINE(TI_TASK, offsetof(struct thread_info, task));
-	DEFINE(TI_FLAGS, offsetof(struct thread_info, flags));
-	DEFINE(TI_PREEMPT, offsetof(struct thread_info, preempt_count));
-	DEFINE(TI_KSP, offsetof(struct thread_info, ksp));
+    /* offsets into thread_info */
+    DEFINE(TI_TASK, offsetof(struct thread_info, task));
+    DEFINE(TI_FLAGS, offsetof(struct thread_info, flags));
+    DEFINE(TI_PREEMPT, offsetof(struct thread_info, preempt_count));
+    DEFINE(TI_KSP, offsetof(struct thread_info, ksp));
 
-	DEFINE(PT_SIZE, sizeof(struct pt_regs));
+    DEFINE(PT_SIZE, sizeof(struct pt_regs));
 
-	return 0;
+    return 0;
 }

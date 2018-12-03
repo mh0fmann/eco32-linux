@@ -13,13 +13,20 @@
  * (at your option) any later version.
  */
 
-	.global eco32_restart
 
-	.text
-	
-	
+#include <asm/eco32.h>
+
+    .global eco32_restart
+
+    .text
+
+
+/*
+ * Restarting is fairly easy atm.
+ * We just disable interrupts and jump back to the rom
+ */
 eco32_restart:
-	mvts $0,0
-	ori $4,$0,0xE0000000
-	jalr $4
-	
+    mvts    $0,0
+    ori     $4,$0,ECO32_KERNEL_DIRECT_MAPPED_ROM_START
+    jalr    $4
+

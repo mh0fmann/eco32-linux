@@ -32,7 +32,7 @@
 
 /* syscall table */
 sys_call_ptr_t syscall_table[__NR_syscalls] = {
-	[0 ... __NR_syscalls-1] = (sys_call_ptr_t) sys_ni_syscall,
+    [0 ... __NR_syscalls-1] = (sys_call_ptr_t) sys_ni_syscall,
 #include <asm/unistd.h>
 };
 
@@ -42,28 +42,28 @@ sys_call_ptr_t syscall_table[__NR_syscalls] = {
  */
 void ISR_syscall(int irq, struct pt_regs* regs)
 {
-	unsigned int num;
-	unsigned int res;
+    unsigned int num;
+    unsigned int res;
 
-	/* syscalls run with interrupts enabled */
-	local_irq_enable();
- 
-	/* skip over trap instruction */
-	regs->r30 += 4;
-	/* check for legal syscall number */
-	num = regs->r2;
+    /* syscalls run with interrupts enabled */
+    local_irq_enable();
 
-	if (num >= __NR_syscalls) {
-		regs->r2 = sys_ni_syscall();
-		return;
-	}
-	
-	syscall_trace_enter(regs);
+    /* skip over trap instruction */
+    regs->r30 += 4;
+    /* check for legal syscall number */
+    num = regs->r2;
 
-	/* call syscall handling function */
-	res = (*syscall_table[num])(regs->r4, regs->r5, regs->r6,
-	                            regs->r7, regs->r8, regs->r9);
-	regs->r2 = res;
-	
-	syscall_trace_leave(regs);
+    if (num >= __NR_syscalls) {
+        regs->r2 = sys_ni_syscall();
+        return;
+    }
+
+    syscall_trace_enter(regs);
+
+    /* call syscall handling function */
+    res = (*syscall_table[num])(regs->r4, regs->r5, regs->r6,
+                                regs->r7, regs->r8, regs->r9);
+    regs->r2 = res;
+
+    syscall_trace_leave(regs);
 }

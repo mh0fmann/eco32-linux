@@ -22,10 +22,10 @@
 /*
  * The ECO32 early printk uses the first uart line
  * to push out the messages.
- * 
+ *
  * this is a rather simple polling prinkt. but it is enough
  * to get the chars out during early boot
- * 
+ *
  * once we sat up the serial line driver we switch to that
  * anyways
  */

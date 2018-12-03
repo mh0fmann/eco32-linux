@@ -13,35 +13,32 @@
  * (at your option) any later version.
  */
 
-#define ARCH_IRQ_SHIFT		23
+#define ARCH_IRQ_SHIFT      23
 
-	.global	arch_local_save_flags
-	.global	arch_local_irq_restore
+    .global arch_local_save_flags
+    .global arch_local_irq_restore
 
-	.text
+    .text
 
-	
+
 arch_local_save_flags:
-	mvfs	$2,0
-	slri	$2,$2,ARCH_IRQ_SHIFT
-	andi	$2,$2,1
-	jr	$31
+    mvfs    $2,0
+    slri    $2,$2,ARCH_IRQ_SHIFT
+    andi    $2,$2,1
+    jr      $31
 
 
 arch_local_irq_restore:
-	bne	$4,$0,arch_local_irq_set
-arch_local_irq_clear:
-	addi	$4,$0,1
-	slli	$4,$4,ARCH_IRQ_SHIFT
-	xnori	$4,$4,0
-	mvfs	$2,0
-	and	$2,$2,$4
-	mvts	$2,0
-	jr	$31
+    addi    $5,$0,1
+    slli    $5,$5,ARCH_IRQ_SHIFT
+    bne     $4,$0,arch_local_irq_set
+    xnori   $5,$5,0
+    mvfs    $2,0
+    and     $2,$2,$5
+    mvts    $2,0
+    jr      $31
 arch_local_irq_set:
-	addi	$4,$0,1
-	slli	$4,$4,ARCH_IRQ_SHIFT
-	mvfs	$2,0
-	or	$2,$2,$4
-	mvts	$2,0
-	jr	$31
+    mvfs    $2,0
+    or      $2,$2,$5
+    mvts    $2,0
+    jr      $31
