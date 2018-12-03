@@ -64,8 +64,10 @@ static int restore_sigcontext(struct sigcontext __user* sc,
 /*
  * This function implements the "sigreturn" syscall.
  */
-long do_sigreturn(struct pt_regs* regs)
+asmlinkage long sys_rt_sigreturn(void)
 {
+
+    struct pt_regs* regs = current_pt_regs();
     struct rt_sigframe __user* frame;
 
     pr_debug("do_sigreturn called, regs @ 0x%08lx\n",

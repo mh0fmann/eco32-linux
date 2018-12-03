@@ -13,20 +13,20 @@
  * (at your option) any later version.
  */
 
-#ifndef __ASM_ECO32_SYSCALLS_H
-#define __ASM_ECO32_SYSCALLS_H
+
+#include <linux/syscalls.h>
+#include <linux/unistd.h>
+#include <asm/syscalls.h>
 
 
-typedef long (*sys_call_t)(long arg0, long arg1, long arg2,
-                           long arg3, long arg4, long arg5);
+#undef __SYSCALL
+#define __SYSCALL(nr, call) [nr] = (sys_call_t)(call),
 
-extern sys_call_t syscall_table[];
 
-/*
- * Calling conventions for the following system calls
- * can differ, so it's possible to override them.
- */
+/* syscall table */
+sys_call_t syscall_table[__NR_syscalls] = {
+    [0 ... __NR_syscalls-1] = (sys_call_t)sys_ni_syscall,
+#include <asm/unistd.h>
+};
 
-asmlinkage long sys_rt_sigreturn(void);
 
-#endif /* __ASM_ECO32_SYSCALLS_H */

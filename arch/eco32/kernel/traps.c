@@ -15,31 +15,15 @@
 
 
 #include <linux/init.h>
-#include <linux/sched.h>
-#include <linux/kernel.h>
-#include <linux/module.h>
-#include <linux/kmod.h>
-#include <linux/string.h>
 #include <linux/errno.h>
-#include <linux/ptrace.h>
-#include <linux/timer.h>
-#include <linux/mm.h>
-#include <linux/kallsyms.h>
-#include <asm/uaccess.h>
-
-#include <asm/io.h>
-#include <asm/pgtable.h>
-#include <asm/irq.h>
-
-#include <linux/syscalls.h>
-#include <linux/signal.h>
+#include <linux/sched/signal.h>
 #include <linux/unistd.h>
-#include <linux/audit.h>
-#include <linux/tracehook.h>
+#include <linux/syscalls.h>
 
+#include <asm/irq.h>
 #include <asm/ptrace.h>
+#include <asm/unistd.h>
 #include <asm/syscalls.h>
-#include <asm/thread_info.h>
 
 
 static char* exceptionCause[32] = {
@@ -78,63 +62,96 @@ static char* exceptionCause[32] = {
 };
 
 
+
 void def_xcpt_handler(int irq, struct pt_regs* regs)
 {
     panic("%s at 0x%08lx", exceptionCause[irq], regs->xa);
 }
 
 
-static void sig_or_panic(int irq, struct pt_regs* regs, int signo)
+/*
+ * All generlly speaking unwanted exceptions arrive here.
+ * If we were not in kernel mode we can handle them with signals to
+ * the process.
+ * Otherwise there is no way out
+ */
+void do_exception(int irq, struct pt_regs* regs)
 {
+    int signo;
     siginfo_t info;
 
     if (user_mode(regs)) {
+        switch (irq) {
+            case XCPT_ILL_INST:
+                signo = SIGILL;
+                break;
+            case XCPT_PRV_INST:
+                signo = SIGILL;
+                break;
+            case XCPT_DIV_INST:
+                signo = SIGFPE;
+                break;
+            case XCPT_ILL_ADDR:
+                signo = SIGBUS;
+                break;
+            case XCPT_PRV_ADDR:
+                signo = SIGSEGV;
+                break;
+            default:
+                goto failed;
+        }
+
         info.si_signo = signo;
         info.si_errno = 0;
-        info.si_addr = (void*) regs->xa;
+        info.si_addr = (void*) regs ->xa;
         force_sig_info(signo, &info, current);
-    }else{
-        def_xcpt_handler(irq, regs);
+        return;
     }
+
+failed:
+    def_xcpt_handler(irq, regs);
 }
 
 
-void ISR_ill_inst(int irq, struct pt_regs* regs)
+/*
+ * The syscalls requested with trap arrive here
+ */
+void do_trap(int irq, struct pt_regs* regs)
 {
-    sig_or_panic(irq, regs, SIGILL);
+    unsigned int num;
+    unsigned int res;
+
+    /* syscalls run with interrupts enabled */
+    local_irq_enable();
+
+    /* skip over trap instruction */
+    regs->r30 += 4;
+    /* check for legal syscall number */
+    num = regs->r2;
+
+    if (num >= __NR_syscalls) {
+        regs->r2 = sys_ni_syscall();
+        return;
+    }
+
+    syscall_trace_enter(regs);
+
+    /* call syscall handling function */
+    res = (*syscall_table[num])(regs->r4, regs->r5, regs->r6,
+                                regs->r7, regs->r8, regs->r9);
+    regs->r2 = res;
+
+    syscall_trace_leave(regs);
 }
 
-
-void ISR_prv_inst(int irq, struct pt_regs* regs)
-{
-    sig_or_panic(irq, regs, SIGILL);
-}
-
-
-void ISR_div_inst(int irq, struct pt_regs* regs)
-{
-    sig_or_panic(irq, regs, SIGFPE);
-}
-
-
-void ISR_ill_addr(int irq, struct pt_regs* regs)
-{
-    sig_or_panic(irq, regs, SIGBUS);
-}
-
-
-void ISR_prv_addr(int irq, struct pt_regs* regs)
-{
-    sig_or_panic(irq, regs, SIGSEGV);
-}
 
 
 void __init trap_init(void)
 {
-    set_ISR(XCPT_ILL_INST, ISR_ill_inst);
-    set_ISR(XCPT_PRV_INST, ISR_prv_inst);
-    set_ISR(XCPT_DIV_INST, ISR_div_inst);
-    set_ISR(XCPT_ILL_ADDR, ISR_ill_addr);
-    set_ISR(XCPT_PRV_ADDR, ISR_prv_addr);
-    set_ISR(XCPT_TRAP_INST, ISR_syscall);
+    set_ISR(XCPT_ILL_INST, do_exception);
+    set_ISR(XCPT_PRV_INST, do_exception);
+    set_ISR(XCPT_DIV_INST, do_exception);
+    set_ISR(XCPT_ILL_ADDR, do_exception);
+    set_ISR(XCPT_PRV_ADDR, do_exception);
+    set_ISR(XCPT_TRAP_INST, do_trap);
 }

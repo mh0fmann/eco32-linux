@@ -229,13 +229,6 @@ umiss:
     rfx
     .syn
 
-/*
- * sigreturn syscall
- */
-sys_rt_sigreturn:
-    addi    $4,$28,0                # fp points to pt_regs
-    j       do_sigreturn            # actual work done there
-
 
 /*
  * ISR table
