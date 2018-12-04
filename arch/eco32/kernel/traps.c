@@ -121,9 +121,6 @@ void do_trap(int irq, struct pt_regs* regs)
     unsigned int num;
     unsigned int res;
 
-    /* syscalls run with interrupts enabled */
-    local_irq_enable();
-
     /* skip over trap instruction */
     regs->r30 += 4;
     /* check for legal syscall number */

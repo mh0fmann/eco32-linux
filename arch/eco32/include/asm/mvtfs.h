@@ -23,6 +23,19 @@
 #define TLB_ENTRY_HI    2
 #define TLB_ENTRY_LO    3
 
+#define CUM_SHIFT       26
+#define CUM             (1 << CUM_SHIFT)
+#define PUM_SHIFT       25
+#define PUM             (1 << PUM_SHIFT)
+#define OUM_SHIFT       24
+#define OUM             (1 << OUM_SHIFT)
+#define CIE_SHIFT       23
+#define CIE             (1 << CIE_SHIFT)
+#define PIE_SHIFT       22
+#define PIE             (1 << PIE_SHIFT)
+#define OIE_SHIFT       21
+#define OIE             (1 << OIE_SHIFT)
+
 
 #ifndef __ASSEMBLY__
 

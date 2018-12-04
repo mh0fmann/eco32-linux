@@ -45,6 +45,9 @@
 #define IRQ_TIMER1              14
 #define IRQ_TIMER2              15
 
+
+#ifndef __ASSEMBLY__
+
 #define irq_canonicalize(irq)   (irq)
 
 #define interrupts_enabled(regs) ((regs->psw >> 22) & 0x1)
@@ -71,9 +74,9 @@ static inline int set_ISR(unsigned int irq, isr_t isr)
     if (irq >= NR_INTERRUPTS) {
         return 1;
     }
-    
+
     isr_tbl[irq] = isr;
-    
+
     return 0;
 }
 
@@ -86,7 +89,7 @@ static inline isr_t get_ISR(unsigned int irq)
         /* NULL is not present here */
         return (isr_t)(0);
     }
-    
+
     return isr_tbl[irq];
 }
 
@@ -107,5 +110,7 @@ void init_IRQ(void);
  * via request_irq which get called by generic_handle_irq
  */
 void do_IRQ(int irq, struct pt_regs* regs);
+
+#endif /* __ASSEMBLY__ */
 
 #endif /* __ASM_ECO32_IRQ_H */

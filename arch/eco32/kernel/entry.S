@@ -13,27 +13,14 @@
  * (at your option) any later version.
  */
 
+
 #include <asm/mvtfs.h>
 #include <asm/ptrace.h>
 #include <asm/page.h>
 #include <asm/thread_info.h>
 #include <asm/asm-offsets.h>
+#include <asm/irq.h>
 
-
-#define CUM_SHIFT       26
-#define CUM             (1 << CUM_SHIFT)
-#define PUM_SHIFT       25
-#define PUM             (1 << PUM_SHIFT)
-#define OUM_SHIFT       24
-#define OUM             (1 << OUM_SHIFT)
-#define CIE_SHIFT       23
-#define CIE             (1 << CIE_SHIFT)
-#define PIE_SHIFT       22
-#define PIE             (1 << PIE_SHIFT)
-#define OIE_SHIFT       21
-#define OIE             (1 << OIE_SHIFT)
-
-#define XCPT_TLB_MISS   21
 
 #define DISABLE_INTERRUPTS  \
     mvfs    $8,PSW      ;\
@@ -175,6 +162,10 @@ from_kernel:                        # valid kernel stack (now) present
     mvfs    $4,PSW                  # first arg: IRQ number
     slri    $4,$4,16
     andi    $4,$4,0x1F
+    ori     $24,$0,NR_IRQS          # check if we do an interrupt or
+    bgeu    $24,$4,hw_irq           # exception handling
+    ENABLE_INTERRUPTS               # exceptions run with interrupts enabled
+hw_irq:
     slli    $24,$4,2                # compute offset into ISR table
     ldw     $24,$24,isr_tbl         # get adress of service routine
     jalr    $24                     # call service routine
