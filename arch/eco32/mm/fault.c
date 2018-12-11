@@ -50,7 +50,7 @@ int fixup_exception(struct pt_regs* regs)
 }
 
 
-asmlinkage void do_page_fault(struct pt_regs* regs, int write)
+void do_page_fault(struct pt_regs* regs, int write)
 {
 	struct task_struct* tsk = current;
 	struct mm_struct* mm = tsk->mm;
