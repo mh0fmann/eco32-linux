@@ -13,32 +13,27 @@
  * (at your option) any later version.
  */
 
-#define ARCH_IRQ_SHIFT      23
+#ifndef __ASM_ECO32_IRQFLAGS_H
+#define __ASM_ECO32_IRQFLAGS_H
 
-    .global arch_local_save_flags
-    .global arch_local_irq_restore
+#include <asm/mvtfs.h>
 
-    .text
-
-
-arch_local_save_flags:
-    mvfs    $2,0
-    slri    $2,$2,ARCH_IRQ_SHIFT
-    andi    $2,$2,1
-    jr      $31
+#define ARCH_IRQ_DISABLED   0
+#define ARCH_IRQ_ENABLED    CIE
 
 
-arch_local_irq_restore:
-    addi    $5,$0,1
-    slli    $5,$5,ARCH_IRQ_SHIFT
-    bne     $4,$0,arch_local_irq_set
-    xnori   $5,$5,0
-    mvfs    $2,0
-    and     $2,$2,$5
-    mvts    $2,0
-    jr      $31
-arch_local_irq_set:
-    mvfs    $2,0
-    or      $2,$2,$5
-    mvts    $2,0
-    jr      $31
+static inline unsigned long arch_local_save_flags(void)
+{
+    return __eco32_read_psw() & ARCH_IRQ_ENABLED;
+}
+
+
+static inline void arch_local_irq_restore(unsigned long flags)
+{
+    unsigned long psw = __eco32_read_psw();
+    __eco32_write_psw(psw | flags);
+}
+
+#include <asm-generic/irqflags.h>
+
+#endif /* __ASM__ECO32_IRQFLAGS_H */

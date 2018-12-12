@@ -17,6 +17,19 @@
 #ifndef __ASM_MVTFS_H
 #define __ASM_MVTFS_H
 
+/*
+ * On eco32 the cpu is mostly controled by the processor status word
+ * 
+ * XXXX V UPO IPO IACK  MASK
+ * 0000 0 000 000 00000 0000000000000000
+ * 
+ * V    : Interrupt vector location. 0 means ROM, 1 means RAM
+ * UPO  : Execution in usermode or previleged mode. 0 means previleged, 1 means usermode
+ * IPO  : Interrupt acceptance status. 0 mean no interrupts, 1 means interrupts allowed
+ * IACK : Current pending interrupt number
+ * MASK : Interrupt enabled for specific interrupt number. 1 means not allowed, 1 means allowed
+ */
+
 
 #define PSW             0
 #define TLB_INDEX       1

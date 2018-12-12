@@ -4,10 +4,18 @@
 
 extra-y := head.o vmlinux.lds
 
-obj-y += syscall_table.o irq.o traps.o setup.o
-obj-y += process.o ptrace.o archlocalirq.o
-obj-y += die.o entry.o signal.o switch.o
-obj-y += time.o pm.o
+obj-y += die.o
+obj-y += entry.o
+obj-y += irq.o
+obj-y += pm.o
+obj-y += process.o
+obj-y += ptrace.o
+obj-y += setup.o
+obj-y += signal.o
+obj-y += switch.o
+obj-y += syscall_table.o
+obj-y += time.o
+obj-y += traps.o
 
 obj-$(CONFIG_SYSFS) += topology.o
 obj-$(CONFIG_PROC_FS) += proc.o
