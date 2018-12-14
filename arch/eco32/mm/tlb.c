@@ -26,65 +26,53 @@ extern void do_page_fault(struct pt_regs* regs, int write);
 
 
 /* 
- * Kernel TLB-Miss are actually also handled in umiss
- * if anything goes wrong we will get here to handle that page fault.
- * So we only need to call do_page_fault here because thats what needs
- * to be done as soon as we get here
+ * All tlb miss arrive here if umiss could not handle them.
+ * We just neeed to differ between read and write miss
  */
-static void ISR_tlb_kmiss(int irqnr, struct pt_regs* regs)
+static void do_tlb_miss(int irqnr, struct pt_regs* regs)
 {
-	do_page_fault(regs, 0);
+    unsigned long write = irqnr == XCPT_TLB_WRITE ? 1 : 0;
+    do_page_fault(regs, write);
 }
 
-void ISR_tlb_write(int irqnr, struct pt_regs* regs)
-{
-	do_page_fault(regs, 1);
-}
-
-void ISR_tlb_inval(int irqnr, struct pt_regs* regs)
-{
-	do_page_fault(regs, 0);
-}
 
 void __init set_tlb_handler(void)
 {
-	set_ISR(XCPT_TLB_MISS, ISR_tlb_kmiss);
-	set_ISR(XCPT_TLB_WRITE, ISR_tlb_write);
-	set_ISR(XCPT_TLB_INVAL, ISR_tlb_inval);
+    set_ISR(XCPT_TLB_MISS, do_tlb_miss);
+    set_ISR(XCPT_TLB_WRITE, do_tlb_miss);
+    set_ISR(XCPT_TLB_INVAL, do_tlb_miss);
 }
+
 
 void flush_tlb_all(void)
 {
-	int i;
-
-	/* set invalid page for all entries */
-	for (i = 0; i < NUM_TLB_ENTRIES; i++) {
-		set_tlb(i, INVALID_PAGE, 0);
-	}
+    int i;
+    /* set invalid page for all entries */
+    for (i = 0; i < NUM_TLB_ENTRIES; i++) {
+        set_tlb(i, INVALID_PAGE, 0);
+    }
 }
+
 
 void flush_tlb_page(struct vm_area_struct* vma, unsigned long addr)
 {
-	int idx;
+    int idx = find_tlb_addr(addr);
 
-	idx = find_tlb_addr(addr);
-
-	if (idx < 0) {
-		/* not found */
-		return;
-	}
-
-	flush_tlb_entry(idx);
+    if (idx >= 0) {
+        flush_tlb_entry(idx);
+    }
 }
 
+
 void flush_tlb_range(struct vm_area_struct* vma,
-                     unsigned long start, unsigned long end)
+                     unsigned long start,
+                     unsigned long end)
 {
-	int i;
-	for (i = 0; i < NUM_TLB_ENTRIES; i++) {
-		unsigned long hi = read_tlb_hi(i);
-		if (hi <= start && hi <= end) {
-			flush_tlb_entry(i);
-		}
-	}
+    int i;
+    for (i = 0; i < NUM_TLB_ENTRIES; i++) {
+        unsigned long hi = read_tlb_hi(i);
+        if (hi <= start && hi <= end) {
+            flush_tlb_entry(i);
+        }
+    }
 }
