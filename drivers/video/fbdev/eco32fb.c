@@ -197,7 +197,7 @@ static struct of_device_id eco32fb_of_ids[] = {
     {
         .compatible = "thm,eco32-graphic",
     },
-    {0},
+    { },
 };
 
 static struct platform_driver eco32fb_platform_driver = {

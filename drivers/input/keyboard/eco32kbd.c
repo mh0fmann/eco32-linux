@@ -278,7 +278,7 @@ static struct of_device_id eco32keyboard_of_ids[] = {
 	{
 		.compatible = "thm,eco32-keyboard",
 	},
-	{0},
+	{ },
 };
 
 static struct platform_driver eco32keyboard_platform_driver = {

@@ -386,7 +386,8 @@ static int eco32uart_probe(struct platform_device* dev)
 
     struct uart_eco32_port* port;
     struct device_node* node;
-    unsigned int base, clk, tx_irq, rx_irq;
+    unsigned int clk, tx_irq, rx_irq;
+    unsigned long base;
     int err;
     static int line = 0;
 
@@ -402,7 +403,7 @@ static int eco32uart_probe(struct platform_device* dev)
     /* read device node and obtain needed properties */
     node = dev->dev.of_node;
 
-    base = of_iomap(node, 0);
+    base = (unsigned long)of_iomap(node, 0);
     if (!base) goto out_no_property;
 
     tx_irq = irq_of_parse_and_map(node, 0);
@@ -476,7 +477,7 @@ static struct of_device_id eco32uart_of_ids[] = {
     {
         .compatible = "thm,eco32-uart",
     },
-    {0}
+    { }
 };
 
 
