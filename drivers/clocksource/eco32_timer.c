@@ -208,7 +208,7 @@ static int __init eco32_timer_init(struct device_node *node)
 
     /*
      * We really need that clockevents timer running
-     * 
+     *
      * If it fails on the first try, try again with the next timer
      * If that fails again we will have a problem..
      */
