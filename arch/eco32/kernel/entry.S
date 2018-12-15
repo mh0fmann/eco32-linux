@@ -24,12 +24,12 @@
 
 #define DISABLE_INTERRUPTS  \
     mvfs    $8,PSW      ;\
-    andi    $8,$8,~CIE  ;\
+    andi    $8,$8,~PSW_CIE  ;\
     mvts    $8,PSW
 
 #define ENABLE_INTERRUPTS   \
     mvfs    $8,PSW      ;\
-    ori     $8,$8,CIE   ;\
+    ori     $8,$8,PSW_CIE   ;\
     mvts    $8,PSW
 
 #define SAVE_REGISTERS      \
@@ -171,7 +171,7 @@ hw_irq:
     jalr    $24                     # call service routine
 rfxcept:
     ldw     $4,$29,psw_OFF          # must check for work before we leave
-    andi    $4,$4,PUM               # are we returning to kernel mode ?
+    andi    $4,$4,PSW_PUM           # are we returning to kernel mode ?
     beq     $4,$0,no_more_work      # yes - then don't check for work
 check_work:
     DISABLE_INTERRUPTS

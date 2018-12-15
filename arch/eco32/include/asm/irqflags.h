@@ -19,7 +19,7 @@
 #include <asm/mvtfs.h>
 
 #define ARCH_IRQ_DISABLED   0
-#define ARCH_IRQ_ENABLED    CIE
+#define ARCH_IRQ_ENABLED    PSW_CIE
 
 
 static inline unsigned long arch_local_save_flags(void)
