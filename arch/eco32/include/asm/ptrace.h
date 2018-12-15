@@ -117,6 +117,7 @@ void syscall_trace_leave(struct pt_regs* regs);
 #define user_stack_pointer(regs)    ((unsigned long)((regs)->sp))
 #define instruction_pointer(regs)   ((unsigned long)((regs)->xa))
 #define user_mode(regs)             (((regs)->psw & (1 << 25)) != 0)
+#define profile_pc(regs)            instruction_pointer(regs)
 
 #define r0_OFF        (0*4)
 #define r1_OFF        (1*4)
