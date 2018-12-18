@@ -162,13 +162,13 @@ from_kernel:                        # valid kernel stack (now) present
     mvfs    $4,PSW                  # first arg: IRQ number
     slri    $4,$4,16
     andi    $4,$4,0x1F
-    ori     $24,$0,NR_IRQS          # check if we do an interrupt or
-    bgeu    $24,$4,hw_irq           # exception handling
+    ori     $9,$0,NR_IRQS           # check if we do an interrupt or
+    bgeu    $9,$4,hw_irq            # exception handling
     ENABLE_INTERRUPTS               # exceptions run with interrupts enabled
 hw_irq:
-    slli    $24,$4,2                # compute offset into ISR table
-    ldw     $24,$24,isr_tbl         # get adress of service routine
-    jalr    $24                     # call service routine
+    slli    $9,$4,2                 # compute offset into ISR table
+    ldw     $9,$9,isr_tbl           # get adress of service routine
+    jalr    $9                      # call service routine
 rfxcept:
     ldw     $4,$29,psw_OFF          # must check for work before we leave
     andi    $4,$4,PSW_PUM           # are we returning to kernel mode ?
