@@ -130,9 +130,12 @@ static int eco32fb_probe(struct platform_device* dev)
     }
 
 
-    if (eco32_device_probe(base)) {
-        dev_err(&dev->dev, "device not present on the bus\n");
-        return -ENODEV;
+    /* Do not probe the device if it is built as a module */
+    if (!IS_MODULE(CONFIG_FB_ECO32)) {
+        if (eco32_device_probe(base)) {
+            dev_err(&dev->dev, "device not present on the bus\n");
+            return -ENODEV;
+        }
     }
 
     /*request mem region */

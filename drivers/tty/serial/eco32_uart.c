@@ -239,7 +239,7 @@ static int eco32uart_startup(struct uart_port* port)
 
     struct uart_eco32_port* eco32port = container_of(port, struct uart_eco32_port, port);
 
-    /* request irq and set isr */
+    /* request irq */
     if (request_irq(eco32port->tx_irq, eco32uart_tx_interrupt_handler, 0, eco32port->dev_name, port)) {
         dev_err(eco32port->dev, "could not request irq for eco32uart\n");
         return -EIO;
@@ -249,9 +249,6 @@ static int eco32uart_startup(struct uart_port* port)
         dev_err(eco32port->dev, "could not request irq for eco32uart\n");
         return -EIO;
     }
-
-    set_ISR(eco32port->tx_irq, do_IRQ);
-    set_ISR(eco32port->rx_irq, do_IRQ);
 
     /* disable interrupts for transmitter */
     eco32uart_stop_tx(port);
@@ -274,11 +271,9 @@ static void eco32uart_shutdown(struct uart_port* port)
     /* disable interrupts for receiver */
     eco32uart_out(0, ECO32UART_RCVR_CTRL, port);
 
-    /* free irq and reset isr */
+    /* free irq */
     free_irq(eco32port->tx_irq, port);
     free_irq(eco32port->rx_irq, port);
-    set_ISR(eco32port->tx_irq, def_xcpt_handler);
-    set_ISR(eco32port->rx_irq, def_xcpt_handler);
 }
 
 
@@ -415,9 +410,11 @@ static int eco32uart_probe(struct platform_device* dev)
     err = of_property_read_u32(node, "clock-frequency", &clk);
     if (err) goto out_no_property;
 
-    if (eco32_device_probe((unsigned long)(base | PAGE_OFFSET))) {
-        dev_err(&dev->dev, "device not present on the bus\n");
-        return -ENODEV;
+    if (!IS_ENABLED(CONFIG_SERIAL_ECO32)) {
+        if (eco32_device_probe((unsigned long)(base | PAGE_OFFSET))) {
+            dev_err(&dev->dev, "device not present on the bus\n");
+            return -ENODEV;
+        }
     }
 
     /* allocate port and fill it */

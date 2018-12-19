@@ -199,10 +199,12 @@ static int eco32keyboard_probe(struct platform_device* dev)
 	}
 
 
-	if (eco32_device_probe((unsigned long)eco32keyboard_dev.base)) {
-		dev_err(&dev->dev, "device not present on the bus\n");
-		return -ENODEV;
-	}
+    if (!IS_MODULE(CONFIG_KEYBOARD_ECO32)) {
+	    if (eco32_device_probe((unsigned long)eco32keyboard_dev.base)) {
+		    dev_err(&dev->dev, "device not present on the bus\n");
+		    return -ENODEV;
+	    }
+    }
 
 	/* request mem region */
 	if (devm_request_mem_region(&dev->dev, base, len, ECO32KEYBOARD_DEV_NAME) == NULL) {
@@ -237,13 +239,9 @@ static int eco32keyboard_probe(struct platform_device* dev)
 
 	__clear_bit(KEY_RESERVED, eco32keyboard_dev.input->keybit);
 
-	/* set isr */
-	set_ISR(eco32keyboard_dev.irq, do_IRQ);
-
 	/* request irq */
 	if (devm_request_irq(&dev->dev, eco32keyboard_dev.irq, eco32keyboard_interrupt_handler, 0, ECO32KEYBOARD_DEV_NAME, NULL)) {
 		dev_err(&dev->dev, "could not request irq for eco32 keyboard\n");
-		set_ISR(eco32keyboard_dev.irq, def_xcpt_handler);
 		return -EIO;
 	}
 
@@ -269,7 +267,6 @@ static int eco32keyboard_remove(struct platform_device* dev)
 {
 
 	eco32keyboard_out(ECO32KEYBOARD_CTRL, 0x00);
-	set_ISR(eco32keyboard_dev.irq, def_xcpt_handler);
 	input_unregister_device(eco32keyboard_dev.input);
 	return 0;
 }

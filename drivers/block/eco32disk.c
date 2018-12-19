@@ -181,29 +181,23 @@ static int eco32disk_open(struct block_device* bdev, fmode_t fmode)
 {
 
 	unsigned long flags;
+    int ret = 0;
 
 	spin_lock_irqsave(&eco32disk_dev.lock, flags);
 
-	/* set isr and request irq if we are the first to open */
+	/* request irq if we are the first to open */
 	if (!eco32disk_dev.open++) {
-		/* set isr for disk */
-		set_ISR(eco32disk_dev.irq, do_IRQ);
 
 		/* request irq */
 		if (request_irq(eco32disk_dev.irq, eco32disk_interrupt_handler, 0, ECO32DISK_DEV_NAME, NULL)) {
 			dev_err(eco32disk_dev.dev, "could not request irq for eco32disk\n");
-			goto out_reset_isr;
-		}
+		    ret = -EIO;
+        }
 	}
 
 	spin_unlock_irqrestore(&eco32disk_dev.lock, flags);
 
-	return 0;
-
-out_reset_isr:
-	set_ISR(eco32disk_dev.irq, def_xcpt_handler);
-	spin_unlock_irqrestore(&eco32disk_dev.lock, flags);
-	return -EIO;
+	return ret;
 }
 
 static void eco32disk_release(struct gendisk* gd, fmode_t fmode)
@@ -217,7 +211,6 @@ static void eco32disk_release(struct gendisk* gd, fmode_t fmode)
 	if (!--eco32disk_dev.open) {
 		/* free irq and reset isr */
 		free_irq(eco32disk_dev.irq, NULL);
-		set_ISR(eco32disk_dev.irq, def_xcpt_handler);
 	}
 
 	spin_unlock_irqrestore(&eco32disk_dev.lock, flags);
@@ -381,11 +374,12 @@ static int eco32disk_probe(struct platform_device* dev)
 		return -ENODEV;
 	}
 
-	/* probe if device is present on the bus */
-	if (eco32_device_probe((unsigned long)eco32disk_dev.base)) {
-		dev_err(&dev->dev, "device not present on the bus\n");
-		return -ENODEV;
-	}
+	if (!IS_MODULE(CONFIG_ECO32_DISK)) {
+	    if (eco32_device_probe((unsigned long)eco32disk_dev.base)) {
+		    dev_err(&dev->dev, "device not present on the bus\n");
+		    return -ENODEV;
+	    }
+    }
 
 	/* check if device is initialized and ready */
 	if (!(eco32disk_in(ECO32DISK_CTL) & ECO32DISK_CTL_INIT)) {
@@ -488,7 +482,7 @@ static struct of_device_id eco32disk_of_ids[] = {
 	{
 		.compatible = "thm,eco32-disk",
 	},
-	{0},
+	{ },
 };
 
 static struct platform_driver eco32disk_platform_driver = {

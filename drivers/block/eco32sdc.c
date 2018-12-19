@@ -74,7 +74,6 @@ static struct {
 	unsigned int busy;
 	spinlock_t q_lock;
 	spinlock_t lock;
-	int open;
 	unsigned int size;
 	unsigned int* base;
 	struct device* dev;
@@ -515,22 +514,13 @@ static void writeSingleSector(unsigned int sct, unsigned char* ptr)
 
 static int eco32sdc_open(struct block_device* bdev, fmode_t fmode)
 {
-	unsigned long flags;
-
-	spin_lock_irqsave(&eco32sdc_dev.lock, flags);
-	eco32sdc_dev.open++;
-	spin_unlock_irqrestore(&eco32sdc_dev.lock, flags);
-
+    /* nothing to do */
 	return 0;
 }
 
 static void eco32sdc_release(struct gendisk* gd, fmode_t fmode)
 {
-	unsigned long flags;
-
-	spin_lock_irqsave(&eco32sdc_dev.lock, flags);
-	eco32sdc_dev.open--;
-	spin_unlock_irqrestore(&eco32sdc_dev.lock, flags);
+    /* nothing to do */
 }
 
 static int eco32sdc_ioctl(struct block_device* bdev, fmode_t fmode, unsigned int cmd, unsigned long arg)
@@ -724,11 +714,12 @@ static int eco32sdc_probe(struct platform_device* dev)
 		return -ENODEV;
 	}
 
-	/* probe if device is present on the bus */
-	if (eco32_device_probe((unsigned long)eco32sdc_dev.base)) {
-		dev_err(&dev->dev, "device not present on the bus\n");
-		return -ENODEV;
-	}
+	if (!IS_MODULE(CONFIG_ECO32_SDC)) {
+	    if (eco32_device_probe((unsigned long)eco32sdc_dev.base)) {
+		    dev_err(&dev->dev, "device not present on the bus\n");
+		    return -ENODEV;
+	    }
+    }
 
 	/* register mem region */
 	if (devm_request_mem_region(&dev->dev, base, len, ECO32SDC_DEV_NAME) == NULL) {
@@ -737,11 +728,9 @@ static int eco32sdc_probe(struct platform_device* dev)
 	}
 
 	/* reset struct values */
-	eco32sdc_dev.open = 0;
 	eco32sdc_dev.lastSent = 0;
 	eco32sdc_dev.busy = 0;
 	eco32sdc_dev.current_request = NULL;
-	spin_lock_init(&eco32sdc_dev.lock);
 
 	/* init sd card */
 	if (!initSDC()) {
@@ -829,7 +818,7 @@ static struct of_device_id eco32sdc_of_ids[] = {
 	{
 		.compatible = "thm,eco32-sdc",
 	},
-	{0},
+	{ },
 };
 
 static struct platform_driver eco32sdc_platform_driver = {

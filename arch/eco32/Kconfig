@@ -63,6 +63,9 @@ config HZ
 config MMU
     def_bool y
 
+# On eco32 we do not support dynamic loadable modules atm
+config MODULES
+    def_bool n
 
 #---------------- ARCH CONFIG ---------------
 
