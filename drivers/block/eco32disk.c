@@ -98,24 +98,6 @@ static inline void eco32disk_out(unsigned int value, unsigned int offset)
 /**************************************************************/
 
 /*
- * local memcpy - block buffer needs word access
- */
-
-static inline void __wmemcpy(void* d, void* s, size_t n)
-{
-	unsigned int* _d = (unsigned int*)d;
-	unsigned int* _s = (unsigned int*)s;
-
-	while (n) {
-		*_d++ = *_s++;
-		n -= 4;
-	}
-}
-
-
-/**************************************************************/
-
-/*
  * Disk interrupt handler
  */
 
@@ -152,7 +134,7 @@ static irqreturn_t eco32disk_interrupt_handler(int irq, void* dev)
 		rq_for_each_segment(bvec, eco32disk_dev.current_request, iter) {
 			buf = bvec_kmap_irq(&bvec, &_flags);
 
-			__wmemcpy(buf, ECO32DISK_DB + hw_offset, bvec.bv_len);
+            memcpy_fromio(buf, ECO32DISK_DB + hw_offset, bvec.bv_len);
 
 			bvec_kunmap_irq(buf, &_flags);
 			hw_offset += bvec.bv_len;
@@ -315,7 +297,7 @@ static void eco32disk_request_fn(struct request_queue* q)
 		rq_for_each_segment(bvec, eco32disk_dev.current_request, iter) {
 			buf = bvec_kmap_irq(&bvec, &flags);
 
-			__wmemcpy(ECO32DISK_DB + hw_offset, buf, bvec.bv_len);
+			memcpy_toio(ECO32DISK_DB + hw_offset, buf, bvec.bv_len);
 
 			bvec_kunmap_irq(buf, &flags);
 			hw_offset += bvec.bv_len;
