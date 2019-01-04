@@ -297,12 +297,12 @@ config ARC_TIMERS
 	  TIMER0 serves as clockevent while TIMER1 provides clocksource
 
 config ECO32_TIMERS
-	bool "Support for 32-bit TIMERn on ECO32 SoC" if COMPILE_TEST
-	depends on GENERIC_CLOCKEVENTS
+	bool "Support for 32-bit timer on ECO32 SoC"
+	depends on ECO32
 	select TIMER_OF
 	help
-	  On the ECO32 SoC are two Timers which can be used for the clockevents
-	  and clocksources of the kernel
+	  On the ECO32 SoC are two timers which can be used for the clockevents
+	  and clocksources of the kernel. Say yes here if you want to use these
 
 config ARC_TIMERS_64BIT
 	bool "Support for 64-bit counters in ARC HS38 cores" if COMPILE_TEST
