@@ -49,7 +49,7 @@ typedef unsigned long elf_greg_t;
 #define ELF_NGREG (sizeof(struct user_regs_struct) / sizeof(elf_greg_t))
 typedef elf_greg_t elf_gregset_t[ELF_NGREG];
 
-/* ECO32 does not have fp support yes, so no fp regs for now. */
+/* ECO32 does not have fp support yet, so no fp regs for now. */
 typedef unsigned long elf_fpregset_t;
 
 /* EM_ECO32 is defined in linux/elf-em.h */
