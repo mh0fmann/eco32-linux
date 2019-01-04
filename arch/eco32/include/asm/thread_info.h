@@ -56,14 +56,14 @@ struct thread_info {
  *
  * preempt_count needs to be 1 initially, until the scheduler is functional.
  */
-#define INIT_THREAD_INFO(tsk)   \
-{                               \
-    .task          = &tsk,      \
-    .flags         = 0,         \
-    .cpu           = 0,         \
-    .preempt_count = 1,         \
-    .addr_limit    = KERNEL_DS, \
-    .ksp           = 0,         \
+#define INIT_THREAD_INFO(tsk)           \
+{                                       \
+    .task          = &tsk,              \
+    .flags         = 0,                 \
+    .cpu           = 0,                 \
+    .preempt_count = INIT_PREEMPT_COUNT,\
+    .addr_limit    = KERNEL_DS,         \
+    .ksp           = 0,                 \
 }
 
 
