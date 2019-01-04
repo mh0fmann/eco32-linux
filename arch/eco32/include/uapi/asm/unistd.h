@@ -13,10 +13,23 @@
  * (at your option) any later version.
  */
 
-#define sys_mmap2   sys_mmap_pgoff
 
+/*
+ * musl is our only libc we currently have
+ * and it does not support renameat2 so we need the old one
+ */
 #define __ARCH_WANT_RENAMEAT
+
+/*
+ * since v4.20 archs that do not use the newer statx interface
+ * need to set this to get the syscalls
+ */
 #define __ARCH_WANT_STAT64
+
+/*
+ * we do not call these directly so we need the wrappers to
+ * be present
+ */
 #define __ARCH_WANT_SYS_FORK
 #define __ARCH_WANT_SYS_CLONE
 

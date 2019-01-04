@@ -4,6 +4,7 @@
 
 extra-y := head.o vmlinux.lds
 
+obj-y += eco32_sys.o
 obj-y += die.o
 obj-y += entry.o
 obj-y += irq.o
