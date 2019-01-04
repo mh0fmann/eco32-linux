@@ -52,29 +52,6 @@ enum fixed_addresses {
 #define FIXADDR_SIZE        (__end_of_fixed_addresses << PAGE_SHIFT)
 #define FIXADDR_START       (FIXADDR_TOP - FIXADDR_SIZE)
 
-#define __fix_to_virt(x)    (FIXADDR_START + ((x) << PAGE_SHIFT))
-#define __virt_to_fix(x)    (((x) - FIXADDR_START) >> PAGE_SHIFT)
+#include <asm-generic/fixmap.h>
 
-#ifndef __ASSEMBLY__
-
-void __init fixmap_init(void);
-
-
-static __always_inline unsigned long fix_to_virt(const unsigned int idx)
-{
-    if (idx >= __end_of_fixed_addresses) {
-        BUG();
-    }
-
-    return __fix_to_virt(idx);
-}
-
-static inline unsigned long virt_to_fix(const unsigned long vaddr)
-{
-    BUG_ON(vaddr >= FIXADDR_TOP || vaddr < FIXADDR_START);
-    return __virt_to_fix(vaddr);
-}
-
-#endif
-
-#endif
+#endif /* __ASM_ECO32_FIXMAP_H */
