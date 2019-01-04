@@ -30,7 +30,7 @@
 
 
 /*
- * Pointe to the current_pgd which holds the pgd of the current
+ * Pointer to the current_pgd which holds the pgd of the current
  * running process
  */
 volatile pgd_t* current_pgd = swapper_pg_dir;
@@ -51,7 +51,7 @@ int __init early_init_dt_reserve_memory_arch(phys_addr_t base,
 {
     if (nomap)
         return memblock_remove(base, size);
-    /* some addresses could be within the DIRECT_MAPPED_SPACE
+    /* some addresses could be within the direct mapped space.
      * translate those to physical ones
      */
     base = __pa(base);
@@ -76,8 +76,8 @@ void __init setup_arch_memory(void)
      *
      * on eco32 we only use lowmem due to our current architecture
      * design.
-     * it is always the same in size and within the same addresses
-     * our mmu always covers this range for for priviliged access
+     * it is always the same in size and within the same addresse.
+     * our mmu always covers this range for for privileged access
      */
 
     min_low_pfn = PFN_UP(0x00000000);
@@ -87,7 +87,7 @@ void __init setup_arch_memory(void)
 
     /* ------- memblock bootime allocator setup -------
      *
-     * memory regions allready aded by the early device tree scan
+     * memory regions allready added by the early device tree scan
      *
      * we will still need to mark some regions as reserved.
      * this includes:
