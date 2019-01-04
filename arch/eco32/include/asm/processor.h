@@ -22,19 +22,13 @@
 #define STACK_TOP       TASK_SIZE
 #define STACK_TOP_MAX   STACK_TOP
 
-/*
- * Default implementation of macro that returns current
- * instruction pointer ("program counter").
- */
-
-#define current_text_addr()     ({ __label__ _l; _l: &&_l; })
 
 /*
  * User space process size. This is hardcoded into a few places,
  * so don't change it unless you know what you are doing.
  */
 
-#define TASK_SIZE       (0x80000000UL)
+#define TASK_SIZE               (0x80000000UL)
 
 /*
  * This decides where the kernel will search for a free chunk
