@@ -23,10 +23,8 @@
  * the current context while a signal handler is executed.
  * It's restored by sys_sigreturn.
  */
-
 struct sigcontext {
-    struct user_regs_struct regs;   /* needs to be first */
-    unsigned long oldmask;
+    struct user_regs_struct regs;
 };
 
 #endif /* __ASM_ECO32_SIGCONTEXT_H */
