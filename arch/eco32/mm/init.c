@@ -167,8 +167,8 @@ void __init mem_init(void)
             ((int)&__init_end -
              (unsigned long)&__init_begin) >> 10);
 
-    /* put remaining bootmem on the free list */
-    free_all_bootmem();
+    /* put remaining mem on the free list */
+    memblock_free_all();
 }
 
 

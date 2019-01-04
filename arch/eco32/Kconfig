@@ -16,8 +16,6 @@ config ECO32
     default y
     select TINY_RCU
     select EMBEDDED
-    select NO_BOOTMEM
-    select HAVE_MEMBLOCK
     select GENERIC_CLOCKEVENTS
     select GENERIC_STRNLEN_USER
     select GENERIC_STRNCPY_FROM_USER

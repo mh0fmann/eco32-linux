@@ -78,7 +78,6 @@ void def_xcpt_handler(int irq, struct pt_regs* regs)
 void do_exception(int irq, struct pt_regs* regs)
 {
     int signo;
-    siginfo_t info;
 
     if (user_mode(regs)) {
         switch (irq) {
@@ -101,10 +100,7 @@ void do_exception(int irq, struct pt_regs* regs)
                 goto failed;
         }
 
-        info.si_signo = signo;
-        info.si_errno = 0;
-        info.si_addr = (void*) regs ->xa;
-        force_sig_info(signo, &info, current);
+        send_sig(signo, current, 0);
         return;
     }
 

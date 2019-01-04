@@ -55,8 +55,8 @@ void do_page_fault(struct pt_regs* regs, int write)
 	struct task_struct* tsk = current;
 	struct mm_struct* mm = tsk->mm;
 	struct vm_area_struct* vma = NULL;
-	siginfo_t info;
 	int fault;
+    int si_code;
 	unsigned int flags = FAULT_FLAG_ALLOW_RETRY | FAULT_FLAG_KILLABLE;
 	unsigned int addr;
 
@@ -70,7 +70,7 @@ void do_page_fault(struct pt_regs* regs, int write)
 	if (user_mode(regs))
 		flags |= FAULT_FLAG_USER;
 
-	info.si_code = SEGV_MAPERR;
+	si_code = SEGV_MAPERR;
 
 	if (in_interrupt() || !mm) {
 		goto no_context;
@@ -142,10 +142,7 @@ bad_area_nosemaphore:
 
 	/* Usermode Segfault*/
 	if (user_mode(regs)) {
-		info.si_signo = SIGSEGV;
-		info.si_errno = 0;
-		info.si_addr = (void*)addr;
-		force_sig_info(SIGSEGV, &info, tsk);
+		force_sig_fault(SIGSEGV, si_code, (void*)addr, current);
 		return;
 	}
 
@@ -178,11 +175,7 @@ out_of_memory:
 do_sigbus:
 	up_read(&mm->mmap_sem);
 
-	info.si_signo = SIGBUS;
-	info.si_errno = 0;
-	info.si_code = BUS_ADRERR;
-	info.si_addr = (void*)addr;
-	force_sig_info(SIGBUS, &info, tsk);
+	force_sig_fault(SIGBUS, si_code, (void __user*)addr, current);
 
 	if (!user_mode(regs))
 		goto no_context;
