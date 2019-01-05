@@ -18,8 +18,8 @@
 #include <asm/thread_info.h>
 #include <asm/asm-offsets.h>
 
-    .global	_switch
-    .global	ret_from_fork
+#include <linux/linkage.h>
+
 
     .text
 
@@ -33,7 +33,7 @@
  *
  * standard ABI conventions are applicable
  */
-_switch:
+ENTRY(_switch)
     subi    $29,$29,PT_SIZE     # allocate pt_regs on old stack
     stw     $16,$29,r16_OFF     # save callee-save regs
     stw     $17,$29,r17_OFF
@@ -65,7 +65,7 @@ _switch:
     addi    $2,$4,0             # return old_ti
     ldw     $4,$4,TI_TASK       # setup arg for schedule_tail
     jr      $31
-
+ENDPROC(_switch)
 
 /*
  * after fork/clone we will arive here
@@ -74,10 +74,11 @@ _switch:
  * Kernel threads can be called directly while user threads are
  * passed over to the kernel exit.
  */
-ret_from_fork:
+ENTRY(ret_from_fork)
     jal     schedule_tail       # task_struct *prev must be in $4
     beq     $16,$0,no_kthread   # skip if we are not a kernel thread
     addi    $4,$17,0            # else get arg for callback function
     jalr    $16                 # and execute the callback function
 no_kthread:
     j       rfxcept
+END(ret_from_fork)

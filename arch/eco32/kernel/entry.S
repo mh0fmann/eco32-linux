@@ -21,16 +21,18 @@
 #include <asm/asm-offsets.h>
 #include <asm/irq.h>
 
+#include <linux/linkage.h>
 
-#define DISABLE_INTERRUPTS       \
-    mvfs    $8,PSW              ;\
-    andi    $8,$8,~PSW_CIE      ;\
-    mvts    $8,PSW
 
-#define ENABLE_INTERRUPTS        \
-    mvfs    $8,PSW              ;\
-    ori     $8,$8,PSW_CIE       ;\
-    mvts    $8,PSW
+#define DISABLE_INTERRUPTS(r)    \
+    mvfs    r,PSW               ;\
+    andi    r,r,~PSW_CIE        ;\
+    mvts    r,PSW
+
+#define ENABLE_INTERRUPTS(r)     \
+    mvfs    r,PSW               ;\
+    ori     r,r,PSW_CIE         ;\
+    mvts    r,PSW
 
 #define SAVE_REGISTERS          \
     stw     $0,$29,r0_OFF       ;\
@@ -112,12 +114,7 @@
     mvts    $24,PSW             ;\
     ldw     $29,$29,r29_OFF
 
-    .global xcept
-    .global rfxcept
-    .global umiss
-    .global sys_rt_sigreturn
-    .global set_ISR
-    .global get_ISR
+
     .global isr_tbl
 
     .global irqmask
@@ -127,11 +124,11 @@
     .text
 
 /*
- * common ISR for exceptions
+ * common kernel entry
  * all interrupts and faults arrive here
  * (with a single exception: user TLB misses go to 'umiss' below)
  */
-xcept:
+ENTRY(xcept)
     .nosyn
     mvfs    $24,PSW                 # get PSW
     slri    $24,$24,16              # extract exception identifier
@@ -159,18 +156,25 @@ from_kernel:                        # valid kernel stack (now) present
     slri    $4,$4,16
     andi    $4,$4,0x1F
     ori     $9,$0,NR_IRQS
-    bgeu    $9,$4,hw_irq            # iunterrupt or exception?
-    ENABLE_INTERRUPTS               # exceptions run with interrupts enabled
-hw_irq:
+    bgeu    $9,$4,call_isr          # interrupt or exception?
+    ENABLE_INTERRUPTS($8)           # exceptions run with interrupts enabled
+call_isr:
     slli    $9,$4,2                 # compute offset into ISR table
     ldw     $9,$9,isr_tbl           # get adress of service routine
     jalr    $9                      # call service routine
-rfxcept:
+    j       rfxcept
+END(xcept)
+
+/*
+ * common kernel exit
+ * after handling of interrupts and exceptions we arrive here
+ */
+ENTRY(rfxcept)
     ldw     $4,$29,psw_OFF          # must check for work before we leave
     andi    $4,$4,PSW_PUM           # are we returning to kernel mode ?
     beq     $4,$0,no_more_work      # yes - then don't check for work
 check_work:
-    DISABLE_INTERRUPTS
+    DISABLE_INTERRUPTS($8)
     ldw     $5,$27,TI_FLAGS         # second arg: thread info flags
     andi    $4,$5,_TIF_WORK_MASK    # any work to do ?
     beq     $4,$0,no_more_work      # no - then leave
@@ -178,14 +182,16 @@ check_work:
     jal     do_work_pending         # now do the work
     j       check_work              # check for more work
 no_more_work:
-    DISABLE_INTERRUPTS
+    DISABLE_INTERRUPTS($8)
     RESTORE_REGISTERS
     rfx
+END(rfxcept)
+
 
 /*
  * user TLB misses arrive here
  */
-umiss:
+ENTRY(umiss)
     .nosyn
     mvfs    $25,TLB_ENTRY_HI        # get missing page addr
     ldhi    $26,current_pgd         # get base addr of page dir
@@ -212,6 +218,7 @@ umiss:
     tbwr
     rfx
     .syn
+END(umiss)
 
 
 /*
@@ -223,6 +230,7 @@ umiss:
     .data
     .align  4
 isr_tbl:
+    /* 00 - 15 : interrupts */
     .word   def_xcpt_handler    # 00: terminal 0 transmitter interrupt
     .word   def_xcpt_handler    # 01: terminal 0 receiver interrupt
     .word   def_xcpt_handler    # 02: terminal 1 transmitter interrupt
@@ -239,6 +247,7 @@ isr_tbl:
     .word   def_xcpt_handler    # 13: unused
     .word   def_xcpt_handler    # 14: timer 0 interrupt
     .word   def_xcpt_handler    # 15: timer 1 interrupt
+    /* 16 - 31 : exceptions */
     .word   def_xcpt_handler    # 16: bus timeout exception
     .word   def_xcpt_handler    # 17: illegal instruction exception
     .word   def_xcpt_handler    # 18: privileged instruction exception

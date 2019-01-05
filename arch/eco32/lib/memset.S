@@ -13,7 +13,7 @@
  * (at your option) any later version.
  */
 
-    .global memset_io
+#include <linux/linkage.h>
 
 
 /*
@@ -22,7 +22,7 @@
  * be aware of unalined reads and writes
  */
 
-memset_io:
+ENTRY(memset_io)
     addi    $8,$5,0
     andi    $8,$8,0xFF
     slli    $5,$5,8
@@ -38,3 +38,4 @@ loop:
     addi    $8,$8,4
     blt     $8,$6,loop
     jr      $31
+END(memset_io)

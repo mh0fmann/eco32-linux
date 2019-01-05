@@ -13,12 +13,8 @@
  * (at your option) any later version.
  */
 
-
 #include <linux/linkage.h>
 #include <asm/errno.h>
-
-	.global	__copy_tofrom_user
-	.global	__clear_user
 
 
 /*
@@ -28,7 +24,7 @@
  *
  * NOTE: Returns number of bytes NOT copied!
  */
-__copy_tofrom_user:
+ENTRY(__copy_tofrom_user)
 	subi	$29,$29,8
 	stw	$4,$29,0		# save dst ptr
 	stw	$5,$29,4		# save src ptr
@@ -48,6 +44,7 @@ copy_done:
 	ldw	$5,$29,4		# restore src ptr
 	addi	$29,$29,8
 	jr	$31
+ENDPROC(__copy_tofrom_user)
 
 	.section	.fixup,"ax"
 copy_fixup:
@@ -66,7 +63,7 @@ copy_fixup:
  *
  * NOTE: Returns number of bytes NOT cleared!
  */
-__clear_user:
+ENTRY(__clear_user)
 	subi	$29,$29,4
 	stw	$4,$29,0		# save dst ptr
 	add     $2,$5,$0		# no need to save size
@@ -81,6 +78,7 @@ clear_done:
 	ldw	$4,$29,0		# restore dst ptr
 	addi	$29,$29,4
 	jr	$31
+ENDPROC(__clear_user)
 
 	.section	.fixup,"ax"
 clear_fixup:

@@ -13,12 +13,13 @@
  * (at your option) any later version.
  */
 
-	.global	__delay
+#include <linux/linkage.h>
+
 
 	.text
-	
 
-__delay:
+ENTRY(__delay)
 	subi	$4,$4,1
 	bne	$4,$0,__delay
 	jr	$31
+END(__delay)

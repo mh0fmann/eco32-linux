@@ -20,29 +20,30 @@
 #include <asm/mvtfs.h>
 #include <asm/tlb.h>
 
-    .global _start
+#include <linux/linkage.h>
+#include <linux/init.h>
 
-    .global xcept
-    .global umiss
-    .global current_ti
-    .global eco32_early_setup
 
-    .section    ".head.text","ax"
-
+__HEAD
     #------------------------------------
 
     # the bootloader jumps here
     .org    0x00000000
-_start:
+ENTRY(_start)
     j   start
+END(_start)
 
-    # exceptions (interrupts and faults) arrive here
+    # exceptions and interrupts arrive here
     .org    0x00000004
+ENTRY(_xcept)
     j   xcept
+END(_xcept)
 
     # TLB misses with addresses < 0x80000000 arrive here
     .org    0x00000008
+ENTRY(_umiss)
     j   umiss
+END(_umiss)
 
     #------------------------------------
 

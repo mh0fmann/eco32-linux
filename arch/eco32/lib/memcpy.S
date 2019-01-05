@@ -13,6 +13,8 @@
  * (at your option) any later version.
  */
 
+#include <linux/linkage.h>
+
 
 /*
  * on eco32 all iomem has to be accessed through 32bit read and write
@@ -20,9 +22,7 @@
  * be aware of unalined reads and writes
  */
 
-    .global memcpy_tofromio
-
-memcpy_tofromio:
+ENTRY(memcpy_tofromio)
     addi    $8,$0,0
 loop:
     ldw     $9,$5,0
@@ -32,3 +32,4 @@ loop:
     addi    $8,$8,4
     ble     $8,$6,loop
     jr      $31
+END(memcpy_tofromio)
