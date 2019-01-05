@@ -1,2 +1,12 @@
-                ECO32 SYSCALL ABI
-                =================
+                        ECO32 SYSCALL ABI
+                        =================
+
+When entering the kernel through trap instruction to perform
+a syscall the arguments for that syscall need to prepared follwing
+the mentiond abi:
+
+$2 contains the number of the syscall
+$4 - $9 contain arguments 1 - 6 of the syscall
+
+When returning from kernel $2 will contain the value returned
+by the syscall if any.
