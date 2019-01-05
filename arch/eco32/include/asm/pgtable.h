@@ -20,7 +20,6 @@
 
 #include <asm-generic/pgtable-nopmd.h>
 #include <asm/mmu.h>
-#include <asm/fixmap.h>
 #include <asm/eco32.h>
 #include <linux/mm_types.h>
 
@@ -64,30 +63,32 @@
 #define PTRS_PER_PTE    (1UL << (PAGE_SHIFT-2))
 #define PTRS_PER_PGD    (1UL << (PAGE_SHIFT-2))
 
+
 /*
  * calculate how many PGD entries a user-level program can use
  * the first mappable virtual address is 0
  * TASK_SIZE is the top of the virtual user address space
  */
-
+/* 512 entries equals 2GB of memory which maps all user mapped space */
 #define USER_PTRS_PER_PGD       (512)
-#define KRNL_PTRS_PER_PGD       (128)
+/* 265 entries equals 1GB of memory which maps all kernel mapped space */
+#define KRNL_PTRS_PER_PGD       (256)
 #define FIRST_USER_ADDRESS      0UL
 
-/*
- * Kernels own virtual memory area.
- */
 
 /*
- * since our arch has fixed kernel mapped virtual area this range and size
- * is easy to set even if we will never be able to allocate 1GB of memory for the kernel
- * because we have way less memory.
+ * since our arch has a fixed kernel mapped virtual area this range and size
+ * is easy to set.
+ *
+ * we can choose something between ECO32_KERNEL_PAGE_MAPPED_START und
+ * ECO32_KERNEL_DIRECT_MAPPED_RAM_START.
+ * something around 32mb seems sufficient since most of our fpga boards
+ * do not have that much memory.
  */
-#define VMALLOC_START       (ECO32_KERNEL_PAGE_MAPPED_START + FIXADDR_SIZE)
 #define VMALLOC_END         (ECO32_KERNEL_DIRECT_MAPPED_RAM_START)
-#define VMALLOC_SIZE        (VMALLOC_END - VMALLOC_START)
+#define VMALLOC_SIZE        (0x02000000) // 32mb
+#define VMALLOC_START       (VMALLOC_END - VMALLOC_SIZE)
 #define VMALLOC_VMADDR(x)   ((unsigned long)(x))
-
 
 /*
  * An ECO32 PTE looks like this:
