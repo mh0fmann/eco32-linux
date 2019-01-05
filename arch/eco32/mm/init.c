@@ -27,7 +27,7 @@
 #include <asm/pgtable.h>
 #include <asm/tlb.h>
 #include <asm/sections.h>
-
+#include <asm/fixmap.h>
 
 /*
  * Pointer to the current_pgd which holds the pgd of the current
