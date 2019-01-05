@@ -19,11 +19,8 @@ KBUILD_CFLAGS_MODULE +=
 LDFLAGS += --oformat elf32-eco32
 LDFLAGS_vmlinux	+= -static -nostdlib
 
-LIBGCC	:= $(shell $(CC) -print-libgcc-file-name)
-
 head-y := arch/eco32/kernel/head.o
 libs-y += arch/eco32/lib/
-libs-y += $(LIBGCC)
 core-y += arch/eco32/kernel/ arch/eco32/mm/
 
 ifneq '$(CONFIG_ECO32_BUILTIN_DTB)' '""'

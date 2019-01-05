@@ -23,6 +23,10 @@ config ECO32
     select GENERIC_ATOMIC64
     select GENERIC_IRQ_SHOW
     select GENERIC_FIND_FIRST_BIT
+    select GENERIC_LIB_LSHRDI3
+    select GENERIC_LIB_ASHLDI3
+    select GENERIC_LIB_ASHRDI3
+    select GENERIC_LIB_MULDI3
     select OF
     select OF_EARLY_FLATTREE
     select OF_IRQ
