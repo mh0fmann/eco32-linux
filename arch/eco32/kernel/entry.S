@@ -22,94 +22,94 @@
 #include <asm/irq.h>
 
 
-#define DISABLE_INTERRUPTS  \
-    mvfs    $8,PSW      ;\
-    andi    $8,$8,~PSW_CIE  ;\
+#define DISABLE_INTERRUPTS       \
+    mvfs    $8,PSW              ;\
+    andi    $8,$8,~PSW_CIE      ;\
     mvts    $8,PSW
 
-#define ENABLE_INTERRUPTS   \
-    mvfs    $8,PSW      ;\
-    ori     $8,$8,PSW_CIE   ;\
+#define ENABLE_INTERRUPTS        \
+    mvfs    $8,PSW              ;\
+    ori     $8,$8,PSW_CIE       ;\
     mvts    $8,PSW
 
-#define SAVE_REGISTERS      \
-    stw     $0,$29,r0_OFF   ;\
-    stw     $1,$29,r1_OFF   ;\
-    stw     $2,$29,r2_OFF   ;\
-    stw     $3,$29,r3_OFF   ;\
-    stw     $4,$29,r4_OFF   ;\
-    stw     $5,$29,r5_OFF   ;\
-    stw     $6,$29,r6_OFF   ;\
-    stw     $7,$29,r7_OFF   ;\
-    stw     $8,$29,r8_OFF   ;\
-    stw     $9,$29,r9_OFF   ;\
-    stw     $10,$29,r10_OFF ;\
-    stw     $11,$29,r11_OFF ;\
-    stw     $12,$29,r12_OFF ;\
-    stw     $13,$29,r13_OFF ;\
-    stw     $14,$29,r14_OFF ;\
-    stw     $15,$29,r15_OFF ;\
-    stw     $16,$29,r16_OFF ;\
-    stw     $17,$29,r17_OFF ;\
-    stw     $18,$29,r18_OFF ;\
-    stw     $19,$29,r19_OFF ;\
-    stw     $20,$29,r20_OFF ;\
-    stw     $21,$29,r21_OFF ;\
-    stw     $22,$29,r22_OFF ;\
-    stw     $23,$29,r23_OFF ;\
-    stw     $24,$29,r24_OFF ;\
-    stw     $25,$29,r25_OFF ;\
-    stw     $26,$29,r26_OFF ;\
-    stw     $27,$29,r27_OFF ;\
-    stw     $28,$29,r28_OFF ;\
-    stw     $25,$29,r29_OFF ;\
-    stw     $30,$29,r30_OFF ;\
-    stw     $31,$29,r31_OFF ;\
-    stw     $2,$29,r2_orig_OFF ;\
-    mvfs    $24,PSW     ;\
+#define SAVE_REGISTERS          \
+    stw     $0,$29,r0_OFF       ;\
+    stw     $1,$29,r1_OFF       ;\
+    stw     $2,$29,r2_OFF       ;\
+    stw     $3,$29,r3_OFF       ;\
+    stw     $4,$29,r4_OFF       ;\
+    stw     $5,$29,r5_OFF       ;\
+    stw     $6,$29,r6_OFF       ;\
+    stw     $7,$29,r7_OFF       ;\
+    stw     $8,$29,r8_OFF       ;\
+    stw     $9,$29,r9_OFF       ;\
+    stw     $10,$29,r10_OFF     ;\
+    stw     $11,$29,r11_OFF     ;\
+    stw     $12,$29,r12_OFF     ;\
+    stw     $13,$29,r13_OFF     ;\
+    stw     $14,$29,r14_OFF     ;\
+    stw     $15,$29,r15_OFF     ;\
+    stw     $16,$29,r16_OFF     ;\
+    stw     $17,$29,r17_OFF     ;\
+    stw     $18,$29,r18_OFF     ;\
+    stw     $19,$29,r19_OFF     ;\
+    stw     $20,$29,r20_OFF     ;\
+    stw     $21,$29,r21_OFF     ;\
+    stw     $22,$29,r22_OFF     ;\
+    stw     $23,$29,r23_OFF     ;\
+    stw     $24,$29,r24_OFF     ;\
+    stw     $25,$29,r25_OFF     ;\
+    stw     $26,$29,r26_OFF     ;\
+    stw     $27,$29,r27_OFF     ;\
+    stw     $28,$29,r28_OFF     ;\
+    stw     $25,$29,r29_OFF     ;\
+    stw     $30,$29,r30_OFF     ;\
+    stw     $31,$29,r31_OFF     ;\
+    stw     $2,$29,r2_orig_OFF  ;\
+    mvfs    $24,PSW             ;\
     stw     $24,$29,psw_OFF
 
-#define RESTORE_REGISTERS   \
-    ldw     $1,$29,r1_OFF   ;\
-    ldw     $2,$29,r2_OFF   ;\
-    ldw     $3,$29,r3_OFF   ;\
-    ldw     $4,$29,r4_OFF   ;\
-    ldw     $5,$29,r5_OFF   ;\
-    ldw     $6,$29,r6_OFF   ;\
-    ldw     $7,$29,r7_OFF   ;\
-    ldw     $8,$29,r8_OFF   ;\
-    ldw     $9,$29,r9_OFF   ;\
-    ldw     $10,$29,r10_OFF ;\
-    ldw     $11,$29,r11_OFF ;\
-    ldw     $12,$29,r12_OFF ;\
-    ldw     $13,$29,r13_OFF ;\
-    ldw     $14,$29,r14_OFF ;\
-    ldw     $15,$29,r15_OFF ;\
-    ldw     $16,$29,r16_OFF ;\
-    ldw     $17,$29,r17_OFF ;\
-    ldw     $18,$29,r18_OFF ;\
-    ldw     $19,$29,r19_OFF ;\
-    ldw     $20,$29,r20_OFF ;\
-    ldw     $21,$29,r21_OFF ;\
-    ldw     $22,$29,r22_OFF ;\
-    ldw     $23,$29,r23_OFF ;\
-    ldw     $24,$29,r24_OFF ;\
-    ldw     $25,$29,r25_OFF ;\
-    ldw     $26,$29,r26_OFF ;\
-    ldw     $27,$29,r27_OFF ;\
-    ldw     $28,$29,r28_OFF ;\
-    ldw     $30,$29,r30_OFF ;\
-    ldw     $31,$29,r31_OFF ;\
-    ldw     $24,$29,psw_OFF ;\
-    .nosyn              ;\
-    ldhi    $25,0xFFFF0000 ;\
-    and     $24,$24,$25     ;\
-    ldhi    $25,irqmask    ;\
-    ori     $25,$25,irqmask ;\
-    ldw     $25,$25,0       ;\
-    or      $24,$24,$25      ;\
-    .syn                ;\
-    mvts    $24,PSW     ;\
+#define RESTORE_REGISTERS        \
+    ldw     $1,$29,r1_OFF       ;\
+    ldw     $2,$29,r2_OFF       ;\
+    ldw     $3,$29,r3_OFF       ;\
+    ldw     $4,$29,r4_OFF       ;\
+    ldw     $5,$29,r5_OFF       ;\
+    ldw     $6,$29,r6_OFF       ;\
+    ldw     $7,$29,r7_OFF       ;\
+    ldw     $8,$29,r8_OFF       ;\
+    ldw     $9,$29,r9_OFF       ;\
+    ldw     $10,$29,r10_OFF     ;\
+    ldw     $11,$29,r11_OFF     ;\
+    ldw     $12,$29,r12_OFF     ;\
+    ldw     $13,$29,r13_OFF     ;\
+    ldw     $14,$29,r14_OFF     ;\
+    ldw     $15,$29,r15_OFF     ;\
+    ldw     $16,$29,r16_OFF     ;\
+    ldw     $17,$29,r17_OFF     ;\
+    ldw     $18,$29,r18_OFF     ;\
+    ldw     $19,$29,r19_OFF     ;\
+    ldw     $20,$29,r20_OFF     ;\
+    ldw     $21,$29,r21_OFF     ;\
+    ldw     $22,$29,r22_OFF     ;\
+    ldw     $23,$29,r23_OFF     ;\
+    ldw     $24,$29,r24_OFF     ;\
+    ldw     $25,$29,r25_OFF     ;\
+    ldw     $26,$29,r26_OFF     ;\
+    ldw     $27,$29,r27_OFF     ;\
+    ldw     $28,$29,r28_OFF     ;\
+    ldw     $30,$29,r30_OFF     ;\
+    ldw     $31,$29,r31_OFF     ;\
+    ldw     $24,$29,psw_OFF     ;\
+    .nosyn                      ;\
+    ldhi    $25,0xFFFF0000      ;\
+    and     $24,$24,$25         ;\
+    ldhi    $25,irqmask         ;\
+    ori     $25,$25,irqmask     ;\
+    ldw     $25,$25,0           ;\
+    or      $24,$24,$25         ;\
+    .syn                        ;\
+    mvts    $24,PSW             ;\
     ldw     $29,$29,r29_OFF
 
     .global xcept
@@ -132,6 +132,7 @@
  * (with a single exception: user TLB misses go to 'umiss' below)
  */
 xcept:
+    .nosyn
     mvfs    $24,PSW                 # get PSW
     slri    $24,$24,16              # extract exception identifier
     andi    $24,$24,0x1F
@@ -144,26 +145,21 @@ page_fault:                         # page faults are handled here, too
     andi    $24,$24,1               # check it
     beq     $24,$0,from_kernel      # which mode did we come from?
 from_user:                          # switch to kernel stack
-    .nosyn
     ldhi    $24,current_ti
     ori     $24,$24,current_ti
     ldw     $24,$24,0
     addi    $29,$24,THREAD_SIZE     # kernel stack is at the end of it
-    .syn
 from_kernel:                        # valid kernel stack (now) present
     subi    $29,$29,PT_SIZE         # make room for pt_regs
     SAVE_REGISTERS
-    .nosyn
-    ldhi    $27,current_ti    c     # now load kernel ti in $27
-    ori     $27,$27,current_ti
-    ldw     $27,$27,0
     .syn
+    ldw     $27,$0,current_ti       # now load current ti in $27
     addi    $5,$29,0                # second arg: ptr to pt_regs
     mvfs    $4,PSW                  # first arg: IRQ number
     slri    $4,$4,16
     andi    $4,$4,0x1F
-    ori     $9,$0,NR_IRQS           # check if we do an interrupt or
-    bgeu    $9,$4,hw_irq            # exception handling
+    ori     $9,$0,NR_IRQS
+    bgeu    $9,$4,hw_irq            # iunterrupt or exception?
     ENABLE_INTERRUPTS               # exceptions run with interrupts enabled
 hw_irq:
     slli    $9,$4,2                 # compute offset into ISR table
@@ -189,8 +185,8 @@ no_more_work:
 /*
  * user TLB misses arrive here
  */
-    .nosyn
 umiss:
+    .nosyn
     mvfs    $25,TLB_ENTRY_HI        # get missing page addr
     ldhi    $26,current_pgd         # get base addr of page dir
     ori     $26,$26,current_pgd
