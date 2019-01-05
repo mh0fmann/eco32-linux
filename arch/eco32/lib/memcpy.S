@@ -16,6 +16,8 @@
 
 /*
  * on eco32 all iomem has to be accessed through 32bit read and write
+ * also all iomem is algigned to 32bit boundries so we don't need to
+ * be aware of unalined reads and writes
  */
 
     .global memcpy_tofromio

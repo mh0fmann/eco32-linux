@@ -17,9 +17,10 @@
 
 
 /*
- * on eco32 all iomem has to be accessed thorugh 32bit read and write
+ * on eco32 all iomem has to be accessed through 32bit read and write
+ * also all iomem is algigned to 32bit boundries so we don't need to
+ * be aware of unalined reads and writes
  */
-
 
 memset_io:
     addi    $8,$5,0

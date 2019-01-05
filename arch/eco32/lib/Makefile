@@ -2,5 +2,9 @@
 # Makefile for ECO32-specific library files.
 #
 
-lib-y	+=  delay.o eco32_delay.o string.o \
-            devprobe.o memcpy.o memset.o
+lib-y   +=  eco32_delay.o
+lib-y   +=  delay.o
+lib-y   +=  devprobe.o
+lib-y   +=  uaccess.o
+lib-y   +=  memcpy.o
+lib-y   +=  memset.o
