@@ -88,14 +88,14 @@ config ECO32_SIMULATOR
 #
 config ARGUMENT_PASSING
     bool "Enable argument passing from bootloader"
-    default y
+    default n
     ---help---
     Say yes here if you want to be able to pass arguments from the bootloader
     to linux
 
 config ARGUMENT_CMDLINE
     bool "Accept the kernel commandline from the bootloader"
-    default y
+    default n
     depends on ARGUMENT_PASSING
     ---help---
     Say yes here if you want to be able to pass a kernel command line from the
