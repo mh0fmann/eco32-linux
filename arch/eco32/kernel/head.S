@@ -13,16 +13,12 @@
  * (at your option) any later version.
  */
 
-/* these includes are needed for THREAD_SIZE */
+
 #include <asm/page.h>
 #include <asm/pgtable.h>
 #include <asm/thread_info.h>
-
-#define PSW     0
-#define TLB_INDEX   1
-#define TLB_ENTRY_HI    2
-#define TLB_ENTRY_LO    3
-#define TLB_ENTRIES 32
+#include <asm/mvtfs.h>
+#include <asm/tlb.h>
 
     .global _start
 
@@ -60,10 +56,10 @@ start:
     # invalidate TLB
     # fill with direct-mapped virtual addresses
     mvts    $0,TLB_ENTRY_LO
-    ldhi    $8,0xC0000000
+    ldhi    $8,INVALID_PAGE
     mvts    $8,TLB_ENTRY_HI
     addi    $8,$0,0
-    addi    $9,$0,TLB_ENTRIES
+    addi    $9,$0,NUM_TLB_ENTRIES
 tlb_inv_loop:
     mvts    $8,TLB_INDEX
     tbwi

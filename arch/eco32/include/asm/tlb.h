@@ -24,6 +24,8 @@
 #define INVALID_PAGE        ECO32_KERNEL_DIRECT_MAPPED_RAM_START
 
 
+#ifndef __ASSEMBLY__
+
 void set_tlb_handler(void);
 
 /*
@@ -76,5 +78,7 @@ static inline int find_tlb_addr(unsigned long addr)
 #define tlb_flush(tlb)              flush_tlb_mm((tlb)->mm)
 #include <linux/pagemap.h>
 #include <asm-generic/tlb.h>
+
+#endif /* __ASSEMBLY__ */
 
 #endif /* __ASM_ECO32_TLB_H */
