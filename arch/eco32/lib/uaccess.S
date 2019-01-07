@@ -25,36 +25,29 @@
  * NOTE: Returns number of bytes NOT copied!
  */
 ENTRY(__copy_tofrom_user)
-	subi	$29,$29,8
-	stw	$4,$29,0		# save dst ptr
-	stw	$5,$29,4		# save src ptr
-	add	$2,$6,$0		# no need to save size
-copy_next:
-	beq	$2,$0,copy_done
-	subi	$2,$2,1			# decrement count
+    beq     $6,$0,copy_done     # nothing to do?
+    add     $2,$6,$0            # return what's left
 copy_get:
-	ldbu	$8,$5,0			# get byte
+    ldbu    $8,$5,0             # get byte
 copy_put:
-	stb	$8,$4,0			# put byte
-	addi	$4,$4,1			# bump ptrs
-	addi	$5,$5,1
-	j	copy_next
+    stb     $8,$4,0             # put byte
+    addi    $4,$4,1             # bump ptrs
+    addi    $5,$5,1
+    subi    $2,$2,1             # decrement
+    bne     $2,$0,copy_get      # done?
 copy_done:
-	ldw	$4,$29,0		# restore dst ptr
-	ldw	$5,$29,4		# restore src ptr
-	addi	$29,$29,8
-	jr	$31
+    jr      $31
 ENDPROC(__copy_tofrom_user)
 
-	.section	.fixup,"ax"
+    .section    .fixup,"ax"
 copy_fixup:
-	j	copy_done
-	.previous
+    j       copy_done
+    .previous
 
-	.section	__ex_table,"a"
-	.long	copy_get,copy_fixup
-	.long	copy_put,copy_fixup
-	.previous
+    .section    __ex_table,"a"
+    .long   copy_get,copy_fixup
+    .long   copy_put,copy_fixup
+    .previous
 
 
 /*
@@ -64,27 +57,22 @@ copy_fixup:
  * NOTE: Returns number of bytes NOT cleared!
  */
 ENTRY(__clear_user)
-	subi	$29,$29,4
-	stw	$4,$29,0		# save dst ptr
-	add     $2,$5,$0		# no need to save size
-clear_next:
-	beq	$2,$0,clear_done
-	subi	$2,$2,1			# decrement count
+    beq     $5,$0,clear_done    # nothing to do?
+    add     $2,$5,$0            # return what's left
 clear_put:
-	stb	$0,$4,0			# put zero byte
-	addi	$4,$4,1			# bump ptr
-	j	clear_next
+    stb     $0,$4,0             # put zero byte
+    addi    $4,$4,1             # bump ptr
+    subi    $2,$2,1             # decrement
+    bne     $2,$0,clear_put     # done?
 clear_done:
-	ldw	$4,$29,0		# restore dst ptr
-	addi	$29,$29,4
-	jr	$31
+    jr  $31
 ENDPROC(__clear_user)
 
-	.section	.fixup,"ax"
+    .section    .fixup,"ax"
 clear_fixup:
-	j	clear_done
-	.previous
+    j       clear_done
+    .previous
 
-	.section	__ex_table,"a"
-	.long	clear_put,clear_fixup
-	.previous
+    .section    __ex_table,"a"
+    .long   clear_put,clear_fixup
+    .previous
