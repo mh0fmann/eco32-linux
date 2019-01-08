@@ -13,41 +13,14 @@
  * (at your option) any later version.
  */
 
-#include <asm/ptrace.h>
-#include <linux/linkage.h>
 #include <linux/kernel.h>
-#include <linux/mm.h>
-#include <linux/sched.h>
-#include <linux/interrupt.h>
-#include <linux/module.h>
-#include <linux/extable.h>
 #include <linux/sched/signal.h>
 
-#include <asm/siginfo.h>
 #include <asm/signal.h>
 #include <asm/pgtable.h>
 #include <asm/uaccess.h>
 #include <asm/eco32.h>
-#include <asm/irq.h>
 #include <asm/mmu_context.h>
-
-
-int fixup_exception(struct pt_regs* regs)
-{
-	const struct exception_table_entry* entry;
-	entry = search_exception_tables(regs->xa);
-
-	if (entry) {
-		pr_debug("fixup 0x%08lx found for insn at 0x%08lx\n",
-		         entry->fixup, regs->xa);
-		regs->xa = entry->fixup;
-		return 1;
-	}
-
-	pr_debug("no fixup found for insn at 0x%08lx\n",
-	         regs->xa);
-	return 0;
-}
 
 
 void do_page_fault(struct pt_regs* regs, int write)

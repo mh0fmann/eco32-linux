@@ -26,6 +26,7 @@
 #include <linux/string.h>
 #include <linux/kernel.h>
 #include <asm/page.h>
+#include <asm/ptrace.h>
 
 #define VERIFY_READ     0
 #define VERIFY_WRITE    1
@@ -82,10 +83,8 @@ struct exception_table_entry {
     unsigned long insn, fixup;
 };
 
-/* Return 0 if exception not found and fixup otherwise. */
-extern unsigned long search_exception_table(unsigned long);
-/* Sort the exception table. */
-extern void sort_exception_table(void);
+/* Fix a exception */
+extern int fixup_exception(struct pt_regs *state);
 
 /*
  * These are the main single-value transfer routines.  They automatically
