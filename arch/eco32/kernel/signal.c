@@ -87,7 +87,7 @@ asmlinkage long sys_rt_sigreturn(void)
     /*
      * Restore sigcontext and check various error conditions.
      */
-    if (!access_ok(VERIFY_READ, frame, sizeof(struct rt_sigframe))) {
+    if (!access_ok(frame, sizeof(struct rt_sigframe))) {
         goto badframe;
     }
 
@@ -134,7 +134,7 @@ static inline void __user* get_sigframe(struct ksignal* ksig,
     sp = sigsp(regs->sp, ksig);
     frame = align_sigframe(sp - framesize);
 
-    if (!access_ok(VERIFY_WRITE, frame, framesize)) {
+    if (!access_ok(frame, framesize)) {
         frame = NULL;
     }
 

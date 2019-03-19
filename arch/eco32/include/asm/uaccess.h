@@ -63,7 +63,7 @@
 /* Ensure that addr is below task's addr_limit. */
 #define __addr_ok(addr) ((unsigned long) addr < get_fs())
 
-#define access_ok(type, addr, size) \
+#define access_ok(addr, size) \
     __range_ok((unsigned long) addr, (unsigned long) size)
 
 /*
@@ -127,7 +127,7 @@ extern long __put_user_bad(void);
     ({                                                  \
      long __pu_err = -EFAULT;                           \
      __typeof__(*(ptr)) *__pu_addr = (ptr);             \
-     if (access_ok(VERIFY_WRITE, __pu_addr, size))      \
+     if (access_ok(__pu_addr, size))                    \
      __put_user_size((x), __pu_addr, (size), __pu_err); \
      __pu_err;                                          \
      })
@@ -198,7 +198,7 @@ struct __large_struct {
     ({                                                          \
      long __gu_err = -EFAULT, __gu_val = 0;                     \
      const __typeof__(*(ptr)) * __gu_addr = (ptr);              \
-     if (access_ok(VERIFY_READ, __gu_addr, size))               \
+     if (access_ok(__gu_addr, size))                            \
      __get_user_size(__gu_val, __gu_addr, (size), __gu_err);    \
      (x) = (__force __typeof__(*(ptr)))__gu_val;                \
      __gu_err;                                                  \
@@ -279,7 +279,7 @@ static inline __must_check unsigned long
 clear_user(void* addr, unsigned long size)
 {
 
-    if (access_ok(VERIFY_WRITE, addr, size)) {
+    if (access_ok(addr, size)) {
         return __clear_user(addr, size);
     }
 
