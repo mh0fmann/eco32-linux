@@ -113,7 +113,7 @@ static irqreturn_t eco32disk_interrupt_handler(int irq, void* dev)
 
     /* if there was an io error mark the request as completet with io error */
     if (ctrl & ECO32DISK_CTL_ERR) {
-        __blk_mq_end_request(eco32disk_dev.current_request, BLK_STS_IOERR);
+        blk_mq_end_request(eco32disk_dev.current_request, BLK_STS_IOERR);
         goto out_unlock_start;
     }
 
@@ -140,7 +140,7 @@ static irqreturn_t eco32disk_interrupt_handler(int irq, void* dev)
 
     /* we are free again - mark request as completed */
     eco32disk_dev.busy = 0;
-    __blk_mq_end_request(eco32disk_dev.current_request, BLK_STS_OK);
+    blk_mq_end_request(eco32disk_dev.current_request, BLK_STS_OK);
     ret = IRQ_HANDLED;
 
 out_unlock_start:
@@ -255,7 +255,7 @@ static blk_status_t eco32disk_queue_rq(struct blk_mq_hw_ctx *hctx,
 
         default: {
             dev_err(eco32disk_dev.dev, "unsupported operation: 0x%08x\n", req_op(eco32disk_dev.current_request));
-            __blk_mq_end_request(eco32disk_dev.current_request, BLK_STS_IOERR);
+            blk_mq_end_request(eco32disk_dev.current_request, BLK_STS_IOERR);
             return BLK_STS_IOERR;
         }
     }
@@ -266,11 +266,11 @@ static blk_status_t eco32disk_queue_rq(struct blk_mq_hw_ctx *hctx,
     /* check if read or write would be outside of device size or exceed buffer */
     if (unlikely((sector + (nsectors >> ECO32DISK_SECTOR_SHIFT)) > eco32disk_dev.size)) {
         dev_err(eco32disk_dev.dev, "request outside device size\n");
-        __blk_mq_end_request(eco32disk_dev.current_request, BLK_STS_IOERR);
+        blk_mq_end_request(eco32disk_dev.current_request, BLK_STS_IOERR);
         return BLK_STS_IOERR;
     }else if (unlikely(nsectors > 8)) {
         dev_err(eco32disk_dev.dev, "request exceeds disk buffer\n");
-        __blk_mq_end_request(eco32disk_dev.current_request, BLK_STS_IOERR);
+        blk_mq_end_request(eco32disk_dev.current_request, BLK_STS_IOERR);
         return BLK_STS_IOERR;
     }
 

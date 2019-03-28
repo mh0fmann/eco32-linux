@@ -594,7 +594,7 @@ static void eco32sdc_request_tasklet(unsigned long data)
         }
     }
 
-    __blk_mq_end_request(eco32sdc_dev.current_request, BLK_STS_OK);
+    blk_mq_end_request(eco32sdc_dev.current_request, BLK_STS_OK);
 
     /* mark as free and start queue */
     eco32sdc_dev.busy = 0;
@@ -635,7 +635,7 @@ static blk_status_t eco32sdc_queue_rq(struct blk_mq_hw_ctx *hctx,
 
         default: {
             dev_err(eco32sdc_dev.dev, "unsupported operation: 0x%08x\n", req_op(eco32sdc_dev.current_request));
-            __blk_mq_end_request(eco32sdc_dev.current_request, BLK_STS_IOERR);
+            blk_mq_end_request(eco32sdc_dev.current_request, BLK_STS_IOERR);
             return BLK_STS_IOERR;;
         }
     }
@@ -647,13 +647,13 @@ static blk_status_t eco32sdc_queue_rq(struct blk_mq_hw_ctx *hctx,
     /* check if read or write would be outside of device size or exceed buffer */
     if (unlikely((sector + (nsectors >> ECO32SDC_SECTOR_SHIFT)) > eco32sdc_dev.size)) {
         dev_err(eco32sdc_dev.dev, "request outside device size\n");
-        __blk_mq_end_request(eco32sdc_dev.current_request, BLK_STS_IOERR);
+        blk_mq_end_request(eco32sdc_dev.current_request, BLK_STS_IOERR);
         return BLK_STS_IOERR;
     }
 
     if (unlikely(nsectors > 8)) {
         dev_err(eco32sdc_dev.dev, "request exceeds per request sector limit\n");
-        __blk_mq_end_request(eco32sdc_dev.current_request, BLK_STS_IOERR);
+        blk_mq_end_request(eco32sdc_dev.current_request, BLK_STS_IOERR);
         return BLK_STS_IOERR;
     }
 
@@ -776,7 +776,7 @@ static int eco32sdc_probe(struct platform_device* dev)
      * let the block layer know how our hardware works and how much at a
      * time we can handle
      *
-     * 8 is the minimum. we should not to more since we need to poll the data
+     * 8 is the minimum. we should not do more since we need to poll the data
      * which can take some time
      */
     blk_queue_max_hw_sectors(eco32sdc_dev.queue, 8);
