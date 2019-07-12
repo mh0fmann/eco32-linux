@@ -92,7 +92,7 @@ register struct thread_info* current_thread_info_reg asm("$27");
 #define _TIF_POLLING_NRFLAG     (1<<TIF_POLLING_NRFLAG)
 
 /* Work to do when returning from interrupt/exception */
-#define _TIF_WORK_MASK          (0xff & ~(_TIF_SYSCALL_TRACE|_TIF_SINGLESTEP|_TIF_NOTIFY_RESUME))
+#define _TIF_WORK_MASK          (0xFF & ~(_TIF_NEED_RESCHED|_TIF_NOTIFY_RESUME|_TIF_SIGPENDING))
 
 #endif /* __KERNEL__ */
 
