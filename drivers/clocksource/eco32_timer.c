@@ -214,14 +214,9 @@ static int __init eco32_timer_init(struct device_node *node)
      */
     if (!clockevents_initialized) {
         clockevents_initialized = !eco32_clockevents_init(node);
-    }
-    /*
-     * There is a problem using a timer as a clocksource
-     * until the problem is resolved the timer will not be used for now!
-    else{
+    } else {
         eco32_clocksource_init(node);
     }
-    */
 
     return 0;
 }
