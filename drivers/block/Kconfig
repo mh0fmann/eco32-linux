@@ -92,6 +92,7 @@ config ECO32_DISK
 	tristate "ECO32 Disk Device Driver"
 	default y
 	depends on OF
+    depends on ECO32
 	help
 	  Device driver for the ECO32 Disk Device.
 
@@ -99,6 +100,8 @@ config ECO32_SDC
 	tristate "ECO32 SDCard Device Driver"
 	default y
 	depends on OF
+    depends on ECO32
+    depends on BROKEN
 	help
 	  Device driver for the ECO32 Disk Device.
 
