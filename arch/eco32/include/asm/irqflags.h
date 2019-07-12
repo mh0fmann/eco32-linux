@@ -22,16 +22,33 @@
 #define ARCH_IRQ_ENABLED    PSW_CIE
 
 
+extern unsigned long psw;
+
 static inline unsigned long arch_local_save_flags(void)
 {
-    return __eco32_read_psw() & ARCH_IRQ_ENABLED;
+    return psw & ARCH_IRQ_ENABLED;
 }
-
 
 static inline void arch_local_irq_restore(unsigned long flags)
 {
-    unsigned long psw = __eco32_read_psw();
-    __eco32_write_psw(psw | flags);
+    __eco32_write_psw(0);
+    if (flags) {
+        psw |= flags;
+    } else {
+        psw &= ~ARCH_IRQ_ENABLED;
+    }
+    __eco32_write_psw(psw);
+}
+
+#define arch_local_irq_save arch_local_irq_save
+static inline unsigned long arch_local_irq_save(void)
+{
+    unsigned long flags;
+    __eco32_write_psw(0);
+    flags = psw & ARCH_IRQ_ENABLED;
+    psw &= ~ARCH_IRQ_ENABLED;
+    __eco32_write_psw(psw);
+    return flags;
 }
 
 #include <asm-generic/irqflags.h>

@@ -47,6 +47,8 @@ END(_umiss)
 
     #------------------------------------
 
+    .global psw
+
 start:
     # init PSW
     # disable interrupts
@@ -85,6 +87,10 @@ bss_clr_test:
     # to be present in register 4 to 7 if not configured
     # otherwise
     jal     eco32_early_setup
+
+    addi    $8,$0,psw
+    mvfs    $9,PSW
+    stw     $9,$8,0
 
     # jump to the start_kernel() routine in init/main.c
     j   start_kernel

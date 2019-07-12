@@ -23,36 +23,20 @@
 #include <asm/mvtfs.h>
 
 
-/*
- * We safe the current state of active irqs here so we can
- * load the active irqs from here.
- *
- * This needs be done so we can update the psw on each context
- * switch and return so all threads run with the correct irqs
- * masked
- */
-unsigned long volatile irqmask = 0;
+unsigned long psw = 0;
 
 
-static void eco32_unmask_irq(struct irq_data* data)
+void eco32_unmask_irq(struct irq_data* data)
 {
-    unsigned long psw;
-
-    irqmask |= (1 << data->hwirq);
-
-    psw = __eco32_read_psw();
+    __eco32_write_psw(0);
     psw |= (1 << data->hwirq);
     __eco32_write_psw(psw);
 }
 
 
-static void eco32_mask_irq(struct irq_data* data)
+void eco32_mask_irq(struct irq_data* data)
 {
-    unsigned long psw;
-
-    irqmask &= ~(1 << data->hwirq);
-
-    psw = __eco32_read_psw();
+    __eco32_write_psw(0);
     psw &= ~(1 << data->hwirq);
     __eco32_write_psw(psw);
 }

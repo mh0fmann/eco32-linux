@@ -24,15 +24,23 @@
 #include <linux/linkage.h>
 
 
-#define DISABLE_INTERRUPTS(r)    \
-    mvfs    r,PSW               ;\
-    andi    r,r,~PSW_CIE        ;\
-    mvts    r,PSW
+#define DISABLE_INTERRUPTS       \
+    mvts    $0,PSW              ;\
+    addi    $8,$0,~PSW_CIE      ;\
+    addi    $9,$0,psw           ;\
+    ldw     $10,$9,0            ;\
+    and     $10,$10,$8          ;\
+    stw     $10,$9,0            ;\
+    mvts    $10,PSW
 
-#define ENABLE_INTERRUPTS(r)     \
-    mvfs    r,PSW               ;\
-    ori     r,r,PSW_CIE         ;\
-    mvts    r,PSW
+#define ENABLE_INTERRUPTS        \
+    mvts    $0,PSW              ;\
+    addi    $8,$0,PSW_CIE       ;\
+    addi    $9,$0,psw           ;\
+    ldw     $10,$9,0            ;\
+    or      $10,$10,$8          ;\
+    stw     $10,$9,0            ;\
+    mvts    $10,PSW
 
 #define SAVE_REGISTERS          \
     stw     $0,$29,r0_OFF       ;\
@@ -103,21 +111,13 @@
     ldw     $30,$29,r30_OFF     ;\
     ldw     $31,$29,r31_OFF     ;\
     ldw     $24,$29,psw_OFF     ;\
-    .nosyn                      ;\
-    ldhi    $25,0xFFFF0000      ;\
-    and     $24,$24,$25         ;\
-    ldhi    $25,irqmask         ;\
-    ori     $25,$25,irqmask     ;\
-    ldw     $25,$25,0           ;\
-    or      $24,$24,$25         ;\
-    .syn                        ;\
     mvts    $24,PSW             ;\
     ldw     $29,$29,r29_OFF
 
 
     .global isr_tbl
 
-    .global irqmask
+    .global psw
     .global current_ti
     .global def_xcpt_handler
 
@@ -136,6 +136,10 @@ ENTRY(xcept)
     subi    $24,$24,XCPT_TLB_MISS   # is it a kernel TLB miss ?
     beq     $24,$0,umiss            # this is also handled there
 page_fault:                         # page faults are handled here, too
+    ldhi    $24,psw                 # update psw in memory
+    ori     $24,$24,psw
+    mvfs    $25,PSW
+    stw     $25,$24,0
     add     $25,$0,$29              # save original sp in $25
     mvfs    $24,PSW                 # get PSW
     slri    $24,$24,25              # shift previous mode to bit 0
@@ -157,7 +161,7 @@ from_kernel:                        # valid kernel stack (now) present
     andi    $4,$4,0x1F
     ori     $9,$0,NR_IRQS
     bgeu    $9,$4,call_isr          # interrupt or exception?
-    ENABLE_INTERRUPTS($8)           # exceptions run with interrupts enabled
+    ENABLE_INTERRUPTS               # exceptions run with interrupts enabled
 call_isr:
     slli    $9,$4,2                 # compute offset into ISR table
     ldw     $9,$9,isr_tbl           # get adress of service routine
@@ -174,15 +178,31 @@ ENTRY(rfxcept)
     andi    $4,$4,PSW_PUM           # are we returning to kernel mode ?
     beq     $4,$0,no_more_work      # yes - then don't check for work
 check_work:
-    DISABLE_INTERRUPTS($8)
+    DISABLE_INTERRUPTS
     ldw     $5,$27,TI_FLAGS         # second arg: thread info flags
     andi    $4,$5,_TIF_WORK_MASK    # any work to do ?
     beq     $4,$0,no_more_work      # no - then leave
     addi    $4,$29,0                # first arg: ptr to pt_regs
     jal     do_work_pending         # now do the work
     j       check_work              # check for more work
-no_more_work:
-    DISABLE_INTERRUPTS($8)
+no_more_work:                       # update psw in memory to look like it after rfx
+    mvts    $0,0                    # disable interrupts
+    addi    $8,$0,psw
+    ldw     $9,$8,0                 # updating the psw in memroy actually only needs
+    ldw     $10,$29,psw_OFF         # to be done when return to kernel
+    addi    $11,$0,0x0000FFFF       # the decision overead would be more annoying than
+    and     $9,$9,$11               # doing it either way
+    addi    $11,$0,0xFFFF0000       # psw needs to be prepared in pt_regs anyways..
+    and     $10,$10,$11
+    slli    $12,$10,1
+    or      $10,$10,$9
+    stw     $10,$29,psw_OFF
+    addi    $11,$0,0x06C00000
+    and     $12,$12,$11
+    addi    $11,$0,0x08000000
+    or      $12,$12,$11
+    or      $12,$12,$9
+    stw     $12,$8,0
     RESTORE_REGISTERS
     rfx
 END(rfxcept)
