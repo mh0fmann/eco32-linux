@@ -50,11 +50,8 @@ END(_umiss)
     .global psw
 
 start:
-    # init PSW
     # disable interrupts
-    # interrupt vector points to RAM
-    ldhi    $8,0x08000000
-    mvts    $8,PSW
+    mvts    $0,PSW
 
     # invalidate TLB
     # fill with direct-mapped virtual addresses
@@ -88,9 +85,10 @@ bss_clr_test:
     # otherwise
     jal     eco32_early_setup
 
+    ldhi    $9,0x08000000
     addi    $8,$0,psw
-    mvfs    $9,PSW
     stw     $9,$8,0
+    mvfs    $9,PSW
 
     # jump to the start_kernel() routine in init/main.c
     j   start_kernel

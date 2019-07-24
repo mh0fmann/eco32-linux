@@ -23,7 +23,7 @@
 #include <asm/mvtfs.h>
 
 
-unsigned long psw = 0;
+volatile unsigned long psw = 0;
 
 
 void eco32_unmask_irq(struct irq_data* data)

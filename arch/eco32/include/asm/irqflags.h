@@ -5,7 +5,7 @@
  *
  * Modifications for ECO32:
  * Copyright (c) 2018 Hellwig Geisse
- * Copyright (c) 2018 Martin Hofmann
+ * Copyright (c) 2019 Martin Hofmann
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -22,25 +22,27 @@
 #define ARCH_IRQ_ENABLED    PSW_CIE
 
 
-extern unsigned long psw;
+extern volatile unsigned long psw;
+
 
 static inline unsigned long arch_local_save_flags(void)
 {
-    return psw & ARCH_IRQ_ENABLED;
+    unsigned long flags;
+    __eco32_write_psw(0);
+    flags = psw & ARCH_IRQ_ENABLED;
+    __eco32_write_psw(psw);
+    return flags;
 }
+
 
 static inline void arch_local_irq_restore(unsigned long flags)
 {
     __eco32_write_psw(0);
-    if (flags) {
-        psw |= flags;
-    } else {
-        psw &= ~ARCH_IRQ_ENABLED;
-    }
+    psw |= (flags & ARCH_IRQ_ENABLED);
     __eco32_write_psw(psw);
 }
 
-#define arch_local_irq_save arch_local_irq_save
+
 static inline unsigned long arch_local_irq_save(void)
 {
     unsigned long flags;
@@ -51,6 +53,33 @@ static inline unsigned long arch_local_irq_save(void)
     return flags;
 }
 
-#include <asm-generic/irqflags.h>
+
+static inline int arch_irqs_disabled_flags(unsigned long flags)
+{
+    return flags == ARCH_IRQ_DISABLED;
+}
+
+
+static inline void arch_local_irq_enable(void)
+{
+    __eco32_write_psw(0);
+    psw |= ARCH_IRQ_ENABLED;
+    __eco32_write_psw(psw);
+}
+
+
+static inline void arch_local_irq_disable(void)
+{
+    __eco32_write_psw(0);
+    psw &= ~ARCH_IRQ_ENABLED;
+    __eco32_write_psw(psw);
+}
+
+
+static inline int arch_irqs_disabled(void)
+{
+    return arch_irqs_disabled_flags(arch_local_save_flags());
+}
+
 
 #endif /* __ASM__ECO32_IRQFLAGS_H */
